@@ -13,6 +13,7 @@ signal player_disconnected(peer_id: int)
 signal server_started(port: int)
 signal connection_failed()
 signal connection_succeeded()
+signal remote_player_state(peer_id: int, position: Vector3, velocity: Vector3)
 
 func host_game(port: int = DEFAULT_PORT) -> bool:
 	peer = ENetMultiplayerPeer.new()
@@ -48,6 +49,7 @@ func close_connection() -> void:
 
 func _on_peer_connected(peer_id: int) -> void:
 	print("[NET] Peer connected: %d" % peer_id)
+	connected_players[peer_id] = "Player_%d" % peer_id
 	player_connected.emit(peer_id, "Player_%d" % peer_id)
 
 func _on_peer_disconnected(peer_id: int) -> void:
@@ -72,3 +74,12 @@ func get_player_count() -> int:
 
 func is_server() -> bool:
 	return multiplayer.is_server()
+
+func broadcast_player_state(position: Vector3, velocity: Vector3) -> void:
+	if peer and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+		receive_player_state.rpc(position, velocity)
+
+@rpc("any_peer", "unreliable", "call_remote")
+func receive_player_state(position: Vector3, velocity: Vector3) -> void:
+	var sender = multiplayer.get_remote_sender_id()
+	remote_player_state.emit(sender, position, velocity)

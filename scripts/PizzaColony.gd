@@ -2,10 +2,32 @@
 # You're toppings, dodge the chef's slicer, claim territory
 extends Node3D
 
+var territory_score := 0.0
+var survival_time := 90.0
+var chef_angle := 0.0
+var player: CharacterBody3D
+
 func _ready() -> void:
-	print("[PIZZA COLONY] Mode loaded — secondary mode (stub)")
 	_build_pizza()
 	_spawn_player()
+	_make_mode_hud("PIZZA COLONY", "CLAIM PEPPERONI  •  SURVIVE THE CHEF")
+
+func _process(delta: float) -> void:
+	survival_time = maxf(survival_time - delta, 0.0)
+	chef_angle += delta * 0.8
+	if player and is_instance_valid(player):
+		territory_score = clampf(territory_score + delta * (1.0 if player.global_position.length() < 12.0 else 0.25), 0.0, 100.0)
+	if survival_time <= 0.0:
+		print("[PIZZA COLONY] Survival complete — territory %.0f%%" % territory_score)
+		set_process(false)
+
+func _make_mode_hud(title: String, objective: String) -> Label:
+	var label = Label.new()
+	label.text = "%s\n%s" % [title, objective]
+	label.position = Vector2(28, 24)
+	label.add_theme_font_size_override("font_size", 22)
+	add_child(label)
+	return label
 
 func _build_pizza() -> void:
 	# Giant circular pizza base
@@ -55,10 +77,10 @@ func _build_pizza() -> void:
 func _spawn_player() -> void:
 	var player_scene = load("res://scenes/PlayerChair.tscn")
 	if player_scene:
-		var p = player_scene.instantiate()
-		p.position = Vector3(0, 1.5, 0)
-		p.player_display_name = "Topping"
-		add_child(p)
+		player = player_scene.instantiate()
+		player.position = Vector3(0, 1.5, 0)
+		player.player_display_name = "Topping"
+		add_child(player)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):

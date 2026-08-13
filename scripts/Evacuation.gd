@@ -14,6 +14,8 @@ var finish_order: Array[Dictionary] = []  # {player_id, name, time}
 var players: Array = []
 var local_player: CharacterBody3D = null
 var hud: CanvasLayer = null
+var mobile_controls: Control = null
+var remote_players: Dictionary = {}
 var top_speed: float = 0.0
 var traps_hit: int = 0
 var traps_placed: int = 0
@@ -41,6 +43,11 @@ func _ready() -> void:
 	camera_base_fov = camera.fov if camera else 70.0
 	if local_player and local_player.has_signal("shake_requested"):
 		local_player.shake_requested.connect(_request_camera_shake)
+	var network = get_node_or_null("/root/Network")
+	if network:
+		network.remote_player_state.connect(_on_remote_player_state)
+		network.player_connected.connect(_on_network_player_connected)
+		network.player_disconnected.connect(_on_network_player_disconnected)
 	
 	var exit_zone = $Arena/ExitZone
 	if exit_zone:
@@ -67,6 +74,9 @@ func _process(delta: float) -> void:
 			if local_player and is_instance_valid(local_player):
 				top_speed = max(top_speed, Vector2(local_player.velocity.x, local_player.velocity.z).length())
 				_update_hud()
+				var network = get_node_or_null("/root/Network")
+				if network and network.peer:
+					network.broadcast_player_state(local_player.global_position, local_player.velocity)
 			if finish_order.size() >= players.size() or timer >= time_limit:
 				_end_race()
 		&"finished":
@@ -118,6 +128,31 @@ func _update_camera(delta: float) -> void:
 
 func _request_camera_shake(amount: float) -> void:
 	camera_shake = maxf(camera_shake, amount)
+
+func _on_network_player_connected(peer_id: int, player_name: String) -> void:
+	if remote_players.has(peer_id):
+		return
+	var player_scene = load("res://scenes/PlayerChair.tscn")
+	if not player_scene:
+		return
+	var remote = player_scene.instantiate()
+	remote.player_display_name = player_name
+	remote.set_can_move(false)
+	remote.name = "Remote_%d" % peer_id
+	add_child(remote)
+	remote_players[peer_id] = remote
+
+func _on_network_player_disconnected(peer_id: int) -> void:
+	var remote = remote_players.get(peer_id)
+	if remote and is_instance_valid(remote):
+		remote.queue_free()
+	remote_players.erase(peer_id)
+
+func _on_remote_player_state(peer_id: int, position: Vector3, remote_velocity: Vector3) -> void:
+	var remote = remote_players.get(peer_id)
+	if remote and is_instance_valid(remote):
+		remote.global_position = remote.global_position.lerp(position, 0.45)
+		remote.velocity = remote_velocity
 
 # --- SETUP ---
 
@@ -415,11 +450,17 @@ func _spawn_player() -> void:
 
 func _setup_hud() -> void:
 	var hud_script = load("res://scripts/HUD.gd")
-	if not hud_script:
-		return
-	hud = CanvasLayer.new()
-	hud.set_script(hud_script)
-	$UI.add_child(hud)
+	if hud_script:
+		hud = CanvasLayer.new()
+		hud.set_script(hud_script)
+		$UI.add_child(hud)
+	var mobile_script = load("res://scripts/MobileControls.gd")
+	if mobile_script and local_player:
+		mobile_controls = Control.new()
+		mobile_controls.set_script(mobile_script)
+		get_tree().root.add_child.call_deferred(mobile_controls)
+		mobile_controls.move_changed.connect(local_player.set_mobile_input)
+		mobile_controls.action_pressed.connect(local_player.trigger_mobile_action)
 
 func _update_hud() -> void:
 	if not hud or not local_player:
@@ -482,6 +523,12 @@ func _end_race() -> void:
 
 func _show_results() -> void:
 	match_state = &"finished"
+	var fx = load("res://scripts/ImpactFX.gd")
+	if fx and local_player:
+		fx.confetti(self, local_player.global_position + Vector3.UP * 1.5)
+	var audio = get_node_or_null("/root/AudioManager")
+	if audio:
+		audio.play_sfx("victory", 1.2)
 	if results_panel:
 		results_panel.visible = true
 		results_panel.modulate.a = 0.0

@@ -2,10 +2,47 @@
 # Deliver absurd HOSTILE cargo through impossible terrain
 extends Node3D
 
+var cargo_nodes: Array[RigidBody3D] = []
+var delivery_progress: float = 0.0
+var delivery_done := false
+var delivery_zone: Area3D
+
 func _ready() -> void:
-	print("[HAULED] Mode loaded — secondary mode (stub)")
 	_build_level()
 	_spawn_player()
+	var hud = _make_mode_hud("HAULED", "GET THE CARGO TO THE GREEN ZONE")
+	if delivery_zone:
+		delivery_zone.body_entered.connect(_on_delivery_body_entered)
+
+func _process(delta: float) -> void:
+	if delivery_done:
+		return
+	var cargo_distance = 0.0
+	for cargo in cargo_nodes:
+		if is_instance_valid(cargo):
+			cargo_distance += cargo.global_position.distance_to(Vector3(0, 1, 25))
+	if not cargo_nodes.is_empty():
+		delivery_progress = clampf(1.0 - cargo_distance / (cargo_nodes.size() * 45.0), 0.0, 1.0)
+		if delivery_progress >= 0.98:
+			_on_delivery_complete()
+
+func _on_delivery_body_entered(body: Node3D) -> void:
+	if body in cargo_nodes:
+		_on_delivery_complete()
+
+func _on_delivery_complete() -> void:
+	if delivery_done:
+		return
+	delivery_done = true
+	print("[HAULED] Delivery complete — cargo survived")
+
+func _make_mode_hud(title: String, objective: String) -> Label:
+	var label = Label.new()
+	label.text = "%s\n%s" % [title, objective]
+	label.position = Vector2(28, 24)
+	label.add_theme_font_size_override("font_size", 22)
+	add_child(label)
+	return label
 
 func _build_level() -> void:
 	# Single floor for now
@@ -31,6 +68,7 @@ func _build_level() -> void:
 	
 	# Spawn delivery zone
 	var zone = Area3D.new()
+	delivery_zone = zone
 	zone.position = Vector3(0, 1, 25)
 	add_child(zone)
 	var zcol = CollisionShape3D.new()
@@ -66,7 +104,7 @@ func _spawn_cargo() -> void:
 		mat.albedo_color = info.color
 		mesh_inst.material_override = mat
 		cargo.add_child(mesh_inst)
-		
+		cargo_nodes.append(cargo)
 		print("[HAULED] Spawned: %s" % info.name)
 
 func _spawn_player() -> void:

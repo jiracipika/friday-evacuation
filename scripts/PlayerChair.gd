@@ -34,6 +34,7 @@ var squash_amount: float = 1.0
 var target_squash: float = 1.0
 var landing_velocity: float = 0.0
 var boost_visual_timer: float = 0.0
+var mobile_input := Vector2.ZERO
 
 # Nodes
 @onready var mesh: MeshInstance3D = $ChairMesh
@@ -259,7 +260,8 @@ func _handle_input(delta: float) -> void:
 		var right = cam.global_transform.basis.x
 		right.y = 0
 		right = right.normalized()
-		
+		if mobile_input.length() > 0.1:
+			input_dir += forward * -mobile_input.y + right * mobile_input.x
 		if Input.is_action_pressed("move_forward"):
 			input_dir -= forward
 		if Input.is_action_pressed("move_back"):
@@ -357,6 +359,17 @@ func _play_sfx(effect_name: String, intensity: float = 1.0) -> void:
 	var audio_manager = get_node_or_null("/root/AudioManager")
 	if audio_manager and audio_manager.has_method("play_sfx"):
 		audio_manager.play_sfx(effect_name, intensity)
+
+func set_mobile_input(value: Vector2) -> void:
+	mobile_input = value
+
+func trigger_mobile_action(action_name: StringName) -> void:
+	if action_name == &"boost" and boost_cd_timer <= 0.0:
+		_start_boost()
+	elif action_name == &"action" and is_on_floor():
+		velocity.y = jump_force
+		target_squash = 1.18
+		_play_sfx("jump")
 
 func set_can_move(value: bool) -> void:
 	can_move = value

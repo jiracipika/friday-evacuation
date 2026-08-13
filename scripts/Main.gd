@@ -70,8 +70,9 @@ func _build_mode_buttons() -> void:
 	for i in range(MODE_INFO.size()):
 		var info = MODE_INFO[i]
 		var btn = Button.new()
-		btn.text = info.title
-		btn.custom_minimum_size = Vector2(0, 60)
+		var state = "PLAYABLE" if i == 0 else "PROTOTYPE"
+		btn.text = "%s\n%s  •  %s" % [info.title, info.subtitle, state]
+		btn.custom_minimum_size = Vector2(0, 72)
 		btn.add_theme_font_size_override("font_size", 20)
 		btn.pressed.connect(_select_mode.bind(i))
 		mode_list.add_child(btn)
@@ -88,9 +89,9 @@ func _select_mode(idx: int) -> void:
 	for i in range(buttons.size()):
 		buttons[i].disabled = i == idx
 		if i == idx:
-			buttons[i].text = ">> " + MODE_INFO[i].title + " <<"
+			buttons[i].text = ">> %s\n%s  •  %s <<" % [MODE_INFO[i].title, MODE_INFO[i].subtitle, "PLAYABLE" if i == 0 else "PROTOTYPE"]
 		else:
-			buttons[i].text = MODE_INFO[i].title
+			buttons[i].text = "%s\n%s  •  %s" % [MODE_INFO[i].title, MODE_INFO[i].subtitle, "PLAYABLE" if i == 0 else "PROTOTYPE"]
 
 func _on_play() -> void:
 	GameManager.select_mode(MODE_INFO[selected_index].mode)

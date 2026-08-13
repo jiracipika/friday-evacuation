@@ -6,6 +6,7 @@ extends Area3D
 
 var age: float = 0.0
 var trap_type: String = "water"  # "water", "banana", "stapler"
+var triggered := false
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
@@ -33,12 +34,20 @@ func _apply_visual() -> void:
 		mesh_node.material_override = mat
 
 func _on_body_entered(body: CharacterBody3D) -> void:
-	if body.is_in_group("players"):
-		if body.has_method("stun"):
-			body.stun(stun_duration)
-			print("[TRAP] %s hit %s trap!" % [body.player_display_name if "player_display_name" in body else "Player", trap_type])
-			# Remove trap after hit
-			queue_free()
+	if triggered or not body.is_in_group("players"):
+		return
+	triggered = true
+	if body.has_method("stun"):
+		body.stun(stun_duration)
+		var fx = load("res://scripts/ImpactFX.gd")
+		if fx:
+			var burst_color = Color("70b7ff") if trap_type == "water" else (Color("ffcf55") if trap_type == "banana" else Color("dce6ff"))
+			fx.burst(get_parent(), global_position + Vector3.UP * 0.2, burst_color, 24)
+		var audio = get_node_or_null("/root/AudioManager")
+		if audio:
+			audio.play_sfx("trap", 1.3)
+		print("[TRAP] %s hit %s trap!" % [body.player_display_name if "player_display_name" in body else "Player", trap_type])
+		queue_free()
 
 func _process(delta: float) -> void:
 	age += delta
