@@ -1,8 +1,8 @@
 # SabotageTrap.gd — Water puddle / banana peel that stuns players
 extends Area3D
 
-@export var stun_duration: float = 2.0
-@export var lifetime: float = 15.0
+@export var stun_duration: float = 1.5
+@export var lifetime: float = 12.0
 
 var age: float = 0.0
 var trap_type: String = "water"  # "water", "banana", "stapler"
