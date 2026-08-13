@@ -17,6 +17,8 @@ func _init() -> void:
 		"res://scripts/ModeHUD.gd",
 		"res://scripts/ModeCard.gd",
 		"res://scripts/Lobby.gd",
+		"res://scripts/Network.gd",
+		"res://scripts/NetworkSmokeTest.gd",
 		"res://scripts/Hauled.gd",
 		"res://scripts/ShopSeek.gd",
 		"res://scripts/PizzaColony.gd",

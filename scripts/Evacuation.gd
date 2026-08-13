@@ -48,6 +48,9 @@ func _ready() -> void:
 		network.remote_player_state.connect(_on_remote_player_state)
 		network.player_connected.connect(_on_network_player_connected)
 		network.player_disconnected.connect(_on_network_player_disconnected)
+		for peer_id in network.connected_players:
+			if int(peer_id) != multiplayer.get_unique_id():
+				_on_network_player_connected(int(peer_id), network.connected_players[peer_id])
 	
 	var exit_zone = $Arena/ExitZone
 	if exit_zone:
