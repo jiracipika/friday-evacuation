@@ -9,14 +9,14 @@ signal shake_requested(amount: float)
 @export var player_display_name: String = "Player"
 
 # Movement tuning — lower accel = smoother starts/stops
-@export var acceleration: float = 18.0
+@export var acceleration: float = 20.0
 @export var max_speed: float = 12.0
-@export var friction: float = 12.0
-@export var rotation_speed: float = 12.0
-@export var boost_force: float = 24.0
-@export var boost_cooldown: float = 3.0
-@export var boost_duration: float = 0.6
-@export var jump_force: float = 7.0
+@export var friction: float = 14.0
+@export var rotation_speed: float = 16.0
+@export var boost_force: float = 28.0
+@export var boost_cooldown: float = 2.5
+@export var boost_duration: float = 0.8
+@export var jump_force: float = 8.0
 
 # Internal state
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -74,14 +74,14 @@ func _setup_boost_particles() -> void:
 	material.scale_max = 0.22
 	material.color = Color(1.0, 0.55, 0.08, 0.85)
 	boost_particles.process_material = material
-	boost_particles.amount = 28
-	boost_particles.lifetime = 0.45
+	boost_particles.amount = 16
+	boost_particles.lifetime = 0.3
 
 func _setup_dust_particles() -> void:
 	dust_particles = GPUParticles3D.new()
 	dust_particles.name = "RollingDust"
-	dust_particles.amount = 18
-	dust_particles.lifetime = 0.55
+	dust_particles.amount = 10
+	dust_particles.lifetime = 0.35
 	dust_particles.emitting = false
 	var process_material = ParticleProcessMaterial.new()
 	process_material.direction = Vector3(0, 1, 0)

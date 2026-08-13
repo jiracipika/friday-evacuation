@@ -51,11 +51,11 @@ func _ready() -> void:
 		for peer_id in network.connected_players:
 			if int(peer_id) != multiplayer.get_unique_id():
 				_on_network_player_connected(int(peer_id), network.connected_players[peer_id])
-	
+
 	var exit_zone = $Arena/ExitZone
 	if exit_zone:
 		exit_zone.body_entered.connect(_on_player_reached_exit)
-	
+
 	if results_panel:
 		var rematch = results_panel.get_node_or_null("VBox/RematchButton")
 		if rematch:
@@ -84,7 +84,7 @@ func _process(delta: float) -> void:
 				_end_race()
 		&"finished":
 			pass
-	
+
 	_update_camera(delta)
 
 func _update_camera(delta: float) -> void:
@@ -92,29 +92,29 @@ func _update_camera(delta: float) -> void:
 		return
 	if not camera:
 		return
-	
+
 	var player_pos = local_player.global_position
 	var player_vel = local_player.velocity
 	var move_dir = Vector3(player_vel.x, 0, player_vel.z)
 	var cam_offset: Vector3
-	
+
 	if move_dir.length() > 2.0:
 		var dir_norm = move_dir.normalized()
 		cam_offset = Vector3(-dir_norm.x * 3.0, 6.0, -dir_norm.z * 3.0)
 	else:
 		var fwd = -local_player.global_transform.basis.z
 		cam_offset = Vector3(fwd.x * 3.0, 6.0, fwd.z * 3.0)
-	
+
 	var look_ahead = move_dir * 0.3
 	var target_cam_pos = player_pos + cam_offset
 	var target_look = player_pos + look_ahead
-	
+
 	var cam_lerp = 1.0 - exp(-8.0 * delta)
 	var look_lerp = 1.0 - exp(-6.0 * delta)
-	
+
 	cam_follow_pos = cam_follow_pos.lerp(target_cam_pos, cam_lerp)
 	cam_look_target = cam_look_target.lerp(target_look, look_lerp)
-	
+
 	camera.global_position = cam_follow_pos
 	camera.look_at(cam_look_target)
 	camera_shake = maxf(camera_shake - delta * 0.9, 0.0)
@@ -159,66 +159,78 @@ func _on_remote_player_state(peer_id: int, position: Vector3, remote_velocity: V
 
 # --- SETUP ---
 
+var exit_marker: MeshInstance3D
+
 func _setup_arena() -> void:
-	_build_floor(Vector3(0, 0, 0), Color(0.15, 0.15, 0.22))
-	_build_floor(Vector3(0, 6, 0), Color(0.18, 0.15, 0.20))
-	_build_floor(Vector3(0, 12, 0), Color(0.13, 0.16, 0.20))
-	_build_floor(Vector3(0, 18, 0), Color(0.10, 0.18, 0.15))
+	_build_floor(Vector3(0, 0, 0), Color(0.15, 0.15, 0.22), 0)
+	_build_floor(Vector3(0, 6, 0), Color(0.18, 0.15, 0.20), 1)
+	_build_floor(Vector3(0, 12, 0), Color(0.13, 0.16, 0.20), 2)
+	_build_floor(Vector3(0, 18, 0), Color(0.10, 0.18, 0.15), 3)
 	_setup_environment()
-	
+
 	_build_ramp(Vector3(8, 0, 20), Vector3(8, 6, 20))
 	_build_ramp(Vector3(-8, 6, 20), Vector3(-8, 12, 20))
 	_build_ramp(Vector3(8, 12, 20), Vector3(8, 18, 20))
-	
+
 	_spawn_obstacles()
 	_spawn_powerups()
+	_add_exit_marker()
 
-func _build_floor(pos: Vector3, color: Color) -> void:
+# --- FLOOR/RAMP GUIDANCE ---
+func _build_floor(pos: Vector3, color: Color, floor_index: int = 0) -> void:
 	var floor_node = StaticBody3D.new()
 	floor_node.position = pos
 	add_child(floor_node)
-	
+
 	var col = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
 	shape.size = Vector3(40, 0.2, 40)
 	col.shape = shape
 	floor_node.add_child(col)
-	
+
 	var mesh_inst = MeshInstance3D.new()
 	var mesh = BoxMesh.new()
 	mesh.size = Vector3(40, 0.2, 40)
 	mesh_inst.mesh = mesh
-	var mat = _make_carpet_material(color)
+	var mat = _make_carpet_material(color, floor_index)
 	mesh_inst.material_override = mat
 	floor_node.add_child(mesh_inst)
-	_spawn_ceiling_lights(pos)
-	
+
+	# Add floor number on floor
+	_add_floor_number(pos, floor_index)
+	# Add exit direction indicators on floor 4
+	if floor_index == 3:
+		_add_exit_indicators(pos)
+
+	_spawn_ceiling_lights(pos, floor_index)
+
 	for i in range(4):
 		var wall = StaticBody3D.new()
 		wall.position = pos + Vector3([0, 20, 0, -20][i], 1.5, [20, 0, -20, 0][i])
 		add_child(wall)
-		
+
 		var wall_col = CollisionShape3D.new()
 		var wall_shape = BoxShape3D.new()
 		wall_shape.size = Vector3(40, 3, 0.3)
 		wall_col.shape = wall_shape
 		wall.add_child(wall_col)
-		
+
 		var wall_mesh = MeshInstance3D.new()
 		var wall_m = BoxMesh.new()
 		wall_m.size = Vector3(40, 3, 0.3)
 		wall_mesh.mesh = wall_m
-		var wall_mat = _make_wall_material(color)
+		var wall_mat = _make_wall_material(color, floor_index)
 		wall_mesh.material_override = wall_mat
 		wall.add_child(wall_mesh)
 
-func _make_carpet_material(base_color: Color) -> StandardMaterial3D:
+func _make_carpet_material(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = base_color
 	mat.roughness = 0.95
 	mat.metallic = 0.0
 	var noise = FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.seed = 900 + floor_index  # Different noise per floor
 	noise.frequency = 0.08
 	var texture = NoiseTexture2D.new()
 	texture.width = 256
@@ -228,11 +240,81 @@ func _make_carpet_material(base_color: Color) -> StandardMaterial3D:
 	mat.albedo_texture = texture
 	return mat
 
-func _make_wall_material(base_color: Color) -> StandardMaterial3D:
+func _make_wall_material(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = base_color.darkened(0.3)
 	mat.roughness = 0.88
 	return mat
+
+func _add_floor_number(floor_pos: Vector3, floor_index: int) -> void:
+	var number = Label3D.new()
+	number.text = "%d" % (floor_index + 1)
+	number.pixel_size = 0.04
+	number.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 1.0, 1.0, 0.15)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.no_depth_test = true
+	number.set_material_override(mat)
+	number.position = floor_pos + Vector3(-16, 0.15, -16)
+	add_child(number)
+
+	var number2 = number.duplicate()
+	number2.position = floor_pos + Vector3(16, 0.15, 16)
+	add_child(number2)
+
+func _add_exit_indicators(floor_pos: Vector3) -> void:
+	for x in [-10, 0, 10]:
+		var arrow = MeshInstance3D.new()
+		var cone = CylinderMesh.new()
+		cone.top_radius = 0.4
+		cone.bottom_radius = 0.8
+		cone.height = 0.15
+		arrow.mesh = cone
+		arrow.rotation.x = PI / 2.0
+		arrow.position = floor_pos + Vector3(x, 0.15, 18)
+		var mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(0.25, 1.0, 0.4, 0.12)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.no_depth_test = true
+		arrow.material_override = mat
+		add_child(arrow)
+
+func _add_exit_marker() -> void:
+	exit_marker = MeshInstance3D.new()
+	var ring = TorusMesh.new()
+	ring.inner_radius = 2.8
+	ring.outer_radius = 3.2
+	exit_marker.mesh = ring
+	exit_marker.position = Vector3(0, 1.8, 22.0)
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.1, 0.95, 0.3)
+	mat.emission_enabled = true
+	mat.emission = Color(0.1, 0.95, 0.3)
+	mat.emission_energy_multiplier = 1.8
+	exit_marker.material_override = mat
+	add_child(exit_marker)
+
+	var arrow = MeshInstance3D.new()
+	var cone = ConeMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = 1.0
+	cone.height = 2.0
+	arrow.mesh = cone
+	arrow.position = Vector3(0, 3.5, 22.0)
+	arrow.rotation.x = PI
+	arrow.material_override = mat
+	add_child(arrow)
+
+	animate_exit_marker()
+
+func animate_exit_marker() -> void:
+	if not exit_marker:
+		return
+	var tween = create_tween()
+	tween.set_loops()
+	tween.tween_property(exit_marker, "scale", Vector3(1.2, 1.2, 1.2), 0.8)
+	tween.tween_property(exit_marker, "scale", Vector3(1.0, 1.0, 1.0), 0.8)
 
 func _make_wood_material() -> StandardMaterial3D:
 	var mat = StandardMaterial3D.new()
@@ -250,21 +332,21 @@ func _make_wood_material() -> StandardMaterial3D:
 	mat.albedo_texture = texture
 	return mat
 
-func _spawn_ceiling_lights(floor_pos: Vector3) -> void:
+func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 	var light_group = Node3D.new()
 	light_group.name = "CeilingLights_%s" % str(int(floor_pos.y))
 	add_child(light_group)
-	
 	for x in [-12.0, 0.0, 12.0]:
 		for z in [-12.0, 0.0, 12.0]:
 			var light = OmniLight3D.new()
 			light.position = floor_pos + Vector3(x, 3.0, z)
-			light.light_color = Color(1.0, 0.88, 0.68)
-			light.light_energy = 0.35
-			light.omni_range = 16.0
+			light.light_color = Color(1.0, 0.92, 0.78)
+			light.light_energy = 0.75
+			light.omni_range = 22.0
 			light.shadow_enabled = false
+			light.light_bake_mode = OmniLight3D.BAKE_STATIC
 			light_group.add_child(light)
-			
+
 			var fixture = MeshInstance3D.new()
 			fixture.position = floor_pos + Vector3(x, 2.92, z)
 			var fixture_mesh = BoxMesh.new()
@@ -283,12 +365,9 @@ func _setup_environment() -> void:
 	if not world or not world.environment:
 		return
 	var env = world.environment
-	env.ambient_light_energy = 0.32
-	env.fog_enabled = true
-	env.fog_density = 0.008
-	env.fog_aerial_perspective = 0.5
-	env.glow_enabled = true
-	env.glow_intensity = 0.7
+	env.ambient_light_energy = 0.42
+	env.fog_enabled = false
+	env.glow_enabled = false
 	env.glow_strength = 0.8
 
 func _build_ramp(from_pos: Vector3, to_pos: Vector3) -> void:
@@ -300,13 +379,13 @@ func _build_ramp(from_pos: Vector3, to_pos: Vector3) -> void:
 	var angle = atan2(direction.y, sqrt(direction.x ** 2 + direction.z ** 2))
 	ramp.rotation.x = -angle
 	add_child(ramp)
-	
+
 	var col = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
 	shape.size = Vector3(6, 0.2, length)
 	col.shape = shape
 	ramp.add_child(col)
-	
+
 	var mesh_inst = MeshInstance3D.new()
 	var mesh = BoxMesh.new()
 	mesh.size = Vector3(6, 0.2, length)
@@ -320,7 +399,7 @@ func _build_ramp(from_pos: Vector3, to_pos: Vector3) -> void:
 func _spawn_obstacles() -> void:
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 1337  # Fixed seed for consistent layout
-	
+
 	for i in range(15):
 		var desk = _make_desk()
 		var floor_y = [0, 6, 12, 18][rng.randi() % 4]
@@ -334,13 +413,13 @@ func _spawn_obstacles() -> void:
 
 func _make_desk() -> StaticBody3D:
 	var desk = StaticBody3D.new()
-	
+
 	var col = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
 	shape.size = Vector3(2, 1.2, 1)
 	col.shape = shape
 	desk.add_child(col)
-	
+
 	var mesh_inst = MeshInstance3D.new()
 	var mesh = BoxMesh.new()
 	mesh.size = Vector3(2, 1.2, 1)
@@ -348,13 +427,13 @@ func _make_desk() -> StaticBody3D:
 	var mat = _make_wood_material()
 	mesh_inst.material_override = mat
 	desk.add_child(mesh_inst)
-	
+
 	return desk
 
 func _spawn_powerups() -> void:
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 999
-	
+
 	for i in range(8):
 		var pu = _make_powerup()
 		var floor_y = [0.5, 6.5, 12.5, 18.5][rng.randi() % 4]
@@ -368,20 +447,20 @@ func _spawn_powerups() -> void:
 func _make_powerup() -> Area3D:
 	var pu = Area3D.new()
 	pu.set_script(load("res://scripts/PowerUpVisual.gd"))
-	
+
 	var col = CollisionShape3D.new()
 	var shape = SphereShape3D.new()
-	shape.radius = 0.6
+	shape.radius = 0.7
 	col.shape = shape
 	pu.add_child(col)
-	
+
 	var cup_mat = StandardMaterial3D.new()
 	cup_mat.albedo_color = Color(0.92, 0.52, 0.12)
 	cup_mat.roughness = 0.45
 	cup_mat.emission_enabled = true
 	cup_mat.emission = Color(1.0, 0.34, 0.04)
 	cup_mat.emission_energy_multiplier = 1.2
-	
+
 	var cup = MeshInstance3D.new()
 	var cup_mesh = CylinderMesh.new()
 	cup_mesh.top_radius = 0.34
@@ -391,7 +470,7 @@ func _make_powerup() -> Area3D:
 	cup.position.y = 0.0
 	cup.material_override = cup_mat
 	pu.add_child(cup)
-	
+
 	var coffee = MeshInstance3D.new()
 	var coffee_mesh = CylinderMesh.new()
 	coffee_mesh.top_radius = 0.27
@@ -404,7 +483,7 @@ func _make_powerup() -> Area3D:
 	coffee_mat.roughness = 0.3
 	coffee.material_override = coffee_mat
 	pu.add_child(coffee)
-	
+
 	var handle = MeshInstance3D.new()
 	var handle_mesh = TorusMesh.new()
 	handle_mesh.inner_radius = 0.11
@@ -414,20 +493,30 @@ func _make_powerup() -> Area3D:
 	handle.rotation.x = PI / 2.0
 	handle.material_override = cup_mat
 	pu.add_child(handle)
-	
-	var glow = OmniLight3D.new()
-	glow.light_color = Color(1.0, 0.45, 0.08)
-	glow.light_energy = 0.65
-	glow.omni_range = 4.0
-	pu.add_child(glow)
-	
+
+	# Add ring underneath to make it more visible
+	var ring = MeshInstance3D.new()
+	var ring_mesh = TorusMesh.new()
+	ring_mesh.inner_radius = 0.6
+	ring_mesh.outer_radius = 0.65
+	ring.mesh = ring_mesh
+	ring.rotation.x = PI / 2.0
+	var ring_mat = StandardMaterial3D.new()
+	ring_mat.albedo_color = Color(1.0, 0.65, 0.12)
+	ring_mat.emission_enabled = true
+	ring_mat.emission = Color(1.0, 0.45, 0.08)
+	ring_mat.emission_energy_multiplier = 0.6
+	ring.material_override = ring_mat
+	ring.position.y = -0.1
+	pu.add_child(ring)
+
 	pu.body_entered.connect(func(body):
 		if body.is_in_group("players"):
 			if body.has_method("_start_boost"):
 				body._start_boost()
 			pu.queue_free()
 	)
-	
+
 	return pu
 
 # --- PLAYER SPAWN ---
@@ -435,132 +524,123 @@ func _make_powerup() -> Area3D:
 func _spawn_player() -> void:
 	var player_scene = load("res://scenes/PlayerChair.tscn")
 	if not player_scene:
-		push_error("Could not load PlayerChair.tscn!")
 		return
 	local_player = player_scene.instantiate()
-	local_player.player_display_name = GameManager.player_name
-	local_player.player_color = Color(0.4, 0.8, 1.0)
-	local_player.set_can_move(false)
+	local_player.position = Vector3(0, 1.0, 0)
 	add_child(local_player)
-	local_player.position = Vector3(0, 1.5, -10)
-	players.append(local_player)
-	
-	# Initialize camera position at player so first frame isn't a wild fly-in
-	if camera:
-		cam_follow_pos = local_player.global_position + Vector3(0, 6, 10)
-		cam_look_target = local_player.global_position
-		camera.global_position = cam_follow_pos
+	players.append({"id": 1, "name": local_player.player_display_name})
 
-func _setup_hud() -> void:
-	var hud_script = load("res://scripts/HUD.gd")
-	if hud_script:
-		hud = CanvasLayer.new()
-		hud.set_script(hud_script)
-		$UI.add_child(hud)
-	var mobile_script = load("res://scripts/MobileControls.gd")
-	if mobile_script and local_player:
-		mobile_controls = Control.new()
-		mobile_controls.set_script(mobile_script)
-		get_tree().root.add_child.call_deferred(mobile_controls)
-		mobile_controls.move_changed.connect(local_player.set_mobile_input)
-		mobile_controls.action_pressed.connect(local_player.trigger_mobile_action)
-
-func _update_hud() -> void:
-	if not hud or not local_player:
-		return
-	if hud.has_method("set_timer_text"):
-		hud.set_timer_text(timer_label.text if timer_label else "")
-		hud.set_speed(Vector2(local_player.velocity.x, local_player.velocity.z).length(), local_player.max_speed)
-		hud.set_boost(local_player.boost_cd_timer, local_player.boost_duration, local_player.is_boosting)
-		hud.set_floor(clampi(int(floor(local_player.global_position.y / 6.0)) + 1, 1, 4))
-		hud.set_player_position(local_player.global_position, clampi(int(floor(local_player.global_position.y / 6.0)), 0, 3))
-		hud.set_status("COUNTDOWN" if match_state == &"countdown" else "RACE", Color("ffcf55"))
-
+# --- GAME FLOW ---
 
 func _start_countdown() -> void:
 	match_state = &"countdown"
 	timer = countdown_seconds
+	if countdown_label:
+		countdown_label.text = str(int(countdown_seconds))
+		countdown_label.visible = true
 
 func _update_countdown_display() -> void:
 	if countdown_label:
-		var secs = ceili(timer)
-		countdown_label.text = str(secs) if secs > 0 else "GO!"
-		countdown_label.visible = true
+		var seconds = int(ceilf(timer))
+		countdown_label.text = str(seconds)
+		if seconds <= 0:
+			countdown_label.visible = false
 
 func _start_race() -> void:
 	match_state = &"racing"
 	timer = 0.0
-	if countdown_label:
-		countdown_label.text = "GO!"
-		countdown_label.visible = false
-	for p in players:
-		if p and is_instance_valid(p):
-			p.set_can_move(true)
+	if local_player:
+		local_player.set_can_move(true)
+	_spawn_traps()
+
+func _spawn_traps() -> void:
+	var manager = get_node_or_null("/root/GameManager")
+	var network = get_node_or_null("/root/Network")
+
+	var trap_scene = load("res://scenes/objects/SabotageTrap.tscn")
+	if not trap_scene:
+		return
+
+	for i in range(4):
+		var trap = trap_scene.instantiate()
+		var floor_y = [0.5, 6.5, 12.5, 18.5][i]
+		trap.position = Vector3(
+			randf_range(-15, 15),
+			floor_y,
+			randf_range(-15, 15)
+		)
+		if trap.has_method("_set_owner"):
+			trap._set_owner(network.multiplayer_peer.get_unique_id() if network and network.multiplayer_peer else 1)
+		traps_placed += 1
+		add_child(trap)
 
 func _update_timer_display() -> void:
 	if timer_label:
-		var remaining = max(0, time_limit - timer)
-		var mins = int(remaining) / 60
-		var secs = int(remaining) % 60
-		timer_label.text = "%d:%02d" % [mins, secs]
+		var remaining = time_limit - timer
+		timer_label.text = "TIME: %d" % int(remaining)
 
-func _on_player_reached_exit(body: CharacterBody3D) -> void:
+func _update_hud() -> void:
+	if not hud:
+		return
+	var speed_label = hud.get_node_or_null("SpeedLabel")
+	if speed_label and local_player:
+		var speed = int(Vector2(local_player.velocity.x, local_player.velocity.z).length())
+		speed_label.text = "SPEED: %d km/h" % speed
+
+func _on_player_reached_exit(body: Node3D) -> void:
 	if not body.is_in_group("players"):
 		return
-	if match_state != &"racing":
-		return
-	
-	var pname = body.player_display_name if "player_display_name" in body else "Player"
-	var entry = {"name": pname, "time": timer}
-	finish_order.append(entry)
-	print("[RACE] %s reached the exit at %.1fs!" % [pname, timer])
-	
-	body.set_can_move(false)
-	
-	if finish_order.size() == 1:
-		_show_results()
+	var player_id = body.get_instance_id()
+	for entry in finish_order:
+		if entry.player_id == player_id:
+			return
+	finish_order.append({
+		"player_id": player_id,
+		"name": body.player_display_name if body.has_method("get_player_display_name") else "Unknown",
+		"time": timer
+	})
+	if body == local_player:
+		if local_player and local_player.has_method("trigger_mobile_action"):
+			local_player.trigger_mobile_action("victory")
+	_end_race()
 
 func _end_race() -> void:
+	if match_state == &"finished":
+		return
 	match_state = &"finished"
-	_show_results()
+	if local_player:
+		local_player.set_can_move(false)
 
-func _show_results() -> void:
-	match_state = &"finished"
-	var fx = load("res://scripts/ImpactFX.gd")
-	if fx and local_player:
-		fx.confetti(self, local_player.global_position + Vector3.UP * 1.5)
-	var audio = get_node_or_null("/root/AudioManager")
-	if audio:
-		audio.play_sfx("victory", 1.2)
 	if results_panel:
 		results_panel.visible = true
-		results_panel.modulate.a = 0.0
-		results_panel.scale = Vector2(0.86, 0.86)
-		var label = results_panel.get_node_or_null("VBox/WinnerLabel")
-		if label and finish_order.size() > 0:
-			label.text = "%s WINS!\nLast one buys beers!" % finish_order[0].name
-		var stats = results_panel.get_node_or_null("VBox/StatsLabel")
-		if not stats:
-			stats = Label.new()
-			stats.name = "StatsLabel"
-			stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			stats.add_theme_font_size_override("font_size", 18)
-			results_panel.get_node("VBox").add_child(stats)
-		stats.text = "TOP SPEED  %d km/h\nTRAPS PLACED  %d" % [roundi(top_speed * 3.6), traps_placed]
-		var tween = create_tween().set_parallel(true)
-		tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tween.tween_property(results_panel, "modulate:a", 1.0, 0.32)
-		tween.tween_property(results_panel, "scale", Vector2.ONE, 0.38)
+		var vbox = results_panel.get_node_or_null("VBox")
+		if vbox:
+			var winner_label = vbox.get_node_or_null("WinnerLabel")
+			var stats_label = vbox.get_node_or_null("StatsLabel")
+			if winner_label:
+				if finish_order.size() > 0:
+					var winner = finish_order[0]
+					winner_label.text = "%s WINS!" % winner.name
+				else:
+					winner_label.text = "NO WINNER"
+			if stats_label:
+				stats_label.text = "TOP SPEED: %d km/h\nTRAPS HIT: %d" % [int(top_speed), traps_hit]
 
+	var impact = load("res://scripts/ImpactFX.gd")
+	if impact and impact.has_method("confetti_burst"):
+		impact.confetti_burst(local_player.global_position if local_player else Vector3.ZERO)
 
 func _on_rematch() -> void:
 	get_tree().reload_current_scene()
 
 func _on_back_to_menu() -> void:
-	get_tree().change_scene_to_file("res://scenes/Main.tscn")
+	var manager = get_node_or_null("/root/GameManager")
+	if manager:
+		manager.set_mode(GameManager.Modes.MAIN_MENU)
 
-# --- INPUT ---
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("pause"):
-		get_tree().change_scene_to_file("res://scenes/Main.tscn")
+func _setup_hud() -> void:
+	hud = $UI
+	if hud:
+		var speed_label = hud.get_node_or_null("SpeedLabel")
+		if speed_label:
+			speed_label.text = "SPEED: 0 km/h"

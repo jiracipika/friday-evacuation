@@ -111,5 +111,5 @@ func set_boost(cooldown: float, duration: float, active: bool) -> void:
 	if boost_bar:
 		boost_bar.value = 100.0 if active else clampf(100.0 - cooldown / 3.0 * 100.0, 0.0, 100.0)
 	if boost_label:
-		boost_label.text = "☕ BOOST ACTIVE" if active else ("☕ BOOST READY [SPACE]" if cooldown <= 0.0 else "☕ BOOST RECHARGING")
+		boost_label.text = "☕ BOOST ACTIVE" if active else ("☕ BOOST READY [SPACE]" if cooldown <= 0.0 else "☕ BOOST %.1fs" % cooldown)
 		boost_label.add_theme_color_override("font_color", Color("ffcf55") if active or cooldown <= 0.0 else Color(1, 1, 1, 0.45))
