@@ -10,6 +10,7 @@ func _init() -> void:
 	var scripts = [
 		"res://scripts/PlayerChair.gd",
 		"res://scripts/SabotageTrap.gd",
+		"res://scripts/PowerUpVisual.gd",
 		"res://scripts/Hauled.gd",
 		"res://scripts/ShopSeek.gd",
 		"res://scripts/PizzaColony.gd",

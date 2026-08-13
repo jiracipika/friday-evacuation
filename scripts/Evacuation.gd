@@ -98,6 +98,7 @@ func _setup_arena() -> void:
 	_build_floor(Vector3(0, 6, 0), Color(0.18, 0.15, 0.20))
 	_build_floor(Vector3(0, 12, 0), Color(0.13, 0.16, 0.20))
 	_build_floor(Vector3(0, 18, 0), Color(0.10, 0.18, 0.15))
+	_setup_environment()
 	
 	_build_ramp(Vector3(8, 0, 20), Vector3(8, 6, 20))
 	_build_ramp(Vector3(-8, 6, 20), Vector3(-8, 12, 20))
@@ -121,11 +122,10 @@ func _build_floor(pos: Vector3, color: Color) -> void:
 	var mesh = BoxMesh.new()
 	mesh.size = Vector3(40, 0.2, 40)
 	mesh_inst.mesh = mesh
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.roughness = 0.8
+	var mat = _make_carpet_material(color)
 	mesh_inst.material_override = mat
 	floor_node.add_child(mesh_inst)
+	_spawn_ceiling_lights(pos)
 	
 	for i in range(4):
 		var wall = StaticBody3D.new()
@@ -142,11 +142,88 @@ func _build_floor(pos: Vector3, color: Color) -> void:
 		var wall_m = BoxMesh.new()
 		wall_m.size = Vector3(40, 3, 0.3)
 		wall_mesh.mesh = wall_m
-		var wall_mat = StandardMaterial3D.new()
-		wall_mat.albedo_color = color.darkened(0.3)
-		wall_mat.roughness = 0.9
+		var wall_mat = _make_wall_material(color)
 		wall_mesh.material_override = wall_mat
 		wall.add_child(wall_mesh)
+
+func _make_carpet_material(base_color: Color) -> StandardMaterial3D:
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = base_color
+	mat.roughness = 0.95
+	mat.metallic = 0.0
+	var noise = FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.08
+	var texture = NoiseTexture2D.new()
+	texture.width = 256
+	texture.height = 256
+	texture.seamless = true
+	texture.noise = noise
+	mat.albedo_texture = texture
+	return mat
+
+func _make_wall_material(base_color: Color) -> StandardMaterial3D:
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = base_color.darkened(0.3)
+	mat.roughness = 0.88
+	return mat
+
+func _make_wood_material() -> StandardMaterial3D:
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.35, 0.24, 0.14)
+	mat.roughness = 0.72
+	mat.metallic = 0.0
+	var noise = FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.045
+	var texture = NoiseTexture2D.new()
+	texture.width = 128
+	texture.height = 128
+	texture.seamless = true
+	texture.noise = noise
+	mat.albedo_texture = texture
+	return mat
+
+func _spawn_ceiling_lights(floor_pos: Vector3) -> void:
+	var light_group = Node3D.new()
+	light_group.name = "CeilingLights_%s" % str(int(floor_pos.y))
+	add_child(light_group)
+	
+	for x in [-12.0, 0.0, 12.0]:
+		for z in [-12.0, 0.0, 12.0]:
+			var light = OmniLight3D.new()
+			light.position = floor_pos + Vector3(x, 3.0, z)
+			light.light_color = Color(1.0, 0.88, 0.68)
+			light.light_energy = 0.35
+			light.omni_range = 16.0
+			light.shadow_enabled = false
+			light_group.add_child(light)
+			
+			var fixture = MeshInstance3D.new()
+			fixture.position = floor_pos + Vector3(x, 2.92, z)
+			var fixture_mesh = BoxMesh.new()
+			fixture_mesh.size = Vector3(3.0, 0.06, 0.22)
+			fixture.mesh = fixture_mesh
+			var fixture_mat = StandardMaterial3D.new()
+			fixture_mat.albedo_color = Color(0.95, 0.9, 0.72)
+			fixture_mat.emission_enabled = true
+			fixture_mat.emission = Color(1.0, 0.72, 0.35)
+			fixture_mat.emission_energy_multiplier = 1.4
+			fixture.material_override = fixture_mat
+			light_group.add_child(fixture)
+
+func _setup_environment() -> void:
+	var world = get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if not world or not world.environment:
+		return
+	var env = world.environment
+	env.ambient_light_energy = 0.32
+	env.fog_enabled = true
+	env.fog_density = 0.008
+	env.fog_aerial_perspective = 0.5
+	env.glow_enabled = true
+	env.glow_intensity = 0.7
+	env.glow_strength = 0.8
 
 func _build_ramp(from_pos: Vector3, to_pos: Vector3) -> void:
 	var ramp = StaticBody3D.new()
@@ -202,9 +279,7 @@ func _make_desk() -> StaticBody3D:
 	var mesh = BoxMesh.new()
 	mesh.size = Vector3(2, 1.2, 1)
 	mesh_inst.mesh = mesh
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.35, 0.3, 0.25)
-	mat.roughness = 0.7
+	var mat = _make_wood_material()
 	mesh_inst.material_override = mat
 	desk.add_child(mesh_inst)
 	
@@ -226,6 +301,7 @@ func _spawn_powerups() -> void:
 
 func _make_powerup() -> Area3D:
 	var pu = Area3D.new()
+	pu.set_script(load("res://scripts/PowerUpVisual.gd"))
 	
 	var col = CollisionShape3D.new()
 	var shape = SphereShape3D.new()
@@ -233,18 +309,51 @@ func _make_powerup() -> Area3D:
 	col.shape = shape
 	pu.add_child(col)
 	
-	var mesh_inst = MeshInstance3D.new()
-	var mesh = SphereMesh.new()
-	mesh.radius = 0.6
-	mesh.height = 1.2
-	mesh_inst.mesh = mesh
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.8, 0.5, 0.2)
-	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.6, 0.1)
-	mat.emission_energy_multiplier = 1.5
-	mesh_inst.material_override = mat
-	pu.add_child(mesh_inst)
+	var cup_mat = StandardMaterial3D.new()
+	cup_mat.albedo_color = Color(0.92, 0.52, 0.12)
+	cup_mat.roughness = 0.45
+	cup_mat.emission_enabled = true
+	cup_mat.emission = Color(1.0, 0.34, 0.04)
+	cup_mat.emission_energy_multiplier = 1.2
+	
+	var cup = MeshInstance3D.new()
+	var cup_mesh = CylinderMesh.new()
+	cup_mesh.top_radius = 0.34
+	cup_mesh.bottom_radius = 0.27
+	cup_mesh.height = 0.52
+	cup.mesh = cup_mesh
+	cup.position.y = 0.0
+	cup.material_override = cup_mat
+	pu.add_child(cup)
+	
+	var coffee = MeshInstance3D.new()
+	var coffee_mesh = CylinderMesh.new()
+	coffee_mesh.top_radius = 0.27
+	coffee_mesh.bottom_radius = 0.27
+	coffee_mesh.height = 0.035
+	coffee.mesh = coffee_mesh
+	coffee.position.y = 0.27
+	var coffee_mat = StandardMaterial3D.new()
+	coffee_mat.albedo_color = Color(0.12, 0.045, 0.015)
+	coffee_mat.roughness = 0.3
+	coffee.material_override = coffee_mat
+	pu.add_child(coffee)
+	
+	var handle = MeshInstance3D.new()
+	var handle_mesh = TorusMesh.new()
+	handle_mesh.inner_radius = 0.11
+	handle_mesh.outer_radius = 0.18
+	handle.mesh = handle_mesh
+	handle.position = Vector3(0.34, 0.0, 0.0)
+	handle.rotation.x = PI / 2.0
+	handle.material_override = cup_mat
+	pu.add_child(handle)
+	
+	var glow = OmniLight3D.new()
+	glow.light_color = Color(1.0, 0.45, 0.08)
+	glow.light_energy = 0.65
+	glow.omni_range = 4.0
+	pu.add_child(glow)
 	
 	pu.body_entered.connect(func(body):
 		if body.is_in_group("players"):

@@ -24,6 +24,9 @@ var is_boosting: bool = false
 var can_move: bool = true
 var is_stunned: float = 0.0  # seconds remaining
 var smooth_facing: float = 0.0  # smoothed Y rotation for model
+var chair_wheels: Array[MeshInstance3D] = []
+var chair_seat: MeshInstance3D
+var chair_backrest: MeshInstance3D
 
 # Nodes
 @onready var mesh: MeshInstance3D = $ChairMesh
@@ -38,10 +41,8 @@ func _ready() -> void:
 	
 	# Apply color to chair mesh
 	if mesh:
-		var mat = StandardMaterial3D.new()
-		mat.albedo_color = player_color
-		mat.roughness = 0.6
-		mesh.material_override = mat
+		mesh.visible = false
+	_build_chair_model()
 	
 	# Set nametag
 	if nametag:
@@ -51,6 +52,73 @@ func _ready() -> void:
 	# Boost particles off by default
 	if boost_particles:
 		boost_particles.emitting = false
+
+func _build_chair_model() -> void:
+	if not model_parent:
+		return
+	var chair_root = Node3D.new()
+	chair_root.name = "ProceduralChair"
+	model_parent.add_child(chair_root)
+
+	var chair_mat = StandardMaterial3D.new()
+	chair_mat.albedo_color = player_color
+	chair_mat.roughness = 0.55
+	chair_mat.metallic = 0.05
+	var dark_mat = StandardMaterial3D.new()
+	dark_mat.albedo_color = Color(0.035, 0.04, 0.055)
+	dark_mat.roughness = 0.4
+	dark_mat.metallic = 0.65
+
+	chair_seat = MeshInstance3D.new()
+	chair_seat.name = "Seat"
+	var seat_mesh = BoxMesh.new()
+	seat_mesh.size = Vector3(0.9, 0.16, 0.82)
+	chair_seat.mesh = seat_mesh
+	chair_seat.position = Vector3(0, 0.28, 0)
+	chair_seat.material_override = chair_mat
+	chair_root.add_child(chair_seat)
+
+	chair_backrest = MeshInstance3D.new()
+	chair_backrest.name = "Backrest"
+	var back_mesh = BoxMesh.new()
+	back_mesh.size = Vector3(0.9, 0.95, 0.14)
+	chair_backrest.mesh = back_mesh
+	chair_backrest.position = Vector3(0, 0.75, 0.28)
+	chair_backrest.material_override = chair_mat
+	chair_root.add_child(chair_backrest)
+
+	var stem = MeshInstance3D.new()
+	var stem_mesh = CylinderMesh.new()
+	stem_mesh.top_radius = 0.07
+	stem_mesh.bottom_radius = 0.09
+	stem_mesh.height = 0.48
+	stem.mesh = stem_mesh
+	stem.position = Vector3(0, 0.02, 0)
+	stem.material_override = dark_mat
+	chair_root.add_child(stem)
+
+	for i in range(5):
+		var angle = float(i) * TAU / 5.0
+		var arm = MeshInstance3D.new()
+		var arm_mesh = BoxMesh.new()
+		arm_mesh.size = Vector3(0.1, 0.07, 0.62)
+		arm.mesh = arm_mesh
+		arm.position = Vector3(sin(angle) * 0.25, -0.22, cos(angle) * 0.25)
+		arm.rotation.y = angle
+		arm.material_override = dark_mat
+		chair_root.add_child(arm)
+
+		var wheel = MeshInstance3D.new()
+		wheel.name = "Wheel_%d" % i
+		var wheel_mesh = SphereMesh.new()
+		wheel_mesh.radius = 0.105
+		wheel_mesh.height = 0.21
+		wheel.mesh = wheel_mesh
+		wheel.position = Vector3(sin(angle) * 0.58, -0.28, cos(angle) * 0.58)
+		wheel.material_override = dark_mat
+		wheel.add_to_group("chair_wheels")
+		chair_root.add_child(wheel)
+		chair_wheels.append(wheel)
 
 func _physics_process(delta: float) -> void:
 	if not can_move:
