@@ -6,28 +6,36 @@ var territory_score := 0.0
 var survival_time := 90.0
 var chef_angle := 0.0
 var player: CharacterBody3D
+var mode_hud: CanvasLayer
+var failed := false
 
 func _ready() -> void:
 	_build_pizza()
 	_spawn_player()
-	_make_mode_hud("PIZZA COLONY", "CLAIM PEPPERONI  •  SURVIVE THE CHEF")
+	mode_hud = _make_mode_hud("PIZZA COLONY", "CLAIM PEPPERONI  •  SURVIVE THE CHEF")
 
 func _process(delta: float) -> void:
+	if failed:
+		return
 	survival_time = maxf(survival_time - delta, 0.0)
 	chef_angle += delta * 0.8
 	if player and is_instance_valid(player):
 		territory_score = clampf(territory_score + delta * (1.0 if player.global_position.length() < 12.0 else 0.25), 0.0, 100.0)
+	var progress = territory_score / 100.0
+	if mode_hud and mode_hud.has_method("update_state"):
+		mode_hud.update_state(survival_time, progress, "SURVIVED" if survival_time <= 0.0 else "CLAIMING TERRITORY", Color("a8ffbd") if survival_time <= 0.0 else Color("ffcf55"))
 	if survival_time <= 0.0:
 		print("[PIZZA COLONY] Survival complete — territory %.0f%%" % territory_score)
 		set_process(false)
 
-func _make_mode_hud(title: String, objective: String) -> Label:
-	var label = Label.new()
-	label.text = "%s\n%s" % [title, objective]
-	label.position = Vector2(28, 24)
-	label.add_theme_font_size_override("font_size", 22)
-	add_child(label)
-	return label
+func _make_mode_hud(title: String, objective: String) -> CanvasLayer:
+	var hud_script = load("res://scripts/ModeHUD.gd")
+	var hud = CanvasLayer.new()
+	if hud_script:
+		hud.set_script(hud_script)
+		add_child(hud)
+		hud.configure(title, objective, survival_time)
+	return hud
 
 func _build_pizza() -> void:
 	# Giant circular pizza base

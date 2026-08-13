@@ -37,7 +37,7 @@ var boost_visual_timer: float = 0.0
 var mobile_input := Vector2.ZERO
 
 # Nodes
-@onready var mesh: MeshInstance3D = $ChairMesh
+@onready var mesh: MeshInstance3D = $ModelParent/ChairMesh
 @onready var collision: CollisionShape3D = $CollisionShape3D
 @onready var nametag: Label3D = $Nametag
 @onready var boost_particles: GPUParticles3D = $BoostParticles

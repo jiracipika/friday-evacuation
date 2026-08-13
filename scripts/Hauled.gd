@@ -2,32 +2,43 @@
 # Deliver absurd HOSTILE cargo through impossible terrain
 extends Node3D
 
-var cargo_nodes: Array[RigidBody3D] = []
+var cargo_nodes: Array[Node3D] = []
 var delivery_progress: float = 0.0
 var delivery_done := false
 var delivery_zone: Area3D
+var mode_hud: CanvasLayer
+var time_limit := 180.0
+var remaining_time := 180.0
+var failed := false
 
 func _ready() -> void:
 	_build_level()
 	_spawn_player()
 	var hud = _make_mode_hud("HAULED", "GET THE CARGO TO THE GREEN ZONE")
+	mode_hud = hud
 	if delivery_zone:
 		delivery_zone.body_entered.connect(_on_delivery_body_entered)
 
 func _process(delta: float) -> void:
-	if delivery_done:
+	if delivery_done or failed:
 		return
+	remaining_time = maxf(remaining_time - delta, 0.0)
 	var cargo_distance = 0.0
 	for cargo in cargo_nodes:
 		if is_instance_valid(cargo):
 			cargo_distance += cargo.global_position.distance_to(Vector3(0, 1, 25))
 	if not cargo_nodes.is_empty():
 		delivery_progress = clampf(1.0 - cargo_distance / (cargo_nodes.size() * 45.0), 0.0, 1.0)
-		if delivery_progress >= 0.98:
-			_on_delivery_complete()
+	if mode_hud and mode_hud.has_method("update_state"):
+		mode_hud.update_state(remaining_time, delivery_progress, "DELIVERED" if delivery_done else ("TIME UP" if remaining_time <= 0.0 else "HAULING"), Color("a8ffbd") if delivery_done else Color("ffcf55"))
+	if delivery_progress >= 0.98:
+		_on_delivery_complete()
+	elif remaining_time <= 0.0:
+		failed = true
+		mode_hud.update_state(0.0, delivery_progress, "FAILED — CARGO NOT DELIVERED", Color("ff7070"))
 
 func _on_delivery_body_entered(body: Node3D) -> void:
-	if body in cargo_nodes:
+	if cargo_nodes.has(body):
 		_on_delivery_complete()
 
 func _on_delivery_complete() -> void:
@@ -36,13 +47,14 @@ func _on_delivery_complete() -> void:
 	delivery_done = true
 	print("[HAULED] Delivery complete — cargo survived")
 
-func _make_mode_hud(title: String, objective: String) -> Label:
-	var label = Label.new()
-	label.text = "%s\n%s" % [title, objective]
-	label.position = Vector2(28, 24)
-	label.add_theme_font_size_override("font_size", 22)
-	add_child(label)
-	return label
+func _make_mode_hud(title: String, objective: String) -> CanvasLayer:
+	var hud_script = load("res://scripts/ModeHUD.gd")
+	var hud = CanvasLayer.new()
+	if hud_script:
+		hud.set_script(hud_script)
+		add_child(hud)
+		hud.configure(title, objective, time_limit)
+	return hud
 
 func _build_level() -> void:
 	# Single floor for now

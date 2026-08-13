@@ -14,7 +14,9 @@ signal server_started(port: int)
 signal connection_failed()
 signal connection_succeeded()
 signal remote_player_state(peer_id: int, position: Vector3, velocity: Vector3)
+signal player_ready_changed(peer_id: int, is_ready: bool)
 
+var ready_players: Dictionary = {}
 func host_game(port: int = DEFAULT_PORT) -> bool:
 	peer = ENetMultiplayerPeer.new()
 	var err = peer.create_server(port, MAX_CLIENTS)
@@ -46,15 +48,18 @@ func close_connection() -> void:
 		peer.close()
 		peer = null
 	connected_players.clear()
+	ready_players.clear()
 
 func _on_peer_connected(peer_id: int) -> void:
 	print("[NET] Peer connected: %d" % peer_id)
 	connected_players[peer_id] = "Player_%d" % peer_id
+	ready_players[peer_id] = false
 	player_connected.emit(peer_id, "Player_%d" % peer_id)
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	print("[NET] Peer disconnected: %d" % peer_id)
 	connected_players.erase(peer_id)
+	ready_players.erase(peer_id)
 	player_disconnected.emit(peer_id)
 
 func _on_connected_to_server() -> void:
@@ -74,6 +79,24 @@ func get_player_count() -> int:
 
 func is_server() -> bool:
 	return multiplayer.is_server()
+
+func set_ready(is_ready: bool) -> void:
+	ready_players[multiplayer.get_unique_id()] = is_ready
+	player_ready_changed.emit(multiplayer.get_unique_id(), is_ready)
+	if peer and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+		receive_ready.rpc(is_ready)
+
+func all_players_ready() -> bool:
+	for value in ready_players.values():
+		if not value:
+			return false
+	return not ready_players.is_empty()
+
+@rpc("any_peer", "reliable", "call_remote")
+func receive_ready(is_ready: bool) -> void:
+	var sender = multiplayer.get_remote_sender_id()
+	ready_players[sender] = is_ready
+	player_ready_changed.emit(sender, is_ready)
 
 func broadcast_player_state(position: Vector3, velocity: Vector3) -> void:
 	if peer and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:

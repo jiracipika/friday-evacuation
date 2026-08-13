@@ -6,18 +6,28 @@ var seeker_time := 60.0
 var found_count := 0
 var target_count := 6
 var player: CharacterBody3D
+var mode_hud: CanvasLayer
+var failed := false
+var time_limit := 60.0
 
 func _ready() -> void:
 	_build_supermarket()
 	_spawn_player()
 	_spawn_grocery_targets()
-	_make_mode_hud("SHOP & SEEK", "FIND THE FAKE GROCERIES  •  60 SEC")
+	mode_hud = _make_mode_hud("SHOP & SEEK", "FIND THE FAKE GROCERIES  •  60 SEC")
 
 func _process(delta: float) -> void:
+	if failed:
+		return
 	seeker_time = maxf(seeker_time - delta, 0.0)
-	if seeker_time <= 0.0:
-		print("[SHOP&SEEK] Time up — found %d/%d" % [found_count, target_count])
+	var progress = float(found_count) / float(target_count)
+	if mode_hud and mode_hud.has_method("update_state"):
+		mode_hud.update_state(seeker_time, progress, "FOUND ALL" if found_count >= target_count else ("TIME UP" if seeker_time <= 0.0 else "SEARCHING"), Color("a8ffbd") if found_count >= target_count else Color("ffcf55"))
+	if found_count >= target_count:
 		set_process(false)
+	elif seeker_time <= 0.0:
+		failed = true
+		mode_hud.update_state(0.0, progress, "FAILED — %d/%d FOUND" % [found_count, target_count], Color("ff7070"))
 
 func _spawn_grocery_targets() -> void:
 	for i in range(target_count):
@@ -38,13 +48,14 @@ func _on_grocery_found(body: Node3D, target: Area3D) -> void:
 		target.queue_free()
 		print("[SHOP&SEEK] Found %d/%d" % [found_count, target_count])
 
-func _make_mode_hud(title: String, objective: String) -> Label:
-	var label = Label.new()
-	label.text = "%s\n%s" % [title, objective]
-	label.position = Vector2(28, 24)
-	label.add_theme_font_size_override("font_size", 22)
-	add_child(label)
-	return label
+func _make_mode_hud(title: String, objective: String) -> CanvasLayer:
+	var hud_script = load("res://scripts/ModeHUD.gd")
+	var hud = CanvasLayer.new()
+	if hud_script:
+		hud.set_script(hud_script)
+		add_child(hud)
+		hud.configure(title, objective, time_limit)
+	return hud
 
 func _build_supermarket() -> void:
 	# Floor

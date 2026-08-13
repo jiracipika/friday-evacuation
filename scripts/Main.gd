@@ -35,6 +35,7 @@ const MODE_INFO = [
 var selected_index: int = 0
 var buttons: Array[Button] = []
 var settings_overlay: Control
+var lobby_overlay: Control
 var settings_button: Button
 var title_base_y: float = 0.0
 var menu_time: float = 0.0
@@ -63,6 +64,9 @@ func _ready() -> void:
 	settings_button.pressed.connect(_open_settings)
 	title_base_y = title_label.position.y
 	_build_menu_theme()
+	host_button.visible = true
+	host_button.text = "MULTIPLAYER LOBBY"
+	host_button.pressed.connect(_open_lobby)
 	join_button.visible = false
 	back_button.visible = false
 
@@ -70,10 +74,10 @@ func _build_mode_buttons() -> void:
 	for i in range(MODE_INFO.size()):
 		var info = MODE_INFO[i]
 		var btn = Button.new()
-		var state = "PLAYABLE" if i == 0 else "PROTOTYPE"
-		btn.text = "%s\n%s  •  %s" % [info.title, info.subtitle, state]
+		var card_script = load("res://scripts/ModeCard.gd")
+		btn.set_script(card_script)
+		btn.configure(info.title, info.subtitle, "PLAYABLE" if i == 0 else "PROTOTYPE", info.color)
 		btn.custom_minimum_size = Vector2(0, 72)
-		btn.add_theme_font_size_override("font_size", 20)
 		btn.pressed.connect(_select_mode.bind(i))
 		mode_list.add_child(btn)
 		buttons.append(btn)
@@ -126,6 +130,20 @@ func _make_button_style(bg: Color, border: Color, width: int) -> StyleBoxFlat:
 	style.set_border_width_all(width)
 	style.set_corner_radius_all(10)
 	return style
+
+func _open_lobby() -> void:
+	if lobby_overlay:
+		return
+	var script = load("res://scripts/Lobby.gd")
+	if not script:
+		return
+	lobby_overlay = Control.new()
+	lobby_overlay.set_script(script)
+	add_child(lobby_overlay)
+	lobby_overlay.close_requested.connect(func():
+		lobby_overlay.queue_free()
+		lobby_overlay = null
+	)
 
 func _open_settings() -> void:
 	if settings_overlay:
