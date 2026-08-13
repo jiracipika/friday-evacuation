@@ -13,6 +13,10 @@ var timer: float = 0.0
 var finish_order: Array[Dictionary] = []  # {player_id, name, time}
 var players: Array = []
 var local_player: CharacterBody3D = null
+var hud: CanvasLayer = null
+var top_speed: float = 0.0
+var traps_hit: int = 0
+var traps_placed: int = 0
 
 ## Smooth camera state
 var cam_follow_pos: Vector3 = Vector3.ZERO
@@ -30,6 +34,7 @@ func _ready() -> void:
 	_setup_arena()
 	_spawn_player()
 	_start_countdown()
+	_setup_hud()
 	
 	var exit_zone = $Arena/ExitZone
 	if exit_zone:
@@ -53,6 +58,9 @@ func _process(delta: float) -> void:
 		&"racing":
 			timer += delta
 			_update_timer_display()
+			if local_player and is_instance_valid(local_player):
+				top_speed = max(top_speed, Vector2(local_player.velocity.x, local_player.velocity.z).length())
+				_update_hud()
 			if finish_order.size() >= players.size() or timer >= time_limit:
 				_end_race()
 		&"finished":
@@ -385,7 +393,24 @@ func _spawn_player() -> void:
 		cam_look_target = local_player.global_position
 		camera.global_position = cam_follow_pos
 
-# --- MATCH FLOW ---
+func _setup_hud() -> void:
+	var hud_script = load("res://scripts/HUD.gd")
+	if not hud_script:
+		return
+	hud = CanvasLayer.new()
+	hud.set_script(hud_script)
+	$UI.add_child(hud)
+
+func _update_hud() -> void:
+	if not hud or not local_player:
+		return
+	if hud.has_method("set_timer_text"):
+		hud.set_timer_text(timer_label.text if timer_label else "")
+		hud.set_speed(Vector2(local_player.velocity.x, local_player.velocity.z).length(), local_player.max_speed)
+		hud.set_boost(local_player.boost_cd_timer, local_player.boost_duration, local_player.is_boosting)
+		hud.set_floor(clampi(int(floor(local_player.global_position.y / 6.0)) + 1, 1, 4))
+		hud.set_status("COUNTDOWN" if match_state == &"countdown" else "RACE", Color("ffcf55"))
+
 
 func _start_countdown() -> void:
 	match_state = &"countdown"
@@ -435,11 +460,27 @@ func _end_race() -> void:
 	_show_results()
 
 func _show_results() -> void:
+	match_state = &"finished"
 	if results_panel:
 		results_panel.visible = true
+		results_panel.modulate.a = 0.0
+		results_panel.scale = Vector2(0.86, 0.86)
 		var label = results_panel.get_node_or_null("VBox/WinnerLabel")
 		if label and finish_order.size() > 0:
 			label.text = "%s WINS!\nLast one buys beers!" % finish_order[0].name
+		var stats = results_panel.get_node_or_null("VBox/StatsLabel")
+		if not stats:
+			stats = Label.new()
+			stats.name = "StatsLabel"
+			stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			stats.add_theme_font_size_override("font_size", 18)
+			results_panel.get_node("VBox").add_child(stats)
+		stats.text = "TOP SPEED  %d km/h\nTRAPS PLACED  %d" % [roundi(top_speed * 3.6), traps_placed]
+		var tween = create_tween().set_parallel(true)
+		tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tween.tween_property(results_panel, "modulate:a", 1.0, 0.32)
+		tween.tween_property(results_panel, "scale", Vector2.ONE, 0.38)
+
 
 func _on_rematch() -> void:
 	get_tree().reload_current_scene()

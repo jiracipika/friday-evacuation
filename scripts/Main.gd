@@ -34,6 +34,10 @@ const MODE_INFO = [
 
 var selected_index: int = 0
 var buttons: Array[Button] = []
+var settings_overlay: Control
+var settings_button: Button
+var title_base_y: float = 0.0
+var menu_time: float = 0.0
 
 # UI nodes
 @onready var title_label: Label = $VBox/Title
@@ -51,7 +55,14 @@ func _ready() -> void:
 	_select_mode(0)
 	
 	play_button.pressed.connect(_on_play)
-	host_button.visible = false
+	settings_button = Button.new()
+	settings_button.text = "⚙ SETTINGS"
+	settings_button.custom_minimum_size = Vector2(0, 46)
+	settings_button.add_theme_font_size_override("font_size", 16)
+	$VBox.add_child(settings_button)
+	settings_button.pressed.connect(_open_settings)
+	title_base_y = title_label.position.y
+	_build_menu_theme()
 	join_button.visible = false
 	back_button.visible = false
 
@@ -85,3 +96,41 @@ func _on_play() -> void:
 	GameManager.select_mode(MODE_INFO[selected_index].mode)
 	var scene_path = GameManager.get_mode_scene(MODE_INFO[selected_index].mode)
 	get_tree().change_scene_to_file(scene_path)
+
+func _process(delta: float) -> void:
+	menu_time += delta
+	if title_label:
+		title_label.position.y = title_base_y + sin(menu_time * 2.0) * 3.0
+
+func _build_menu_theme() -> void:
+	var card_style = StyleBoxFlat.new()
+	card_style.bg_color = Color("1c1c2e")
+	card_style.border_color = Color(1, 1, 1, 0.12)
+	card_style.set_border_width_all(1)
+	card_style.set_corner_radius_all(10)
+	card_style.content_margin_left = 16.0
+	card_style.content_margin_right = 16.0
+	for button in buttons:
+		button.add_theme_stylebox_override("normal", card_style)
+		button.add_theme_stylebox_override("hover", _make_button_style(Color(0.15, 0.15, 0.25), Color("ff9a1a"), 2))
+		button.add_theme_stylebox_override("pressed", _make_button_style(Color(0.22, 0.18, 0.12), Color("ffb52e"), 3))
+	play_button.add_theme_stylebox_override("normal", _make_button_style(Color("ff9a1a"), Color("ffcf55"), 2))
+	play_button.add_theme_color_override("font_color", Color("0a0a0f"))
+	play_button.add_theme_color_override("font_hover_color", Color.WHITE)
+
+func _make_button_style(bg: Color, border: Color, width: int) -> StyleBoxFlat:
+	var style = StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_color = border
+	style.set_border_width_all(width)
+	style.set_corner_radius_all(10)
+	return style
+
+func _open_settings() -> void:
+	if settings_overlay:
+		return
+	var script = load("res://scripts/Settings.gd")
+	settings_overlay = Control.new()
+	settings_overlay.set_script(script)
+	add_child(settings_overlay)
+	settings_overlay.closed.connect(func(): settings_overlay = null)
