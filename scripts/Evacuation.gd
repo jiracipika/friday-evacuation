@@ -14,6 +14,10 @@ var finish_order: Array[Dictionary] = []  # {player_id, name, time}
 var players: Array = []
 var local_player: CharacterBody3D = null
 
+## Smooth camera state
+var cam_follow_pos: Vector3 = Vector3.ZERO
+var cam_look_target: Vector3 = Vector3.ZERO
+
 ## Nodes
 @onready var countdown_label: Label3D = $Arena/CountdownLabel
 @onready var timer_label: Label = $UI/TimerLabel
@@ -27,10 +31,17 @@ func _ready() -> void:
 	_spawn_player()
 	_start_countdown()
 	
-	# Connect exit zone
 	var exit_zone = $Arena/ExitZone
 	if exit_zone:
 		exit_zone.body_entered.connect(_on_player_reached_exit)
+	
+	if results_panel:
+		var rematch = results_panel.get_node_or_null("VBox/RematchButton")
+		if rematch:
+			rematch.pressed.connect(_on_rematch)
+		var menu = results_panel.get_node_or_null("VBox/MenuButton")
+		if menu:
+			menu.pressed.connect(_on_back_to_menu)
 
 func _process(delta: float) -> void:
 	match match_state:
@@ -42,30 +53,57 @@ func _process(delta: float) -> void:
 		&"racing":
 			timer += delta
 			_update_timer_display()
-			# Check if everyone finished or time ran out
 			if finish_order.size() >= players.size() or timer >= time_limit:
 				_end_race()
 		&"finished":
 			pass
+	
+	_update_camera(delta)
+
+func _update_camera(delta: float) -> void:
+	if not local_player or not is_instance_valid(local_player):
+		return
+	if not camera:
+		return
+	
+	var player_pos = local_player.global_position
+	var player_vel = local_player.velocity
+	var move_dir = Vector3(player_vel.x, 0, player_vel.z)
+	var cam_offset: Vector3
+	
+	if move_dir.length() > 2.0:
+		var dir_norm = move_dir.normalized()
+		cam_offset = Vector3(-dir_norm.x * 3.0, 6.0, -dir_norm.z * 3.0)
+	else:
+		var fwd = -local_player.global_transform.basis.z
+		cam_offset = Vector3(fwd.x * 3.0, 6.0, fwd.z * 3.0)
+	
+	var look_ahead = move_dir * 0.3
+	var target_cam_pos = player_pos + cam_offset
+	var target_look = player_pos + look_ahead
+	
+	var cam_lerp = 1.0 - exp(-8.0 * delta)
+	var look_lerp = 1.0 - exp(-6.0 * delta)
+	
+	cam_follow_pos = cam_follow_pos.lerp(target_cam_pos, cam_lerp)
+	cam_look_target = cam_look_target.lerp(target_look, look_lerp)
+	
+	camera.global_position = cam_follow_pos
+	camera.look_at(cam_look_target)
 
 # --- SETUP ---
 
 func _setup_arena() -> void:
-	# Build the office building procedurally
-	_build_floor(Vector3(0, 0, 0), Color(0.15, 0.15, 0.22))    # Floor 1 (start)
-	_build_floor(Vector3(0, 6, 0), Color(0.18, 0.15, 0.20))    # Floor 2
-	_build_floor(Vector3(0, 12, 0), Color(0.13, 0.16, 0.20))   # Floor 3
-	_build_floor(Vector3(0, 18, 0), Color(0.10, 0.18, 0.15))   # Floor 4 (parking lot exit)
+	_build_floor(Vector3(0, 0, 0), Color(0.15, 0.15, 0.22))
+	_build_floor(Vector3(0, 6, 0), Color(0.18, 0.15, 0.20))
+	_build_floor(Vector3(0, 12, 0), Color(0.13, 0.16, 0.20))
+	_build_floor(Vector3(0, 18, 0), Color(0.10, 0.18, 0.15))
 	
-	# Add ramps connecting floors
 	_build_ramp(Vector3(8, 0, 20), Vector3(8, 6, 20))
 	_build_ramp(Vector3(-8, 6, 20), Vector3(-8, 12, 20))
 	_build_ramp(Vector3(8, 12, 20), Vector3(8, 18, 20))
 	
-	# Add obstacles
 	_spawn_obstacles()
-	
-	# Add power-ups
 	_spawn_powerups()
 
 func _build_floor(pos: Vector3, color: Color) -> void:
@@ -89,14 +127,9 @@ func _build_floor(pos: Vector3, color: Color) -> void:
 	mesh_inst.material_override = mat
 	floor_node.add_child(mesh_inst)
 	
-	# Walls
 	for i in range(4):
 		var wall = StaticBody3D.new()
-		var angles = [0, 90, 180, 270]
-		wall.rotation.y = deg_to_rad(angles[i])
-		wall.position = pos + Vector3(
-			[0, 20, 0, -20][i], 1, [20, 0, -20, 0][i]
-		)
+		wall.position = pos + Vector3([0, 20, 0, -20][i], 1.5, [20, 0, -20, 0][i])
 		add_child(wall)
 		
 		var wall_col = CollisionShape3D.new()
@@ -142,13 +175,12 @@ func _build_ramp(from_pos: Vector3, to_pos: Vector3) -> void:
 	ramp.add_child(mesh_inst)
 
 func _spawn_obstacles() -> void:
-	# Spawn desks, plants, water coolers scattered around
 	var rng = RandomNumberGenerator.new()
-	rng.seed = Time.get_ticks_msec()
+	rng.seed = 1337  # Fixed seed for consistent layout
 	
 	for i in range(15):
 		var desk = _make_desk()
-		var floor_y = [0, 6, 12, 18].pick_random()
+		var floor_y = [0, 6, 12, 18][rng.randi() % 4]
 		desk.position = Vector3(
 			rng.randf_range(-15, 15),
 			floor_y + 0.5,
@@ -180,11 +212,11 @@ func _make_desk() -> StaticBody3D:
 
 func _spawn_powerups() -> void:
 	var rng = RandomNumberGenerator.new()
-	rng.seed = Time.get_ticks_msec() + 42
+	rng.seed = 999
 	
 	for i in range(8):
 		var pu = _make_powerup()
-		var floor_y = [0.5, 6.5, 12.5, 18.5].pick_random()
+		var floor_y = [0.5, 6.5, 12.5, 18.5][rng.randi() % 4]
 		pu.position = Vector3(
 			rng.randf_range(-12, 12),
 			floor_y,
@@ -208,12 +240,12 @@ func _make_powerup() -> Area3D:
 	mesh_inst.mesh = mesh
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = Color(0.8, 0.5, 0.2)
+	mat.emission_enabled = true
 	mat.emission = Color(1.0, 0.6, 0.1)
 	mat.emission_energy_multiplier = 1.5
 	mesh_inst.material_override = mat
 	pu.add_child(mesh_inst)
 	
-	# Coffee boost on pickup
 	pu.body_entered.connect(func(body):
 		if body.is_in_group("players"):
 			if body.has_method("_start_boost"):
@@ -233,21 +265,16 @@ func _spawn_player() -> void:
 	local_player = player_scene.instantiate()
 	local_player.player_display_name = GameManager.player_name
 	local_player.player_color = Color(0.4, 0.8, 1.0)
-	local_player.set_can_move(false)  # Locked during countdown
+	local_player.set_can_move(false)
 	add_child(local_player)
 	local_player.position = Vector3(0, 1.5, -10)
 	players.append(local_player)
 	
-	# Attach camera to follow player
+	# Initialize camera position at player so first frame isn't a wild fly-in
 	if camera:
-		camera.global_position = local_player.global_position + Vector3(0, 5, 10)
-	
-	# Set camera to follow
-	_setup_follow_camera()
-
-func _setup_follow_camera() -> void:
-	# We'll use a simple follow camera
-	set_process(true)
+		cam_follow_pos = local_player.global_position + Vector3(0, 6, 10)
+		cam_look_target = local_player.global_position
+		camera.global_position = cam_follow_pos
 
 # --- MATCH FLOW ---
 
@@ -289,11 +316,9 @@ func _on_player_reached_exit(body: CharacterBody3D) -> void:
 	finish_order.append(entry)
 	print("[RACE] %s reached the exit at %.1fs!" % [pname, timer])
 	
-	# Lock the finished player
 	body.set_can_move(false)
 	
 	if finish_order.size() == 1:
-		# Winner!
 		_show_results()
 
 func _end_race() -> void:
@@ -307,14 +332,11 @@ func _show_results() -> void:
 		if label and finish_order.size() > 0:
 			label.text = "%s WINS!\nLast one buys beers!" % finish_order[0].name
 
-# --- CAMERA FOLLOW ---
+func _on_rematch() -> void:
+	get_tree().reload_current_scene()
 
-func _physics_process(delta: float) -> void:
-	if local_player and is_instance_valid(local_player) and match_state == &"racing":
-		var target_pos = local_player.global_position
-		var cam_target = target_pos + Vector3(0, 6, 10)
-		camera.global_position = camera.global_position.lerp(cam_target, delta * 5.0)
-		camera.look_at(target_pos)
+func _on_back_to_menu() -> void:
+	get_tree().change_scene_to_file("res://scenes/Main.tscn")
 
 # --- INPUT ---
 

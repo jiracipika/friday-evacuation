@@ -1,20 +1,20 @@
 # PlayerChair.gd — Office chair physics character controller
-# Sits in a CharacterBody3D, rolls like an office chair, has boost + sabotage
+# Smooth, juicy movement tuned for game feel
 extends CharacterBody3D
 
 # Visual
 @export var player_color: Color = Color(0.4, 0.8, 1.0)
 @export var player_display_name: String = "Player"
 
-# Movement tuning
-@export var acceleration: float = 45.0
-@export var max_speed: float = 14.0
-@export var friction: float = 25.0
-@export var rotation_speed: float = 8.0
-@export var boost_force: float = 30.0
+# Movement tuning — lower accel = smoother starts/stops
+@export var acceleration: float = 18.0
+@export var max_speed: float = 12.0
+@export var friction: float = 12.0
+@export var rotation_speed: float = 12.0
+@export var boost_force: float = 24.0
 @export var boost_cooldown: float = 3.0
-@export var boost_duration: float = 0.8
-@export var jump_force: float = 8.0
+@export var boost_duration: float = 0.6
+@export var jump_force: float = 7.0
 
 # Internal state
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -23,6 +23,7 @@ var boost_cd_timer: float = 0.0
 var is_boosting: bool = false
 var can_move: bool = true
 var is_stunned: float = 0.0  # seconds remaining
+var smooth_facing: float = 0.0  # smoothed Y rotation for model
 
 # Nodes
 @onready var mesh: MeshInstance3D = $ChairMesh
@@ -67,7 +68,9 @@ func _physics_process(delta: float) -> void:
 		return
 	else:
 		if model_parent:
-			model_parent.rotation.z = lerp(model_parent.rotation.z, 0.0, delta * 10.0)
+			# Frame-rate independent wobble recovery
+			var wobble_lerp = 1.0 - exp(-12.0 * delta)
+			model_parent.rotation.z = lerp(model_parent.rotation.z, 0.0, wobble_lerp)
 	
 	# Timers
 	if boost_cd_timer > 0:
@@ -85,14 +88,18 @@ func _physics_process(delta: float) -> void:
 	
 	_apply_gravity(delta)
 	
-	# Clamp speed
+	# Clamp speed smoothly (only when not boosting)
 	if not is_boosting:
-		velocity = velocity.limit_length(max_speed)
+		var hori = Vector2(velocity.x, velocity.z)
+		if hori.length() > max_speed:
+			hori = hori.normalized() * max_speed
+			velocity.x = hori.x
+			velocity.z = hori.y
 	
 	move_and_slide()
 	
-	# Spin wheels visual
-	_spin_wheels(delta)
+	# Smooth model rotation toward facing direction
+	_smooth_facing(delta)
 
 func _handle_input(delta: float) -> void:
 	var input_dir = Vector3.ZERO
@@ -119,14 +126,15 @@ func _handle_input(delta: float) -> void:
 	input_dir = input_dir.normalized()
 	
 	if input_dir.length() > 0.1:
-		velocity += input_dir * acceleration * delta
+		# Smooth acceleration
+		velocity.x += input_dir.x * acceleration * delta
+		velocity.z += input_dir.z * acceleration * delta
 		
-		# Rotate model to face movement
-		var target_angle = atan2(-input_dir.x, -input_dir.z)
-		if model_parent:
-			var current = model_parent.rotation.y
-			var diff = angle_difference(current, target_angle)
-			model_parent.rotation.y = current + diff * rotation_speed * delta
+		# Update target facing angle
+		smooth_facing = atan2(-input_dir.x, -input_dir.z)
+	else:
+		# Apply friction when no input
+		_apply_friction(delta)
 	
 	# Boost
 	if Input.is_action_just_pressed("boost") and boost_cd_timer <= 0:
@@ -140,30 +148,40 @@ func _handle_input(delta: float) -> void:
 	if Input.is_action_just_pressed("sabotage"):
 		_drop_trap()
 
+func _smooth_facing(delta: float) -> void:
+	if not model_parent:
+		return
+	var current = model_parent.rotation.y
+	var diff = angle_difference(current, smooth_facing)
+	# Frame-rate independent rotation lerp
+	var lerp_factor = 1.0 - exp(-rotation_speed * delta)
+	model_parent.rotation.y = current + diff * lerp_factor
+
 func _apply_gravity(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
 func _apply_friction(delta: float) -> void:
-	# Horizontal friction only
-	var hori = Vector3(velocity.x, 0, velocity.z)
-	hori = hori.move_toward(Vector3.ZERO, friction * delta)
+	# Horizontal friction only — frame-rate independent
+	var hori = Vector2(velocity.x, velocity.z)
+	var friction_factor = 1.0 - exp(-friction * delta)
+	hori = hori.lerp(Vector2.ZERO, friction_factor)
 	velocity.x = hori.x
-	velocity.z = hori.z
+	velocity.z = hori.y
 
 func _start_boost() -> void:
 	is_boosting = true
 	boost_timer = boost_duration
 	boost_cd_timer = boost_cooldown
-	var dir = velocity.normalized()
+	var dir = Vector2(velocity.x, velocity.z).normalized()
 	if dir.length() < 0.1:
 		# Boost in facing direction if stationary
 		var fwd = -global_transform.basis.z
-		dir = Vector3(fwd.x, 0, fwd.z).normalized()
-	velocity += dir * boost_force
+		dir = Vector2(fwd.x, fwd.z).normalized()
+	velocity.x += dir.x * boost_force
+	velocity.z += dir.y * boost_force
 	if boost_particles:
 		boost_particles.emitting = true
-	print("[%s] BOOST!" % player_display_name)
 
 func _drop_trap() -> void:
 	# Spawn a water puddle / banana peel behind the player
@@ -172,16 +190,9 @@ func _drop_trap() -> void:
 		return
 	var trap = trap_scene.instantiate()
 	get_parent().add_child(trap)
-	trap.global_position = global_position + (velocity.normalized() * -2.0 if velocity.length() > 1 else -global_transform.basis.z * 2.0)
+	var behind_dir = -velocity.normalized() if velocity.length() > 1.0 else -global_transform.basis.z
+	trap.global_position = global_position + Vector3(behind_dir.x, 0, behind_dir.z) * 2.0
 	trap.global_position.y = 0.1
-	print("[%s] Trap dropped!" % player_display_name)
-
-func _spin_wheels(delta: float) -> void:
-	# Spin the little wheel meshes based on speed
-	var speed = Vector2(velocity.x, velocity.z).length()
-	for wheel in get_tree().get_nodes_in_group("chair_wheels"):
-		if wheel.is_ancestor_of(self) or wheel.get_parent() == model_parent:
-			wheel.rotation.x += speed * delta * 2.0
 
 func stun(duration: float) -> void:
 	is_stunned = max(is_stunned, duration)

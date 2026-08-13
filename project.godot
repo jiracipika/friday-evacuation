@@ -1,7 +1,10 @@
-
-; Friday 5PM: Evacuation project file
-; Cross-platform co-op comedy physics game
-; Target: Windows, macOS (ARM), Android, iOS, Web
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
 
 config_version=5
 
@@ -9,9 +12,14 @@ config_version=5
 
 config/name="Friday 5PM: Evacuation"
 config/description="It's 4:59 PM Friday. Race your office chair to the parking lot. Last one buys beers. Plus 3 more chaotic game modes."
+config/version="0.1.0"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
-config/version="0.1.0"
+
+[autoload]
+
+GameManager="*res://scripts/GameManager.gd"
+Network="*res://scripts/Network.gd"
 
 [display]
 
@@ -19,18 +27,6 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/handheld/orientation=1
-
-[physics]
-
-3d/default_gravity=20.0
-common/physics_ticks_per_second=60
-
-[rendering]
-
-renderer/rendering_method="mobile"
-anti_aliasing/quality/msaa_2x=true
-anti_aliasing/quality/screen_space_aa=1
-environment/defaults/default_clear_color=Color(0.039, 0.039, 0.058, 1)
 
 [input]
 
@@ -79,17 +75,23 @@ pause={
 ]
 }
 
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
+
 [layer_names]
 
 3d_physics/physics_layer_1="world"
 3d_physics/physics_layer_2="players"
 3d_physics/physics_layer_3="items"
 
-[autoload]
+[physics]
 
-GameManager="*res://scripts/GameManager.gd"
-Network="*res://scripts/Network.gd"
+3d/default_gravity=20.0
 
-[input_devices]
+[rendering]
 
-pointing/emulate_touch_from_mouse=true
+renderer/rendering_method="mobile"
+environment/defaults/default_clear_color=Color(0.039, 0.039, 0.058, 1)
+anti_aliasing/quality/screen_space_aa=1
+anti_aliasing/quality/msaa_2x=true
