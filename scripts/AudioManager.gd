@@ -4,12 +4,24 @@ var sfx_volume: float = 0.8
 var music_volume: float = 0.5
 var _players: Array[AudioStreamPlayer] = []
 
+const SFX_BUS := "SFX"
+const MUSIC_BUS := "Music"
+
 func _ready() -> void:
+	_ensure_buses()
 	for i in range(6):
 		var player = AudioStreamPlayer.new()
-		player.bus = &"Master"
+		player.bus = SFX_BUS
 		add_child(player)
 		_players.append(player)
+
+func _ensure_buses() -> void:
+	if AudioServer.get_bus_index(SFX_BUS) < 0:
+		AudioServer.add_bus()
+		AudioServer.set_bus_name(AudioServer.bus_count - 1, SFX_BUS)
+	if AudioServer.get_bus_index(MUSIC_BUS) < 0:
+		AudioServer.add_bus()
+		AudioServer.set_bus_name(AudioServer.bus_count - 1, MUSIC_BUS)
 
 func play_sfx(effect_name: String, intensity: float = 1.0) -> void:
 	var player = _next_player()
@@ -23,9 +35,15 @@ func play_sfx(effect_name: String, intensity: float = 1.0) -> void:
 
 func set_sfx_volume(value: float) -> void:
 	sfx_volume = clampf(value, 0.0, 1.0)
+	var bus = AudioServer.get_bus_index(SFX_BUS)
+	if bus >= 0:
+		AudioServer.set_bus_volume_db(bus, linear_to_db(sfx_volume))
 
 func set_music_volume(value: float) -> void:
 	music_volume = clampf(value, 0.0, 1.0)
+	var bus = AudioServer.get_bus_index(MUSIC_BUS)
+	if bus >= 0:
+		AudioServer.set_bus_volume_db(bus, linear_to_db(music_volume))
 
 func _next_player() -> AudioStreamPlayer:
 	for player in _players:

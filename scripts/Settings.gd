@@ -100,6 +100,7 @@ func _apply_settings() -> void:
 	if not quality_option:
 		return
 	var quality = quality_option.selected
+	_apply_graphics_quality(quality)
 	config.set_value("graphics", "quality", quality)
 	config.set_value("audio", "master", master_slider.value / 100.0)
 	config.set_value("audio", "music", music_slider.value / 100.0)
@@ -110,6 +111,19 @@ func _apply_settings() -> void:
 	if audio:
 		audio.set_sfx_volume((master_slider.value / 100.0) * (sfx_slider.value / 100.0))
 		audio.set_music_volume((master_slider.value / 100.0) * (music_slider.value / 100.0))
+
+func _apply_graphics_quality(quality: int) -> void:
+	var root = get_tree().current_scene
+	if not root:
+		return
+	var environment = root.get_node_or_null("WorldEnvironment")
+	if environment and environment.environment:
+		var env = environment.environment
+		env.fog_enabled = quality > 0
+		env.glow_enabled = quality > 0
+	var lights = root.find_children("*", "OmniLight3D", true, false)
+	for light in lights:
+		light.shadow_enabled = quality >= 2
 
 func _close() -> void:
 	closed.emit()

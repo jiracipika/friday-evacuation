@@ -21,6 +21,9 @@ var traps_placed: int = 0
 ## Smooth camera state
 var cam_follow_pos: Vector3 = Vector3.ZERO
 var cam_look_target: Vector3 = Vector3.ZERO
+var camera_base_fov: float = 70.0
+var camera_shake: float = 0.0
+var camera_shake_time: float = 0.0
 
 ## Nodes
 @onready var countdown_label: Label3D = $Arena/CountdownLabel
@@ -35,6 +38,9 @@ func _ready() -> void:
 	_spawn_player()
 	_start_countdown()
 	_setup_hud()
+	camera_base_fov = camera.fov if camera else 70.0
+	if local_player and local_player.has_signal("shake_requested"):
+		local_player.shake_requested.connect(_request_camera_shake)
 	
 	var exit_zone = $Arena/ExitZone
 	if exit_zone:
@@ -98,6 +104,20 @@ func _update_camera(delta: float) -> void:
 	
 	camera.global_position = cam_follow_pos
 	camera.look_at(cam_look_target)
+	camera_shake = maxf(camera_shake - delta * 0.9, 0.0)
+	camera_shake_time += delta * 34.0
+	var speed_ratio = clampf(move_dir.length() / 12.0, 0.0, 1.0)
+	camera.fov = lerpf(camera.fov, camera_base_fov + speed_ratio * 5.0, 1.0 - exp(-7.0 * delta))
+	if camera_shake > 0.0:
+		var shake_offset = Vector3(
+			sin(camera_shake_time * 1.13) * camera_shake,
+			cos(camera_shake_time * 0.91) * camera_shake * 0.6,
+			sin(camera_shake_time * 1.47) * camera_shake
+		)
+		camera.global_position += shake_offset
+
+func _request_camera_shake(amount: float) -> void:
+	camera_shake = maxf(camera_shake, amount)
 
 # --- SETUP ---
 
@@ -409,6 +429,7 @@ func _update_hud() -> void:
 		hud.set_speed(Vector2(local_player.velocity.x, local_player.velocity.z).length(), local_player.max_speed)
 		hud.set_boost(local_player.boost_cd_timer, local_player.boost_duration, local_player.is_boosting)
 		hud.set_floor(clampi(int(floor(local_player.global_position.y / 6.0)) + 1, 1, 4))
+		hud.set_player_position(local_player.global_position, clampi(int(floor(local_player.global_position.y / 6.0)), 0, 3))
 		hud.set_status("COUNTDOWN" if match_state == &"countdown" else "RACE", Color("ffcf55"))
 
 

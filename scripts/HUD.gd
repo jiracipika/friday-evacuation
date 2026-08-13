@@ -8,6 +8,7 @@ var timer_label: Label
 var status_label: Label
 var speed_bar: ProgressBar
 var boost_bar: ProgressBar
+var minimap: Control
 
 func _ready() -> void:
 	_build_hud()
@@ -32,6 +33,13 @@ func _build_hud() -> void:
 	top_row.add_child(timer_label)
 	status_label = _make_label("RACE", 18, Color(0.4, 1, 0.65))
 	top_row.add_child(status_label)
+	var minimap_script = load("res://scripts/Minimap.gd")
+	minimap = Control.new()
+	minimap.set_script(minimap_script)
+	minimap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	minimap.position = Vector2(-174, 92)
+	minimap.size = Vector2(150, 150)
+	add_child(minimap)
 
 	var bottom = MarginContainer.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
@@ -80,6 +88,12 @@ func set_timer_text(value: String) -> void:
 func set_floor(value: int) -> void:
 	if floor_label:
 		floor_label.text = "FLOOR %d" % value
+	if minimap and minimap.has_method("set_player"):
+		minimap.set_player(Vector3.ZERO, value - 1)
+
+func set_player_position(world_position: Vector3, floor_index: int) -> void:
+	if minimap and minimap.has_method("set_player"):
+		minimap.set_player(world_position, floor_index)
 
 func set_status(value: String, color: Color = Color.WHITE) -> void:
 	if status_label:

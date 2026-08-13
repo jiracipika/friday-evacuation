@@ -2,6 +2,8 @@
 # Smooth, juicy movement tuned for game feel
 extends CharacterBody3D
 
+signal shake_requested(amount: float)
+
 # Visual
 @export var player_color: Color = Color(0.4, 0.8, 1.0)
 @export var player_display_name: String = "Player"
@@ -27,6 +29,7 @@ var smooth_facing: float = 0.0  # smoothed Y rotation for model
 var chair_wheels: Array[MeshInstance3D] = []
 var chair_seat: MeshInstance3D
 var chair_backrest: MeshInstance3D
+var dust_particles: GPUParticles3D
 var squash_amount: float = 1.0
 var target_squash: float = 1.0
 var landing_velocity: float = 0.0
@@ -55,6 +58,7 @@ func _ready() -> void:
 	
 	# Boost particles off by default
 	_setup_boost_particles()
+	_setup_dust_particles()
 
 func _setup_boost_particles() -> void:
 	if not boost_particles:
@@ -71,6 +75,30 @@ func _setup_boost_particles() -> void:
 	boost_particles.process_material = material
 	boost_particles.amount = 28
 	boost_particles.lifetime = 0.45
+
+func _setup_dust_particles() -> void:
+	dust_particles = GPUParticles3D.new()
+	dust_particles.name = "RollingDust"
+	dust_particles.amount = 18
+	dust_particles.lifetime = 0.55
+	dust_particles.emitting = false
+	var process_material = ParticleProcessMaterial.new()
+	process_material.direction = Vector3(0, 1, 0)
+	process_material.spread = 35.0
+	process_material.initial_velocity_min = 0.4
+	process_material.initial_velocity_max = 1.4
+	process_material.gravity = Vector3(0, 0.8, 0)
+	process_material.scale_min = 0.04
+	process_material.scale_max = 0.14
+	process_material.color = Color(0.72, 0.62, 0.45, 0.28)
+	dust_particles.process_material = process_material
+	var dust_mesh = SphereMesh.new()
+	dust_mesh.radius = 0.08
+	dust_mesh.height = 0.16
+	dust_particles.draw_pass_1 = dust_mesh
+	dust_particles.position = Vector3(0, -0.22, 0.28)
+	add_child(dust_particles)
+
 func _build_chair_model() -> void:
 	if not model_parent:
 		return
@@ -164,6 +192,7 @@ func _physics_process(delta: float) -> void:
 		boost_cd_timer -= delta
 	if is_boosting:
 		boost_timer -= delta
+		boost_visual_timer = boost_timer
 		if boost_timer <= 0:
 			is_boosting = false
 			if boost_particles:
@@ -185,6 +214,8 @@ func _physics_process(delta: float) -> void:
 	
 	move_and_slide()
 	_apply_visual_feedback(delta)
+	if dust_particles:
+		dust_particles.emitting = is_on_floor() and Vector2(velocity.x, velocity.z).length() > 4.0 and not is_boosting
 	
 	# Smooth model rotation toward facing direction
 	_smooth_facing(delta)
@@ -192,10 +223,12 @@ func _physics_process(delta: float) -> void:
 func _apply_visual_feedback(delta: float) -> void:
 	var landed = is_on_floor() and landing_velocity < -2.0
 	if landed:
-		target_squash = 0.68 if landing_velocity < -6.0 else 0.82
+		var impact = abs(landing_velocity)
+		target_squash = 0.68 if impact > 6.0 else 0.82
 		landing_velocity = 0.0
 		target_squash = max(target_squash, 0.82)
-		_play_sfx("land")
+		_play_sfx("land", impact)
+		shake_requested.emit(clampf(impact * 0.018, 0.07, 0.16))
 
 	if not is_on_floor():
 		landing_velocity = min(landing_velocity, velocity.y)
@@ -300,6 +333,7 @@ func _start_boost() -> void:
 	if boost_particles:
 		boost_particles.emitting = true
 	target_squash = 1.08
+	shake_requested.emit(0.04)
 	_play_sfx("boost")
 
 func _drop_trap() -> void:
@@ -316,12 +350,13 @@ func stun(duration: float) -> void:
 	is_stunned = max(is_stunned, duration)
 	velocity = velocity * 0.3
 	target_squash = 0.82
+	shake_requested.emit(0.1)
 	_play_sfx("trap")
 
-func _play_sfx(effect_name: String) -> void:
+func _play_sfx(effect_name: String, intensity: float = 1.0) -> void:
 	var audio_manager = get_node_or_null("/root/AudioManager")
 	if audio_manager and audio_manager.has_method("play_sfx"):
-		audio_manager.play_sfx(effect_name)
+		audio_manager.play_sfx(effect_name, intensity)
 
 func set_can_move(value: bool) -> void:
 	can_move = value
