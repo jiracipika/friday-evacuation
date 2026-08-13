@@ -1,0 +1,131 @@
+[gd_scene load_steps=8 format=3 uid="uid://evacuation_001"]
+
+[ext_resource type="Script" path="res://scripts/Evacuation.gd" id="1_evac"]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0.039, 0.039, 0.058, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.1, 0.1, 0.15, 1)
+ambient_light_energy = 0.5
+fog_enabled = true
+fog_light_color = Color(0.039, 0.039, 0.058, 1)
+fog_density = 0.005
+
+[sub_resource type="BoxShape3D" id="ExitShape_1"]
+size = Vector3(10, 6, 4)
+
+[sub_resource type="BoxMesh" id="ExitMesh_1"]
+size = Vector3(10, 6, 4)
+
+[sub_resource type="StandardMaterial3D" id="ExitMat_1"]
+albedo_color = Color(0.2, 1.0, 0.2, 0.3)
+transparency = 1
+emission_enabled = true
+emission = Color(0.1, 0.8, 0.1, 1)
+
+[sub_resource type="SphereShape3D" id="CamShape_1"]
+
+[sub_resource type="GDScript" id="CameraFollow_1"]
+script/source = "extends Camera3D
+var target: Node3D = null
+var enabled: bool = false
+
+func _physics_process(delta):
+	if enabled and target and is_instance_valid(target):
+		var t = target.global_position + Vector3(0, 6, 10)
+		global_position = global_position.lerp(t, delta * 5.0)
+		look_at(target.global_position)
+"
+
+[node name="Evacuation" type="Node3D"]
+script = ExtResource("1_evac")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, 0.4, 0, -0.2, 0.434, 0.879, 0.354, -0.761, 0.526, -10, 25, -10)
+light_energy = 0.8
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.927, 0.375, 0, -0.375, 0.927, 0, 8, 15)
+fov = 70
+
+[node name="Arena" type="Node3D" parent="."]
+
+[node name="ExitZone" type="Area3D" parent="Arena"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 18.5, 15)
+
+[node name="ExitCollision" type="CollisionShape3D" parent="Arena/ExitZone"]
+shape = SubResource("ExitShape_1")
+
+[node name="ExitMesh" type="MeshInstance3D" parent="Arena/ExitZone"]
+mesh = SubResource("ExitMesh_1")
+material_override = SubResource("ExitMat_1")
+
+[node name="CountdownLabel" type="Label3D" parent="Arena"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 0)
+text = "3"
+font_size = 120
+outline_size = 24
+billboard = 1
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="TimerLabel" type="Label" parent="UI"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -80
+offset_top = 20
+offset_right = 80
+offset_bottom = 60
+grow_horizontal = 2
+text = "2:00"
+theme_override_font_sizes/font_size = 36
+theme_override_colors/font_color = Color(1, 0.8, 0.2, 1)
+
+[node name="ResultsPanel" type="Panel" parent="UI"]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300
+offset_top = -200
+offset_right = 300
+offset_bottom = 200
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="UI/ResultsPanel"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20
+offset_top = 20
+offset_right = -20
+offset_bottom = -20
+theme_override_constants/separation = 20
+
+[node name="WinnerLabel" type="Label" parent="UI/ResultsPanel/VBox"]
+layout_mode = 2
+text = "WINNER"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 32
+theme_override_colors/font_color = Color(1, 0.65, 0.1, 1)
+
+[node name="RematchButton" type="Button" parent="UI/ResultsPanel/VBox"]
+layout_mode = 2
+text = "REMATCH"
+custom_minimum_size = Vector2(0, 60)
+theme_override_font_sizes/font_size = 24
+
+[node name="MenuButton" type="Button" parent="UI/ResultsPanel/VBox"]
+layout_mode = 2
+text = "MAIN MENU"
+custom_minimum_size = Vector2(0, 60)
+theme_override_font_sizes/font_size = 24

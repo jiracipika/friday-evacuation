@@ -1,0 +1,52 @@
+[gd_scene load_steps=6 format=3 uid="uid://player_chair_001"]
+
+[ext_resource type="Script" path="res://scripts/PlayerChair.gd" id="1_player"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
+radius = 0.5
+height = 1.2
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_1"]
+radius = 0.5
+height = 1.2
+
+[sub_resource type="StandardMaterial3D" id="Mat_1"]
+albedo_color = Color(0.4, 0.8, 1.0, 1)
+roughness = 0.6
+
+[sub_resource type="SphereShape3D" id="ParticleShape_1"]
+radius = 0.1
+
+[node name="PlayerChair" type="CharacterBody3D"]
+script = ExtResource("1_player")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_1")
+
+[node name="ModelParent" type="Node3D" parent="."]
+
+[node name="ChairMesh" type="MeshInstance3D" parent="ModelParent"]
+mesh = SubResource("CapsuleMesh_1")
+material_override = SubResource("Mat_1")
+
+[node name="Seat" type="MeshInstance3D" parent="ModelParent"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
+
+[node name="Back" type="MeshInstance3D" parent="ModelParent"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -0.4)
+
+[node name="CameraAnchor" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.5, 7)
+
+[node name="Nametag" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.0, 0)
+text = "Player"
+font_size = 48
+outline_size = 12
+billboard = 1
+
+[node name="BoostParticles" type="GPUParticles3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -0.5)
+emitting = false
+amount = 20
+lifetime = 0.3
