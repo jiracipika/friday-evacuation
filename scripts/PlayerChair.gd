@@ -27,6 +27,10 @@ var smooth_facing: float = 0.0  # smoothed Y rotation for model
 var chair_wheels: Array[MeshInstance3D] = []
 var chair_seat: MeshInstance3D
 var chair_backrest: MeshInstance3D
+var squash_amount: float = 1.0
+var target_squash: float = 1.0
+var landing_velocity: float = 0.0
+var boost_visual_timer: float = 0.0
 
 # Nodes
 @onready var mesh: MeshInstance3D = $ChairMesh
@@ -50,9 +54,23 @@ func _ready() -> void:
 		nametag.modulate = player_color
 	
 	# Boost particles off by default
-	if boost_particles:
-		boost_particles.emitting = false
+	_setup_boost_particles()
 
+func _setup_boost_particles() -> void:
+	if not boost_particles:
+		return
+	var material = ParticleProcessMaterial.new()
+	material.direction = Vector3(0, 0, 1)
+	material.spread = 18.0
+	material.initial_velocity_min = 2.0
+	material.initial_velocity_max = 4.0
+	material.gravity = Vector3(0, -1.5, 0)
+	material.scale_min = 0.08
+	material.scale_max = 0.22
+	material.color = Color(1.0, 0.55, 0.08, 0.85)
+	boost_particles.process_material = material
+	boost_particles.amount = 28
+	boost_particles.lifetime = 0.45
 func _build_chair_model() -> void:
 	if not model_parent:
 		return
@@ -127,12 +145,13 @@ func _physics_process(delta: float) -> void:
 	# Stun timer
 	if is_stunned > 0:
 		is_stunned -= delta
-		# Wobble visual
 		if model_parent:
 			model_parent.rotation.z = sin(Time.get_ticks_msec() * 0.03) * 0.15
+			model_parent.rotation.y += delta * 12.0
 		_apply_gravity(delta)
 		_apply_friction(delta)
 		move_and_slide()
+		_apply_visual_feedback(delta)
 		return
 	else:
 		if model_parent:
@@ -165,9 +184,35 @@ func _physics_process(delta: float) -> void:
 			velocity.z = hori.y
 	
 	move_and_slide()
+	_apply_visual_feedback(delta)
 	
 	# Smooth model rotation toward facing direction
 	_smooth_facing(delta)
+
+func _apply_visual_feedback(delta: float) -> void:
+	var landed = is_on_floor() and landing_velocity < -2.0
+	if landed:
+		target_squash = 0.68 if landing_velocity < -6.0 else 0.82
+		landing_velocity = 0.0
+		target_squash = max(target_squash, 0.82)
+		_play_sfx("land")
+
+	if not is_on_floor():
+		landing_velocity = min(landing_velocity, velocity.y)
+
+	target_squash = lerpf(target_squash, 1.0, 1.0 - exp(-7.0 * delta))
+	squash_amount = lerpf(squash_amount, target_squash, 1.0 - exp(-16.0 * delta))
+	if model_parent:
+		var width = 2.0 - squash_amount
+		model_parent.scale = Vector3(width, squash_amount, width)
+		var wheelie_target = 0.0
+		if is_boosting:
+			wheelie_target = -sin((boost_duration - boost_visual_timer) / boost_duration * PI) * 0.18
+		model_parent.rotation.x = lerpf(model_parent.rotation.x, wheelie_target, 1.0 - exp(-10.0 * delta))
+
+	for wheel in chair_wheels:
+		if is_instance_valid(wheel):
+			wheel.rotation.x += Vector2(velocity.x, velocity.z).length() * delta * 3.0
 
 func _handle_input(delta: float) -> void:
 	var input_dir = Vector3.ZERO
@@ -211,6 +256,8 @@ func _handle_input(delta: float) -> void:
 	# Jump
 	if Input.is_action_just_pressed("action") and is_on_floor():
 		velocity.y = jump_force
+		target_squash = 1.18
+		_play_sfx("jump")
 	
 	# Sabotage (drop a trap behind you)
 	if Input.is_action_just_pressed("sabotage"):
@@ -238,6 +285,8 @@ func _apply_friction(delta: float) -> void:
 	velocity.z = hori.y
 
 func _start_boost() -> void:
+	if is_boosting:
+		return
 	is_boosting = true
 	boost_timer = boost_duration
 	boost_cd_timer = boost_cooldown
@@ -250,9 +299,10 @@ func _start_boost() -> void:
 	velocity.z += dir.y * boost_force
 	if boost_particles:
 		boost_particles.emitting = true
+	target_squash = 1.08
+	_play_sfx("boost")
 
 func _drop_trap() -> void:
-	# Spawn a water puddle / banana peel behind the player
 	var trap_scene = load("res://scenes/objects/SabotageTrap.tscn")
 	if not trap_scene:
 		return
@@ -265,6 +315,13 @@ func _drop_trap() -> void:
 func stun(duration: float) -> void:
 	is_stunned = max(is_stunned, duration)
 	velocity = velocity * 0.3
+	target_squash = 0.82
+	_play_sfx("trap")
+
+func _play_sfx(effect_name: String) -> void:
+	var audio_manager = get_node_or_null("/root/AudioManager")
+	if audio_manager and audio_manager.has_method("play_sfx"):
+		audio_manager.play_sfx(effect_name)
 
 func set_can_move(value: bool) -> void:
 	can_move = value
