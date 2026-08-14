@@ -674,6 +674,13 @@ func _end_race() -> void:
 	if local_player:
 		local_player.set_can_move(false)
 
+	var stats = get_node_or_null("/root/StatsManager")
+	if stats:
+		var won := false
+		if finish_order.size() > 0 and is_instance_valid(local_player):
+			won = finish_order[0].player_id == local_player.get_instance_id()
+		stats.record_race(won, top_speed, 0)
+
 	if results_panel:
 		results_panel.visible = true
 		var vbox = results_panel.get_node_or_null("VBox")

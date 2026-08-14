@@ -351,6 +351,7 @@ func _drop_trap() -> void:
 	var behind_dir = -velocity.normalized() if velocity.length() > 1.0 else -global_transform.basis.z
 	trap.global_position = global_position + Vector3(behind_dir.x, 0, behind_dir.z) * 2.0
 	trap.global_position.y = 0.1
+	trap.owner_id = get_instance_id()
 
 func stun(duration: float) -> void:
 	is_stunned = max(is_stunned, duration)

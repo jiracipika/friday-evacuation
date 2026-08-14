@@ -21,6 +21,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 GameManager="*res://scripts/GameManager.gd"
 Network="*res://scripts/Network.gd"
 AudioManager="*res://scripts/AudioManager.gd"
+StatsManager="*res://scripts/StatsManager.gd"
 
 [display]
 

@@ -37,6 +37,8 @@ var buttons: Array[Button] = []
 var settings_overlay: Control
 var lobby_overlay: Control
 var settings_button: Button
+var credits_button: Button
+var stats_label: Label
 var title_base_y: float = 0.0
 var menu_time: float = 0.0
 
@@ -62,6 +64,22 @@ func _ready() -> void:
 	settings_button.add_theme_font_size_override("font_size", 16)
 	$VBox.add_child(settings_button)
 	settings_button.pressed.connect(_open_settings)
+	credits_button = Button.new()
+	credits_button.text = "★ CREDITS"
+	credits_button.custom_minimum_size = Vector2(0, 46)
+	credits_button.add_theme_font_size_override("font_size", 16)
+	$VBox.add_child(credits_button)
+	credits_button.pressed.connect(_open_credits)
+	stats_label = Label.new()
+	stats_label.text = ""
+	stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stats_label.add_theme_font_size_override("font_size", 13)
+	stats_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	$VBox.add_child(stats_label)
+	var stats = get_node_or_null("/root/StatsManager")
+	if stats:
+		stats_label.text = stats.get_summary_line()
+		stats.stats_updated.connect(func(): stats_label.text = stats.get_summary_line())
 	title_base_y = title_label.position.y
 	_build_menu_theme()
 	host_button.visible = true
@@ -100,7 +118,16 @@ func _select_mode(idx: int) -> void:
 func _on_play() -> void:
 	GameManager.select_mode(MODE_INFO[selected_index].mode)
 	var scene_path = GameManager.get_mode_scene(MODE_INFO[selected_index].mode)
-	get_tree().change_scene_to_file(scene_path)
+	var loading = load("res://scripts/LoadingScreen.gd")
+	if loading:
+		loading.show_loading(scene_path)
+	else:
+		get_tree().change_scene_to_file(scene_path)
+
+func _open_credits() -> void:
+	var overlay = CanvasLayer.new()
+	overlay.set_script(load("res://scripts/CreditsScreen.gd"))
+	add_child(overlay)
 
 func _process(delta: float) -> void:
 	menu_time += delta

@@ -7,6 +7,7 @@ extends Area3D
 var age: float = 0.0
 var trap_type: String = "water"  # "water", "banana", "stapler"
 var triggered := false
+var owner_id: int = 0  # instance id of the player who placed this trap
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
@@ -39,6 +40,9 @@ func _on_body_entered(body: CharacterBody3D) -> void:
 	triggered = true
 	if body.has_method("stun"):
 		body.stun(stun_duration)
+		var stats = get_node_or_null("/root/StatsManager")
+		if stats and int(owner_id) != int(body.get_instance_id()):
+			stats.record_trap_landed()
 		var fx = load("res://scripts/ImpactFX.gd")
 		if fx:
 			var burst_color = Color("70b7ff") if trap_type == "water" else (Color("ffcf55") if trap_type == "banana" else Color("dce6ff"))
