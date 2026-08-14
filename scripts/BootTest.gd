@@ -22,6 +22,7 @@ func _init() -> void:
 		"res://scripts/Hauled.gd",
 		"res://scripts/ShopSeek.gd",
 		"res://scripts/PizzaColony.gd",
+		"res://scripts/PauseMenu.gd",
 	]
 	
 	var all_pass = true

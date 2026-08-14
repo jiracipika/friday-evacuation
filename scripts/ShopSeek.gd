@@ -110,4 +110,6 @@ func _spawn_player() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
-		get_tree().change_scene_to_file("res://scenes/Main.tscn")
+		var pause_menu = load("res://scripts/PauseMenu.gd")
+		pause_menu.create(self, Callable())
+		get_viewport().set_input_as_handled()

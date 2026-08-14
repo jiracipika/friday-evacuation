@@ -697,9 +697,17 @@ func _on_rematch() -> void:
 	get_tree().reload_current_scene()
 
 func _on_back_to_menu() -> void:
-	var manager = get_node_or_null("/root/GameManager")
-	if manager:
-		manager.set_mode(GameManager.Modes.MAIN_MENU)
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://scenes/Main.tscn")
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("pause") and match_state != &"finished":
+		var network = get_node_or_null("/root/Network")
+		if network and network.peer:
+			return
+		var pause_menu = load("res://scripts/PauseMenu.gd")
+		pause_menu.create(self, _on_back_to_menu)
+		get_viewport().set_input_as_handled()
 
 func _setup_hud() -> void:
 	hud = $UI
