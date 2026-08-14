@@ -296,7 +296,7 @@ func _add_exit_marker() -> void:
 	add_child(exit_marker)
 
 	var arrow = MeshInstance3D.new()
-	var cone = ConeMesh.new()
+	var cone = CylinderMesh.new()
 	cone.top_radius = 0.0
 	cone.bottom_radius = 1.0
 	cone.height = 2.0
