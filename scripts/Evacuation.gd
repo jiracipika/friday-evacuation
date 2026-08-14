@@ -168,9 +168,12 @@ func _setup_arena() -> void:
 	_build_floor(Vector3(0, 18, 0), Color(0.10, 0.18, 0.15), 3)
 	_setup_environment()
 
-	_build_ramp(Vector3(8, 0, 20), Vector3(8, 6, 20))
-	_build_ramp(Vector3(-8, 6, 20), Vector3(-8, 12, 20))
-	_build_ramp(Vector3(8, 12, 20), Vector3(8, 18, 20))
+	# Elevator pads connect floors. Each pad is an Area3D trigger zone that
+	# smoothly lifts the player to the next floor when entered.
+	# This avoids Godot 4 CharacterBody3D slope/stair physics issues entirely.
+	_build_elevator(Vector3(12, 0.5, 14), Vector3(12, 6.5, -2), 1)   # Floor 1 → 2
+	_build_elevator(Vector3(-12, 6.5, -2), Vector3(-12, 12.5, 14), 2) # Floor 2 → 3
+	_build_elevator(Vector3(12, 12.5, 14), Vector3(12, 18.5, -2), 3)  # Floor 3 → 4
 
 	_spawn_obstacles()
 	_spawn_powerups()
@@ -272,7 +275,8 @@ func _add_exit_indicators(floor_pos: Vector3) -> void:
 		cone.height = 0.15
 		arrow.mesh = cone
 		arrow.rotation.x = PI / 2.0
-		arrow.position = floor_pos + Vector3(x, 0.15, 18)
+		# Point toward exit zone at z=15 (relative to floor 4 at y=18)
+		arrow.position = floor_pos + Vector3(x, 0.15, 13)
 		var mat = StandardMaterial3D.new()
 		mat.albedo_color = Color(0.25, 1.0, 0.4, 0.12)
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -286,7 +290,8 @@ func _add_exit_marker() -> void:
 	ring.inner_radius = 2.8
 	ring.outer_radius = 3.2
 	exit_marker.mesh = ring
-	exit_marker.position = Vector3(0, 1.8, 22.0)
+	# Position on floor 4 (y=18), near the exit zone at z=15
+	exit_marker.position = Vector3(0, 19.3, 15.0)
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = Color(0.1, 0.95, 0.3)
 	mat.emission_enabled = true
@@ -301,7 +306,7 @@ func _add_exit_marker() -> void:
 	cone.bottom_radius = 1.0
 	cone.height = 2.0
 	arrow.mesh = cone
-	arrow.position = Vector3(0, 3.5, 22.0)
+	arrow.position = Vector3(0, 21.0, 15.0)
 	arrow.rotation.x = PI
 	arrow.material_override = mat
 	add_child(arrow)
@@ -370,31 +375,89 @@ func _setup_environment() -> void:
 	env.glow_enabled = false
 	env.glow_strength = 0.8
 
+func _build_elevator(from_pos: Vector3, to_pos: Vector3, target_floor: int) -> void:
+	# Visual platform at the entry point
+	var pad = MeshInstance3D.new()
+	var pad_mesh = BoxMesh.new()
+	pad_mesh.size = Vector3(4, 0.15, 4)
+	pad.mesh = pad_mesh
+	pad.position = from_pos + Vector3(0, 0.1, 0)
+	var pad_mat = StandardMaterial3D.new()
+	pad_mat.albedo_color = Color(0.15, 0.5, 1.0, 0.7)
+	pad_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	pad_mat.emission_enabled = true
+	pad_mat.emission = Color(0.1, 0.4, 1.0)
+	pad_mat.emission_energy_multiplier = 0.8
+	pad.material_override = pad_mat
+	add_child(pad)
+
+	# Pulsing light above the pad
+	var pad_light = OmniLight3D.new()
+	pad_light.position = from_pos + Vector3(0, 2.0, 0)
+	pad_light.light_color = Color(0.2, 0.6, 1.0)
+	pad_light.light_energy = 1.0
+	pad_light.omni_range = 8.0
+	pad_light.shadow_enabled = false
+	add_child(pad_light)
+
+	# Arrow pointing up
+	var arrow = MeshInstance3D.new()
+	var arrow_mesh = CylinderMesh.new()
+	arrow_mesh.top_radius = 0.0
+	arrow_mesh.bottom_radius = 0.8
+	arrow_mesh.height = 1.5
+	arrow.mesh = arrow_mesh
+	arrow.position = from_pos + Vector3(0, 1.5, 0)
+	var arrow_mat = StandardMaterial3D.new()
+	arrow_mat.albedo_color = Color(0.2, 0.7, 1.0)
+	arrow_mat.emission_enabled = true
+	arrow_mat.emission = Color(0.1, 0.5, 1.0)
+	arrow_mat.emission_energy_multiplier = 1.2
+	arrow.material_override = arrow_mat
+	add_child(arrow)
+
+	# Trigger zone — detects when player enters
+	var trigger = Area3D.new()
+	trigger.position = from_pos
+	var trigger_col = CollisionShape3D.new()
+	var trigger_shape = BoxShape3D.new()
+	trigger_shape.size = Vector3(4, 3, 4)
+	trigger_col.shape = trigger_shape
+	trigger.add_child(trigger_col)
+	add_child(trigger)
+
+	# Destination marker (visual)
+	var dest_marker = MeshInstance3D.new()
+	var dest_mesh = BoxMesh.new()
+	dest_mesh.size = Vector3(4, 0.15, 4)
+	dest_marker.mesh = dest_mesh
+	dest_marker.position = to_pos + Vector3(0, 0.1, 0)
+	dest_marker.material_override = pad_mat
+	add_child(dest_marker)
+
+	# Connect the trigger — when player enters, teleport them to the destination
+	# (must teleport because floors are solid boxes; launching would hit the underside)
+	trigger.body_entered.connect(func(body: Node3D):
+		if not body.is_in_group("players"):
+			return
+		var dy = to_pos.y - body.global_position.y
+		if dy > 1.0:
+			# Teleport to destination
+			body.global_position = to_pos + Vector3(0, 1.0, 0)
+			body.velocity = Vector3.ZERO
+			# Play boost sound
+			var audio = get_node_or_null("/root/AudioManager")
+			if audio and audio.has_method("play_sfx"):
+				audio.play_sfx("boost", 1.5)
+			# Visual feedback
+			var impact_fx = load("res://scripts/ImpactFX.gd")
+			if impact_fx and impact_fx.has_method("boost_burst"):
+				impact_fx.boost_burst(body.global_position)
+	)
+
 func _build_ramp(from_pos: Vector3, to_pos: Vector3) -> void:
-	var ramp = StaticBody3D.new()
-	var mid = (from_pos + to_pos) / 2.0
-	ramp.position = mid
-	var direction = to_pos - from_pos
-	var length = direction.length()
-	var angle = atan2(direction.y, sqrt(direction.x ** 2 + direction.z ** 2))
-	ramp.rotation.x = -angle
-	add_child(ramp)
-
-	var col = CollisionShape3D.new()
-	var shape = BoxShape3D.new()
-	shape.size = Vector3(6, 0.2, length)
-	col.shape = shape
-	ramp.add_child(col)
-
-	var mesh_inst = MeshInstance3D.new()
-	var mesh = BoxMesh.new()
-	mesh.size = Vector3(6, 0.2, length)
-	mesh_inst.mesh = mesh
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.2, 0.2, 0.25)
-	mat.roughness = 0.7
-	mesh_inst.material_override = mat
-	ramp.add_child(mesh_inst)
+	# Legacy function kept for compatibility — now delegates to elevator
+	_build_elevator(from_pos, to_pos, 0)
 
 func _spawn_obstacles() -> void:
 	var rng = RandomNumberGenerator.new()

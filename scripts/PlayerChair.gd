@@ -46,17 +46,21 @@ var mobile_input := Vector2.ZERO
 
 func _ready() -> void:
 	add_to_group("players")
-	
+
+	# Floor snap so the chair sticks to slopes and handles ramp-to-floor steps
+	floor_snap_length = 0.4
+	floor_max_angle = deg_to_rad(50.0)
+
 	# Apply color to chair mesh
 	if mesh:
 		mesh.visible = false
 	_build_chair_model()
-	
+
 	# Set nametag
 	if nametag:
 		nametag.text = player_display_name
 		nametag.modulate = player_color
-	
+
 	# Boost particles off by default
 	_setup_boost_particles()
 	_setup_dust_particles()
@@ -170,7 +174,7 @@ func _build_chair_model() -> void:
 func _physics_process(delta: float) -> void:
 	if not can_move:
 		return
-	
+
 	# Stun timer
 	if is_stunned > 0:
 		is_stunned -= delta
@@ -187,7 +191,7 @@ func _physics_process(delta: float) -> void:
 			# Frame-rate independent wobble recovery
 			var wobble_lerp = 1.0 - exp(-12.0 * delta)
 			model_parent.rotation.z = lerp(model_parent.rotation.z, 0.0, wobble_lerp)
-	
+
 	# Timers
 	if boost_cd_timer > 0:
 		boost_cd_timer -= delta
@@ -198,13 +202,13 @@ func _physics_process(delta: float) -> void:
 			is_boosting = false
 			if boost_particles:
 				boost_particles.emitting = false
-	
+
 	# Input (only for local player)
 	if is_multiplayer_authority():
 		_handle_input(delta)
-	
+
 	_apply_gravity(delta)
-	
+
 	# Clamp speed smoothly (only when not boosting)
 	if not is_boosting:
 		var hori = Vector2(velocity.x, velocity.z)
@@ -212,12 +216,12 @@ func _physics_process(delta: float) -> void:
 			hori = hori.normalized() * max_speed
 			velocity.x = hori.x
 			velocity.z = hori.y
-	
+
 	move_and_slide()
 	_apply_visual_feedback(delta)
 	if dust_particles:
 		dust_particles.emitting = is_on_floor() and Vector2(velocity.x, velocity.z).length() > 4.0 and not is_boosting
-	
+
 	# Smooth model rotation toward facing direction
 	_smooth_facing(delta)
 
@@ -250,7 +254,7 @@ func _apply_visual_feedback(delta: float) -> void:
 
 func _handle_input(delta: float) -> void:
 	var input_dir = Vector3.ZERO
-	
+
 	# Get camera-relative input
 	var cam = get_viewport().get_camera_3d()
 	if cam:
@@ -270,30 +274,30 @@ func _handle_input(delta: float) -> void:
 			input_dir -= right
 		if Input.is_action_pressed("move_right"):
 			input_dir += right
-	
+
 	input_dir = input_dir.normalized()
-	
+
 	if input_dir.length() > 0.1:
 		# Smooth acceleration
 		velocity.x += input_dir.x * acceleration * delta
 		velocity.z += input_dir.z * acceleration * delta
-		
+
 		# Update target facing angle
 		smooth_facing = atan2(-input_dir.x, -input_dir.z)
 	else:
 		# Apply friction when no input
 		_apply_friction(delta)
-	
+
 	# Boost
 	if Input.is_action_just_pressed("boost") and boost_cd_timer <= 0:
 		_start_boost()
-	
+
 	# Jump
 	if Input.is_action_just_pressed("action") and is_on_floor():
 		velocity.y = jump_force
 		target_squash = 1.18
 		_play_sfx("jump")
-	
+
 	# Sabotage (drop a trap behind you)
 	if Input.is_action_just_pressed("sabotage"):
 		_drop_trap()
