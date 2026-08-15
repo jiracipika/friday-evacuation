@@ -26,6 +26,8 @@ func _init() -> void:
 		"res://scripts/StatsManager.gd",
 		"res://scripts/LoadingScreen.gd",
 		"res://scripts/CreditsScreen.gd",
+		"res://scripts/Accessibility.gd",
+		"res://scripts/SubtitleOverlay.gd",
 	]
 	
 	var all_pass = true

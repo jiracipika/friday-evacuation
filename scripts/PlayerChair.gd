@@ -341,6 +341,9 @@ func _start_boost() -> void:
 	target_squash = 1.08
 	shake_requested.emit(0.04)
 	_play_sfx("boost")
+	var a11y = load("res://scripts/Accessibility.gd")
+	if a11y:
+		a11y.caption("BOOST!", 1.0)
 
 func _drop_trap() -> void:
 	var trap_scene = load("res://scenes/objects/SabotageTrap.tscn")
@@ -359,6 +362,9 @@ func stun(duration: float) -> void:
 	target_squash = 0.82
 	shake_requested.emit(0.1)
 	_play_sfx("trap")
+	var a11y = load("res://scripts/Accessibility.gd")
+	if a11y:
+		a11y.caption("STUNNED — TRAP HIT", 1.2)
 
 func _play_sfx(effect_name: String, intensity: float = 1.0) -> void:
 	var audio_manager = get_node_or_null("/root/AudioManager")

@@ -50,6 +50,9 @@ func _on_body_entered(body: CharacterBody3D) -> void:
 		var audio = get_node_or_null("/root/AudioManager")
 		if audio:
 			audio.play_sfx("trap", 1.3)
+		var a11y = load("res://scripts/Accessibility.gd")
+		if a11y:
+			a11y.caption("TRAP HIT: " + trap_type.to_upper(), 1.2)
 		print("[TRAP] %s hit %s trap!" % [body.player_display_name if "player_display_name" in body else "Player", trap_type])
 		queue_free()
 

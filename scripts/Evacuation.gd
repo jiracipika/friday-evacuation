@@ -130,6 +130,9 @@ func _update_camera(delta: float) -> void:
 		camera.global_position += shake_offset
 
 func _request_camera_shake(amount: float) -> void:
+	var a11y_shake = load("res://scripts/Accessibility.gd")
+	if a11y_shake and not a11y_shake.screen_shake_enabled():
+		return
 	camera_shake = maxf(camera_shake, amount)
 
 func _on_network_player_connected(peer_id: int, player_name: String) -> void:
@@ -449,6 +452,9 @@ func _build_elevator(from_pos: Vector3, to_pos: Vector3, target_floor: int) -> v
 			var audio = get_node_or_null("/root/AudioManager")
 			if audio and audio.has_method("play_sfx"):
 				audio.play_sfx("boost", 1.5)
+			var a11y = load("res://scripts/Accessibility.gd")
+			if a11y:
+				a11y.caption("ELEVATOR", 1.0)
 			# Visual feedback
 			var impact_fx = load("res://scripts/ImpactFX.gd")
 			if impact_fx and impact_fx.has_method("boost_burst"):
@@ -612,6 +618,9 @@ func _update_countdown_display() -> void:
 func _start_race() -> void:
 	match_state = &"racing"
 	timer = 0.0
+	var a11y = load("res://scripts/Accessibility.gd")
+	if a11y:
+		a11y.caption("GO!", 1.0)
 	if local_player:
 		local_player.set_can_move(true)
 	_spawn_traps()
@@ -665,6 +674,9 @@ func _on_player_reached_exit(body: Node3D) -> void:
 	if body == local_player:
 		if local_player and local_player.has_method("trigger_mobile_action"):
 			local_player.trigger_mobile_action("victory")
+		var a11y = load("res://scripts/Accessibility.gd")
+		if a11y:
+			a11y.caption("FINISH!", 2.0)
 	_end_race()
 
 func _end_race() -> void:
@@ -722,3 +734,9 @@ func _setup_hud() -> void:
 		var speed_label = hud.get_node_or_null("SpeedLabel")
 		if speed_label:
 			speed_label.text = "SPEED: 0 km/h"
+		# Caption overlay for audio-cue subtitles (no-op when disabled)
+		var overlay_script = load("res://scripts/SubtitleOverlay.gd")
+		if overlay_script:
+			var overlay = Control.new()
+			overlay.set_script(overlay_script)
+			hud.add_child(overlay)

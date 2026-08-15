@@ -32,6 +32,9 @@ func _on_body_entered(body: Node3D) -> void:
 		var audio = get_node_or_null("/root/AudioManager")
 		if audio:
 			audio.play_sfx("powerup", 1.2)
+		var a11y = load("res://scripts/Accessibility.gd")
+		if a11y:
+			a11y.caption("COFFEE COLLECTED — BOOST READY", 1.2)
 
 		var fx = load("res://scripts/ImpactFX.gd")
 		if fx:

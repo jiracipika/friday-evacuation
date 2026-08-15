@@ -8,6 +8,13 @@ var master_slider: HSlider
 var music_slider: HSlider
 var sfx_slider: HSlider
 var shake_toggle: CheckButton
+var flash_toggle: CheckButton
+var reduced_motion_toggle: CheckButton
+var high_contrast_toggle: CheckButton
+var subtitles_toggle: CheckButton
+var time_scale_option: OptionButton
+
+const TIME_SCALE_LABELS := ["0.75x (SLOWER)", "1.0x (NORMAL)", "1.25x (FASTER)"]
 
 func _ready() -> void:
 	_load_settings()
@@ -69,9 +76,41 @@ func _build_ui() -> void:
 
 	shake_toggle = CheckButton.new()
 	shake_toggle.text = "ENABLE SCREEN SHAKE"
-	shake_toggle.button_pressed = true
+	shake_toggle.button_pressed = bool(config.get_value("accessibility", "screen_shake", true))
 	box.add_child(shake_toggle)
 	shake_toggle.toggled.connect(func(_value): _apply_settings())
+
+	flash_toggle = CheckButton.new()
+	flash_toggle.text = "ENABLE FLASH EFFECTS"
+	flash_toggle.button_pressed = bool(config.get_value("accessibility", "flash_effects", true))
+	box.add_child(flash_toggle)
+	flash_toggle.toggled.connect(func(_value): _apply_settings())
+
+	reduced_motion_toggle = CheckButton.new()
+	reduced_motion_toggle.text = "REDUCED MOTION"
+	reduced_motion_toggle.button_pressed = bool(config.get_value("accessibility", "reduced_motion", false))
+	box.add_child(reduced_motion_toggle)
+	reduced_motion_toggle.toggled.connect(func(_value): _apply_settings())
+
+	high_contrast_toggle = CheckButton.new()
+	high_contrast_toggle.text = "HIGH CONTRAST HUD"
+	high_contrast_toggle.button_pressed = bool(config.get_value("accessibility", "high_contrast", false))
+	box.add_child(high_contrast_toggle)
+	high_contrast_toggle.toggled.connect(func(_value): _apply_settings())
+
+	subtitles_toggle = CheckButton.new()
+	subtitles_toggle.text = "AUDIO CUE SUBTITLES"
+	subtitles_toggle.button_pressed = bool(config.get_value("accessibility", "subtitles", false))
+	box.add_child(subtitles_toggle)
+	subtitles_toggle.toggled.connect(func(_value): _apply_settings())
+
+	time_scale_option = OptionButton.new()
+	for label in TIME_SCALE_LABELS:
+		time_scale_option.add_item(label)
+	var saved_scale := float(config.get_value("accessibility", "time_scale", 1.0))
+	time_scale_option.selected = _time_scale_index(saved_scale)
+	_add_setting(box, "GAME SPEED (SINGLE PLAYER ONLY)", time_scale_option)
+	time_scale_option.item_selected.connect(func(_index): _apply_settings())
 
 	var back = Button.new()
 	back.text = "BACK"
@@ -106,11 +145,35 @@ func _apply_settings() -> void:
 	config.set_value("audio", "music", music_slider.value / 100.0)
 	config.set_value("audio", "sfx", sfx_slider.value / 100.0)
 	config.set_value("accessibility", "screen_shake", shake_toggle.button_pressed)
+	config.set_value("accessibility", "flash_effects", flash_toggle.button_pressed if flash_toggle else true)
+	config.set_value("accessibility", "reduced_motion", reduced_motion_toggle.button_pressed if reduced_motion_toggle else false)
+	config.set_value("accessibility", "high_contrast", high_contrast_toggle.button_pressed if high_contrast_toggle else false)
+	config.set_value("accessibility", "subtitles", subtitles_toggle.button_pressed if subtitles_toggle else false)
+	if time_scale_option:
+		config.set_value("accessibility", "time_scale", _time_scale_value(time_scale_option.selected))
 	config.save("user://settings.cfg")
 	var audio = get_node_or_null("/root/AudioManager")
 	if audio:
 		audio.set_sfx_volume((master_slider.value / 100.0) * (sfx_slider.value / 100.0))
 		audio.set_music_volume((master_slider.value / 100.0) * (music_slider.value / 100.0))
+
+func _time_scale_index(value: float) -> int:
+	# Snap to the nearest supported option index (0=0.75, 1=1.0, 2=1.25)
+	var options := [0.75, 1.0, 1.25]
+	var best := 1
+	var best_dist := absf(value - 1.0)
+	for i in options.size():
+		var dist := absf(value - options[i])
+		if dist < best_dist:
+			best_dist = dist
+			best = i
+	return best
+
+func _time_scale_value(index: int) -> float:
+	match index:
+		0: return 0.75
+		2: return 1.25
+		_: return 1.0
 
 func _apply_graphics_quality(quality: int) -> void:
 	var root = get_tree().current_scene
