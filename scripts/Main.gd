@@ -38,6 +38,8 @@ var settings_overlay: Control
 var lobby_overlay: Control
 var settings_button: Button
 var credits_button: Button
+var modifier_row: HBoxContainer
+var modifier_toggles: Array[CheckButton] = []
 var stats_label: Label
 var title_base_y: float = 0.0
 var menu_time: float = 0.0
@@ -58,6 +60,7 @@ func _ready() -> void:
 	_select_mode(0)
 	
 	play_button.pressed.connect(_on_play)
+	_build_modifier_row()
 	settings_button = Button.new()
 	settings_button.text = "⚙ SETTINGS"
 	settings_button.custom_minimum_size = Vector2(0, 46)
@@ -100,6 +103,32 @@ func _build_mode_buttons() -> void:
 		mode_list.add_child(btn)
 		buttons.append(btn)
 
+func _build_modifier_row() -> void:
+	# Race-modifier quick toggles — single-player Evacuation only.
+	var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
+	if not RaceModifiersScript:
+		return
+	RaceModifiersScript.load_from_cfg()
+	modifier_row = HBoxContainer.new()
+	modifier_row.add_theme_constant_override("separation", 6)
+	$VBox.add_child(modifier_row)
+	$VBox.move_child(modifier_row, play_button.get_index() + 1)
+	var idx := 0
+	for mod in RaceModifiersScript.ALL:
+		var toggle := CheckButton.new()
+		toggle.text = RaceModifiersScript.LABELS[mod].split(" — ")[0]
+		toggle.tooltip_text = RaceModifiersScript.LABELS[mod]
+		toggle.button_pressed = RaceModifiersScript.is_active(mod)
+		toggle.add_theme_font_size_override("font_size", 11)
+		toggle.toggled.connect(func(on: bool):
+			RaceModifiersScript.toggle(mod)
+			RaceModifiersScript.save_to_cfg()
+		)
+		modifier_row.add_child(toggle)
+		modifier_toggles.append(toggle)
+		idx += 1
+	modifier_row.visible = selected_index == 0
+
 func _select_mode(idx: int) -> void:
 	selected_index = idx
 	var info = MODE_INFO[idx]
@@ -107,6 +136,8 @@ func _select_mode(idx: int) -> void:
 	subtitle_label.text = info.subtitle
 	subtitle_label.modulate = info.color
 	desc_label.text = info.desc
+	if modifier_row:
+		modifier_row.visible = idx == 0
 	
 	for i in range(buttons.size()):
 		buttons[i].disabled = i == idx

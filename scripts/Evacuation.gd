@@ -19,6 +19,7 @@ var remote_players: Dictionary = {}
 var top_speed: float = 0.0
 var traps_hit: int = 0
 var traps_placed: int = 0
+var sp_modifiers: bool = false
 
 ## Smooth camera state
 var cam_follow_pos: Vector3 = Vector3.ZERO
@@ -38,6 +39,7 @@ var camera_shake_time: float = 0.0
 func _ready() -> void:
 	_setup_arena()
 	_spawn_player()
+	_apply_player_modifiers()
 	_start_countdown()
 	_setup_hud()
 	camera_base_fov = camera.fov if camera else 70.0
@@ -165,6 +167,12 @@ func _on_remote_player_state(peer_id: int, position: Vector3, remote_velocity: V
 var exit_marker: MeshInstance3D
 
 func _setup_arena() -> void:
+	# Race modifiers (single-player only — any active peer disables them)
+	var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
+	var network_mod := get_node_or_null("/root/Network")
+	sp_modifiers = RaceModifiersScript != null and not (network_mod and network_mod.peer)
+	if sp_modifiers and RaceModifiersScript.is_active(RaceModifiersScript.Modifier.TIME_ATTACK_90):
+		time_limit = 90.0
 	_build_floor(Vector3(0, 0, 0), Color(0.15, 0.15, 0.22), 0)
 	_build_floor(Vector3(0, 6, 0), Color(0.18, 0.15, 0.20), 1)
 	_build_floor(Vector3(0, 12, 0), Color(0.13, 0.16, 0.20), 2)
@@ -183,6 +191,15 @@ func _setup_arena() -> void:
 	_add_exit_marker()
 
 # --- FLOOR/RAMP GUIDANCE ---
+func _apply_player_modifiers() -> void:
+	if not sp_modifiers or not local_player:
+		return
+	var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
+	if RaceModifiersScript.is_active(RaceModifiersScript.Modifier.LOW_GRAVITY):
+		local_player.gravity *= 0.6
+	if RaceModifiersScript.is_active(RaceModifiersScript.Modifier.SLIPPERY):
+		local_player.friction *= 0.3
+
 func _build_floor(pos: Vector3, color: Color, floor_index: int = 0) -> void:
 	var floor_node = StaticBody3D.new()
 	floor_node.position = pos
@@ -500,6 +517,9 @@ func _make_desk() -> StaticBody3D:
 	return desk
 
 func _spawn_powerups() -> void:
+	var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
+	if sp_modifiers and RaceModifiersScript.is_active(RaceModifiersScript.Modifier.NO_COFFEE):
+		return  # No coffee run: skip all power-up spawns
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 999
 
@@ -633,9 +653,14 @@ func _spawn_traps() -> void:
 	if not trap_scene:
 		return
 
-	for i in range(4):
+	var trap_count := 4
+	var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
+	if sp_modifiers and RaceModifiersScript.is_active(RaceModifiersScript.Modifier.DOUBLE_TRAPS):
+		trap_count = 8
+
+	for i in range(trap_count):
 		var trap = trap_scene.instantiate()
-		var floor_y = [0.5, 6.5, 12.5, 18.5][i]
+		var floor_y = [0.5, 6.5, 12.5, 18.5][i % 4]
 		trap.position = Vector3(
 			randf_range(-15, 15),
 			floor_y,
@@ -707,6 +732,14 @@ func _end_race() -> void:
 					winner_label.text = "NO WINNER"
 			if stats_label:
 				stats_label.text = "TOP SPEED: %d km/h\nTRAPS HIT: %d" % [int(top_speed), traps_hit]
+			# Show active modifiers on the results screen for clarity
+			if sp_modifiers:
+				var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
+				var names: Array[String] = []
+				for mod in RaceModifiersScript.selected:
+					names.append(RaceModifiersScript.LABELS[mod].split(" — ")[0])
+				if names.size() > 0 and stats_label:
+					stats_label.text += "\nMODIFIERS: " + ", ".join(names)
 
 	var impact = load("res://scripts/ImpactFX.gd")
 	if impact and impact.has_method("confetti_burst"):
