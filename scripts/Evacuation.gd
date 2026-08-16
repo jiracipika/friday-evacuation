@@ -20,6 +20,7 @@ var top_speed: float = 0.0
 var traps_hit: int = 0
 var traps_placed: int = 0
 var sp_modifiers: bool = false
+var new_personal_best: bool = false
 
 ## Smooth camera state
 var cam_follow_pos: Vector3 = Vector3.ZERO
@@ -716,7 +717,10 @@ func _end_race() -> void:
 		var won := false
 		if finish_order.size() > 0 and is_instance_valid(local_player):
 			won = finish_order[0].player_id == local_player.get_instance_id()
+		var prev_best: float = stats.top_speed_ever
+		var prev_races: int = stats.total_races
 		stats.record_race(won, top_speed, 0)
+		new_personal_best = top_speed > prev_best and prev_races > 0
 
 	if results_panel:
 		results_panel.visible = true
@@ -732,6 +736,8 @@ func _end_race() -> void:
 					winner_label.text = "NO WINNER"
 			if stats_label:
 				stats_label.text = "TOP SPEED: %d km/h\nTRAPS HIT: %d" % [int(top_speed), traps_hit]
+				if new_personal_best:
+					stats_label.text += "\n★ NEW TOP-SPEED RECORD ★"
 			# Show active modifiers on the results screen for clarity
 			if sp_modifiers:
 				var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
@@ -744,6 +750,13 @@ func _end_race() -> void:
 	var impact = load("res://scripts/ImpactFX.gd")
 	if impact and impact.has_method("confetti_burst"):
 		impact.confetti_burst(local_player.global_position if local_player else Vector3.ZERO)
+	if new_personal_best:
+		var audio_pb = get_node_or_null("/root/AudioManager")
+		if audio_pb:
+			audio_pb.play_sfx("victory", 1.0)
+		var pb_a11y = load("res://scripts/Accessibility.gd")
+		if pb_a11y:
+			pb_a11y.caption("NEW TOP-SPEED RECORD!", 1.5)
 
 func _on_rematch() -> void:
 	get_tree().reload_current_scene()
