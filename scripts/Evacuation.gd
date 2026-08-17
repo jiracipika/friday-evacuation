@@ -21,6 +21,7 @@ var traps_hit: int = 0
 var traps_placed: int = 0
 var sp_modifiers: bool = false
 var new_personal_best: bool = false
+var ghost_racer: Node3D
 
 ## Smooth camera state
 var cam_follow_pos: Vector3 = Vector3.ZERO
@@ -41,6 +42,7 @@ func _ready() -> void:
 	_setup_arena()
 	_spawn_player()
 	_apply_player_modifiers()
+	_maybe_spawn_ghost()
 	_start_countdown()
 	_setup_hud()
 	camera_base_fov = camera.fov if camera else 70.0
@@ -200,6 +202,46 @@ func _apply_player_modifiers() -> void:
 		local_player.gravity *= 0.6
 	if RaceModifiersScript.is_active(RaceModifiersScript.Modifier.SLIPPERY):
 		local_player.friction *= 0.3
+
+# --- GHOST PACER (single-player) ---
+func _maybe_spawn_ghost() -> void:
+	# No ghost in multiplayer; respect the user's race/ghost setting (default on).
+	var network_mod := get_node_or_null("/root/Network")
+	if network_mod and network_mod.peer:
+		return
+	var config := ConfigFile.new()
+	config.load("user://settings.cfg")
+	if not config.get_value("race", "ghost_enabled", true):
+		return
+	var ghost_script = load("res://scripts/GhostRacer.gd")
+	if ghost_script == null:
+		return
+	ghost_racer = Node3D.new()
+	ghost_racer.set_script(ghost_script)
+	# Course: start → each floor's far side → exit ring on floor 4
+	var course: Array[Vector3] = [
+		Vector3(0, 1.0, 0),
+		Vector3(10, 0.5, 8),
+		Vector3(-8, 6.5, -6),
+		Vector3(9, 12.5, 9),
+		Vector3(-6, 18.5, 6),
+		Vector3(0, 19.0, 14.5),
+	]
+	ghost_racer.setup(course, "GHOST", 75.0)
+	add_child(ghost_racer)
+	ghost_racer.ghost_finished.connect(_on_ghost_finished)
+
+func _on_ghost_finished(ghost_name: String, ghost_time: float) -> void:
+	if match_state == &"finished":
+		return
+	finish_order.append({
+		"player_id": ghost_racer.get_instance_id(),
+		"name": ghost_name,
+		"time": ghost_time
+	})
+	var a11y = load("res://scripts/Accessibility.gd")
+	if a11y:
+		a11y.caption("GHOST FINISHED — " + str(snappedf(ghost_time, 0.1)) + "s", 2.0)
 
 func _build_floor(pos: Vector3, color: Color, floor_index: int = 0) -> void:
 	var floor_node = StaticBody3D.new()

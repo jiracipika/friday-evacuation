@@ -9,6 +9,7 @@ var music_slider: HSlider
 var sfx_slider: HSlider
 var shake_toggle: CheckButton
 var flash_toggle: CheckButton
+var ghost_toggle: CheckButton
 var reduced_motion_toggle: CheckButton
 var high_contrast_toggle: CheckButton
 var subtitles_toggle: CheckButton
@@ -86,6 +87,12 @@ func _build_ui() -> void:
 	box.add_child(flash_toggle)
 	flash_toggle.toggled.connect(func(_value): _apply_settings())
 
+	ghost_toggle = CheckButton.new()
+	ghost_toggle.text = "SINGLE-PLAYER GHOST PACER"
+	ghost_toggle.button_pressed = bool(config.get_value("race", "ghost_enabled", true))
+	box.add_child(ghost_toggle)
+	ghost_toggle.toggled.connect(func(_value): _apply_settings())
+
 	reduced_motion_toggle = CheckButton.new()
 	reduced_motion_toggle.text = "REDUCED MOTION"
 	reduced_motion_toggle.button_pressed = bool(config.get_value("accessibility", "reduced_motion", false))
@@ -146,6 +153,7 @@ func _apply_settings() -> void:
 	config.set_value("audio", "sfx", sfx_slider.value / 100.0)
 	config.set_value("accessibility", "screen_shake", shake_toggle.button_pressed)
 	config.set_value("accessibility", "flash_effects", flash_toggle.button_pressed if flash_toggle else true)
+	config.set_value("race", "ghost_enabled", ghost_toggle.button_pressed if ghost_toggle else true)
 	config.set_value("accessibility", "reduced_motion", reduced_motion_toggle.button_pressed if reduced_motion_toggle else false)
 	config.set_value("accessibility", "high_contrast", high_contrast_toggle.button_pressed if high_contrast_toggle else false)
 	config.set_value("accessibility", "subtitles", subtitles_toggle.button_pressed if subtitles_toggle else false)
