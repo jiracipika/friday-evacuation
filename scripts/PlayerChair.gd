@@ -18,6 +18,12 @@ signal shake_requested(amount: float)
 @export var boost_duration: float = 0.8
 @export var jump_force: float = 8.0
 
+# Mode hooks (secondary modes repurpose keys or apply carry penalties;
+# Evacuation leaves all three at defaults)
+var suppress_action_jump := false
+var boost_locked := false
+var carry_slowdown := 1.0
+
 # Internal state
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var boost_timer: float = 0.0
@@ -225,11 +231,12 @@ func _physics_process(delta: float) -> void:
 
 	_apply_gravity(delta)
 
-	# Clamp speed smoothly (only when not boosting)
+	# Clamp speed smoothly (only when not boosting; carry penalties stack)
 	if not is_boosting:
+		var effective_max := max_speed * carry_slowdown
 		var hori = Vector2(velocity.x, velocity.z)
-		if hori.length() > max_speed:
-			hori = hori.normalized() * max_speed
+		if hori.length() > effective_max:
+			hori = hori.normalized() * effective_max
 			velocity.x = hori.x
 			velocity.z = hori.y
 
@@ -305,11 +312,11 @@ func _handle_input(delta: float) -> void:
 		_apply_friction(delta)
 
 	# Boost
-	if Input.is_action_just_pressed("boost") and boost_cd_timer <= 0:
+	if Input.is_action_just_pressed("boost") and boost_cd_timer <= 0 and not boost_locked:
 		_start_boost()
 
-	# Jump
-	if Input.is_action_just_pressed("action") and is_on_floor():
+	# Jump (suppressed while a mode repurposes E for grab/interact)
+	if not suppress_action_jump and Input.is_action_just_pressed("action") and is_on_floor():
 		velocity.y = jump_force
 		target_squash = 1.18
 		_play_sfx("jump")
