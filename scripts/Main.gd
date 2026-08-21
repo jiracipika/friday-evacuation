@@ -104,7 +104,7 @@ func _build_mode_buttons() -> void:
 		var card_script = load("res://scripts/ModeCard.gd")
 		btn.set_script(card_script)
 		btn.configure(info.title, info.subtitle, "PLAYABLE" if i == 0 else "PROTOTYPE", info.color)
-		btn.custom_minimum_size = Vector2(0, 72)
+		btn.custom_minimum_size = Vector2(0, 62)
 		btn.pressed.connect(_select_mode.bind(i))
 		mode_list.add_child(btn)
 		buttons.append(btn)
