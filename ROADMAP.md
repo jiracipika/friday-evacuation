@@ -884,6 +884,14 @@ Replace the current uniform floor generation with distinct themed floors:
        OS.vibrate(50)  # 50ms vibration
    ```
 
+**STATUS: COMPLETE (commit `201b4e8`, verified).** Implemented in
+`scripts/MobileControls.gd` (custom-drawn joystick plus BOOST/JUMP/TRAP
+buttons), mounted and directly wired in all four modes. Desktop preview uses
+`FE_TOUCH=1`; Android/iOS activate automatically. Boost ring reflects the
+real chair cooldown synchronously; stun and button presses use handheld
+haptics. `TouchControlsSmokeTest.gd` passes 20 checks, including real chair
+movement, cooldown lockout, all actions, and every mode mount.
+
 ### 7B: Export Configuration
 
 **File: export_presets.cfg (create in project root)**
