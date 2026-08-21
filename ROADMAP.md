@@ -631,6 +631,8 @@ Replace the current uniform floor generation with distinct themed floors:
 
 **VERIFY:** Roombas wander and stun on contact. Doors swing and knock players. Fire drill flashes lights.
 
+**STATUS: COMPLETE (commit `90362d7`, verified).** `Hazards.gd` controller + `Roomba.gd` entity wired into Evacuation (built in `_setup_arena`, `start_race()` at go, `stop()` at race end). 8 Roombas (2/floor; floor-3 spawns sampled from landing rects — never over gaps), collision-normal reflection wandering (plain reversal ping-ponged in clutter, caught by test), 1.5s stun + knockback + caption on contact. 4 swinging doors (F1 corridor mouths, F4 cafeteria entrances): ±60° sin swing, 0.5s stun + directional shove. Fire drill every 30s for 5s: 5Hz red strobes all floors, +50% panic friction on every chair (restored afterward), caption announce. Floor-3 falling debris every 5-8s: 1s warning shake (respects reduced_motion), spawns above landings only, 1s stun + knockback on hit, despawns 2s after landing. Also fixed a real crash the test exposed: `SabotageTrap._on_body_entered` typed-param crash when AnimatableBody3D (doors) entered its Area3D. `HazardsSmokeTest.gd` = 18 checks; full 13-suite ladder green; boot 0 errors. Tuning (Roomba density, drill cadence, debris rate) flagged for on-Mac playtest.
+
 ---
 
 ## Phase 5: MULTIPLAYER

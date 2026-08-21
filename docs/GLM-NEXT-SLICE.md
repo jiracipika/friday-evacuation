@@ -51,7 +51,30 @@ line for the full inventory. Key facts for follow-up slices:
 - Checkpoints: elevators set `body.respawn_point` on teleport;
   `Evacuation._respawn_if_fell()` watches during racing.
 
-## Next vertical slice: Phase 4C dynamic hazards (recommended)
+## COMPLETED slice: Phase 4C dynamic hazards (commit `90362d7`)
+
+All four hazard types shipped and verified (18-check smoke test + ladder).
+Notable fixes: roomba 180°-reversal ping-pong (now reflects on collision
+normal); SabotageTrap typed-param crash with AnimatableBody3D; doors gate
+on race start. FLOOR3_LANDINGS is now mirrored in THREE places (Evacuation,
+LevelClearTest, Hazards) — keep all three in sync.
+
+## Next vertical slice: on-Mac playtest + tuning pass (recommended)
+
+With 4A/4B/4C complete the game plays end-to-end headless but has never
+been played by a human in this configuration. Highest-value next step:
+
+1. Launch the real game on the Mac (`open -a Godot` project), play all 4
+   floors with hazards on, and note: ice slide feel, gap-jump fairness,
+   roomba density (8 may be chaotic), fire-drill cadence (30s), debris
+   rate, door placement collisions with plants/tables.
+2. Tune constants in one pass: Hazards.gd (ROOMBA count/density,
+   FIRE_DRILL_INTERVAL, DEBRIS rates), SurfaceZone frictions (ice 0.16
+   may be too slick at 60fps feel), power-up weights.
+3. Screenshot-driven check of the new HUD wiring in a real match.
+4. Remaining roadmap: Phase 5 multiplayer hardening (real two-machine
+   Wi-Fi QA), Phase 6 secondary-mode full implementation, Phase 7 mobile
+   export/device QA.
 
 ROADMAP 4C: Rogue Roombas (wander AI, contact stun + knockback, 2-3 per
 floor), swinging doors (floors 1+4, sin-wave rotation, hit = knockback +
@@ -82,6 +105,7 @@ Implementation notes:
 ```bash
 git diff --check
 /usr/local/bin/godot --headless --script scripts/BootTest.gd
+/usr/local/bin/godot --headless --path . --script scripts/HazardsSmokeTest.gd
 /usr/local/bin/godot --headless --path . --script scripts/ThemedFloorsSmokeTest.gd
 /usr/local/bin/godot --headless --path . --script scripts/PowerUpSmokeTest.gd
 /usr/local/bin/godot --headless --path . --script scripts/PauseMenuSmokeTest.gd
