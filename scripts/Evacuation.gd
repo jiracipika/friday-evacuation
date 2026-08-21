@@ -14,6 +14,7 @@ var finish_order: Array[Dictionary] = []  # {player_id, name, time}
 var players: Array = []
 var local_player: CharacterBody3D = null
 var hud: CanvasLayer = null
+var hud_ext: CanvasLayer = null  # scripts/HUD.gd instance (speed/boost/item/minimap)
 var mobile_controls: Control = null
 var remote_players: Dictionary = {}
 var top_speed: float = 0.0
@@ -565,9 +566,10 @@ func _spawn_powerups() -> void:
 		return  # No coffee run: skip all power-up spawns
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 999
+	var PowerUp = load("res://scripts/PowerUpVisual.gd")
 
 	for i in range(8):
-		var pu = _make_powerup()
+		var pu = PowerUp.create(PowerUp.pick_weighted(rng))
 		var floor_y = [0.5, 6.5, 12.5, 18.5][rng.randi() % 4]
 		pu.position = Vector3(
 			rng.randf_range(-12, 12),
@@ -575,81 +577,6 @@ func _spawn_powerups() -> void:
 			rng.randf_range(-12, 12)
 		)
 		add_child(pu)
-
-func _make_powerup() -> Area3D:
-	var pu = Area3D.new()
-	pu.set_script(load("res://scripts/PowerUpVisual.gd"))
-
-	var col = CollisionShape3D.new()
-	var shape = SphereShape3D.new()
-	shape.radius = 0.7
-	col.shape = shape
-	pu.add_child(col)
-
-	var cup_mat = StandardMaterial3D.new()
-	cup_mat.albedo_color = Color(0.92, 0.52, 0.12)
-	cup_mat.roughness = 0.45
-	cup_mat.emission_enabled = true
-	cup_mat.emission = Color(1.0, 0.34, 0.04)
-	cup_mat.emission_energy_multiplier = 1.2
-
-	var cup = MeshInstance3D.new()
-	var cup_mesh = CylinderMesh.new()
-	cup_mesh.top_radius = 0.34
-	cup_mesh.bottom_radius = 0.27
-	cup_mesh.height = 0.52
-	cup.mesh = cup_mesh
-	cup.position.y = 0.0
-	cup.material_override = cup_mat
-	pu.add_child(cup)
-
-	var coffee = MeshInstance3D.new()
-	var coffee_mesh = CylinderMesh.new()
-	coffee_mesh.top_radius = 0.27
-	coffee_mesh.bottom_radius = 0.27
-	coffee_mesh.height = 0.035
-	coffee.mesh = coffee_mesh
-	coffee.position.y = 0.27
-	var coffee_mat = StandardMaterial3D.new()
-	coffee_mat.albedo_color = Color(0.12, 0.045, 0.015)
-	coffee_mat.roughness = 0.3
-	coffee.material_override = coffee_mat
-	pu.add_child(coffee)
-
-	var handle = MeshInstance3D.new()
-	var handle_mesh = TorusMesh.new()
-	handle_mesh.inner_radius = 0.11
-	handle_mesh.outer_radius = 0.18
-	handle.mesh = handle_mesh
-	handle.position = Vector3(0.34, 0.0, 0.0)
-	handle.rotation.x = PI / 2.0
-	handle.material_override = cup_mat
-	pu.add_child(handle)
-
-	# Add ring underneath to make it more visible
-	var ring = MeshInstance3D.new()
-	var ring_mesh = TorusMesh.new()
-	ring_mesh.inner_radius = 0.6
-	ring_mesh.outer_radius = 0.65
-	ring.mesh = ring_mesh
-	ring.rotation.x = PI / 2.0
-	var ring_mat = StandardMaterial3D.new()
-	ring_mat.albedo_color = Color(1.0, 0.65, 0.12)
-	ring_mat.emission_enabled = true
-	ring_mat.emission = Color(1.0, 0.45, 0.08)
-	ring_mat.emission_energy_multiplier = 0.6
-	ring.material_override = ring_mat
-	ring.position.y = -0.1
-	pu.add_child(ring)
-
-	pu.body_entered.connect(func(body):
-		if body.is_in_group("players"):
-			if body.has_method("_start_boost"):
-				body._start_boost()
-			pu.queue_free()
-	)
-
-	return pu
 
 # --- PLAYER SPAWN ---
 
@@ -720,12 +647,21 @@ func _update_timer_display() -> void:
 		timer_label.text = "TIME: %d" % int(remaining)
 
 func _update_hud() -> void:
-	if not hud:
+	if hud_ext == null or not is_instance_valid(hud_ext):
 		return
-	var speed_label = hud.get_node_or_null("SpeedLabel")
-	if speed_label and local_player:
-		var speed = int(Vector2(local_player.velocity.x, local_player.velocity.z).length())
-		speed_label.text = "SPEED: %d km/h" % speed
+	if local_player and is_instance_valid(local_player):
+		var speed = Vector2(local_player.velocity.x, local_player.velocity.z).length()
+		hud_ext.set_speed(speed, local_player.max_speed)
+		hud_ext.set_boost(
+			local_player.boost_cd_timer,
+			local_player.boost_duration,
+			local_player.is_boosting,
+			local_player.boost_cooldown
+		)
+		hud_ext.set_item(local_player.item_kind, local_player.item_charges)
+		var floor_idx := _current_floor_index()
+		hud_ext.set_player_position(local_player.global_position, floor_idx)
+		hud_ext.set_floor(floor_idx + 1)
 
 func _on_player_reached_exit(body: Node3D) -> void:
 	if not body.is_in_group("players"):
@@ -819,12 +755,40 @@ func _unhandled_input(event: InputEvent) -> void:
 func _setup_hud() -> void:
 	hud = $UI
 	if hud:
-		var speed_label = hud.get_node_or_null("SpeedLabel")
-		if speed_label:
-			speed_label.text = "SPEED: 0 km/h"
+		# Real in-match HUD: speed bar, boost state, item charges, minimap.
+		var hud_script = load("res://scripts/HUD.gd")
+		if hud_script:
+			hud_ext = CanvasLayer.new()
+			hud_ext.set_script(hud_script)
+			hud_ext.layer = 10
+			add_child(hud_ext)
 		# Caption overlay for audio-cue subtitles (no-op when disabled)
 		var overlay_script = load("res://scripts/SubtitleOverlay.gd")
-		if overlay_script:
-			var overlay = Control.new()
-			overlay.set_script(overlay_script)
-			hud.add_child(overlay)
+		if overlay_script and overlay_script.has_method("mount"):
+			overlay_script.mount(hud)
+	# Touch controls on mobile platforms (hidden on desktop)
+	if OS.get_name() in ["Android", "iOS"]:
+		var mc_script = load("res://scripts/MobileControls.gd")
+		if mc_script:
+			mobile_controls = Control.new()
+			mobile_controls.set_script(mc_script)
+			mobile_controls.name = "MobileControls"
+			add_child(mobile_controls)
+			if mobile_controls.has_signal("move_changed"):
+				mobile_controls.move_changed.connect(_on_mobile_move)
+			if mobile_controls.has_signal("action_pressed"):
+				mobile_controls.action_pressed.connect(_on_mobile_action)
+
+func _on_mobile_move(value: Vector2) -> void:
+	if local_player and is_instance_valid(local_player) and local_player.has_method("set_mobile_input"):
+		local_player.set_mobile_input(value)
+
+func _on_mobile_action(action_name: StringName) -> void:
+	if local_player and is_instance_valid(local_player) and local_player.has_method("trigger_mobile_action"):
+		local_player.trigger_mobile_action(action_name)
+
+## Derive the current floor (0-based) from the local player's Y position.
+func _current_floor_index() -> int:
+	if local_player and is_instance_valid(local_player):
+		return clampi(int(local_player.global_position.y / 6.0), 0, 3)
+	return 0

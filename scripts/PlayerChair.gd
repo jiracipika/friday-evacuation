@@ -36,6 +36,12 @@ var landing_velocity: float = 0.0
 var boost_visual_timer: float = 0.0
 var mobile_input := Vector2.ZERO
 
+# Held item charges (Phase 4B power-up variety)
+var item_kind: StringName = &"none"  # none, stapler, spill
+var item_charges: int = 0
+var item_ready: bool = true  # fire-rate gate so Q spam cannot stack zips
+var item_cooldown: float = 0.0
+
 # Nodes
 @onready var mesh: MeshInstance3D = $ModelParent/ChairMesh
 @onready var collision: CollisionShape3D = $CollisionShape3D
@@ -195,6 +201,10 @@ func _physics_process(delta: float) -> void:
 	# Timers
 	if boost_cd_timer > 0:
 		boost_cd_timer -= delta
+	if item_cooldown > 0:
+		item_cooldown -= delta
+		if item_cooldown <= 0:
+			item_ready = true
 	if is_boosting:
 		boost_timer -= delta
 		boost_visual_timer = boost_timer
@@ -298,9 +308,13 @@ func _handle_input(delta: float) -> void:
 		target_squash = 1.18
 		_play_sfx("jump")
 
-	# Sabotage (drop a trap behind you)
+	# Held item (stapler/spill charges) — Q uses the item first; without an
+	# item Q falls back to dropping a sabotage trap (existing behavior).
 	if Input.is_action_just_pressed("sabotage"):
-		_drop_trap()
+		if item_charges > 0:
+			_use_item()
+		else:
+			_drop_trap()
 
 func _smooth_facing(delta: float) -> void:
 	if not model_parent:
@@ -323,19 +337,19 @@ func _apply_friction(delta: float) -> void:
 	velocity.x = hori.x
 	velocity.z = hori.y
 
-func _start_boost() -> void:
+func _start_boost(force_mult: float = 1.0, duration_mult: float = 1.0) -> void:
 	if is_boosting:
 		return
 	is_boosting = true
-	boost_timer = boost_duration
+	boost_timer = boost_duration * duration_mult
 	boost_cd_timer = boost_cooldown
 	var dir = Vector2(velocity.x, velocity.z).normalized()
 	if dir.length() < 0.1:
 		# Boost in facing direction if stationary
 		var fwd = -global_transform.basis.z
 		dir = Vector2(fwd.x, fwd.z).normalized()
-	velocity.x += dir.x * boost_force
-	velocity.z += dir.y * boost_force
+	velocity.x += dir.x * boost_force * force_mult
+	velocity.z += dir.y * boost_force * force_mult
 	if boost_particles:
 		boost_particles.emitting = true
 	target_squash = 1.08
@@ -355,6 +369,56 @@ func _drop_trap() -> void:
 	trap.global_position = global_position + Vector3(behind_dir.x, 0, behind_dir.z) * 2.0
 	trap.global_position.y = 0.1
 	trap.owner_id = get_instance_id()
+
+## Phase 4B: give the player N charges of a held item, replacing any previous one.
+func give_item(kind: StringName, charges: int) -> void:
+	if charges <= 0:
+		return
+	item_kind = kind
+	item_charges = charges
+	item_ready = true
+	item_cooldown = 0.0
+	var a11y = load("res://scripts/Accessibility.gd")
+	if a11y:
+		if kind == &"stapler":
+			a11y.caption("STAPLER ×%d — Q TO FIRE" % charges, 1.6)
+		elif kind == &"spill":
+			a11y.caption("SPILL ×%d — Q TO DROP" % charges, 1.6)
+
+## Fire the held item (stapler bolt forward / spill puddle behind).
+func _use_item() -> void:
+	if item_charges <= 0 or not item_ready:
+		return
+	if item_kind == &"stapler":
+		var bolt_script = load("res://scripts/StaplerBolt.gd")
+		if bolt_script:
+			var bolt = CharacterBody3D.new()
+			bolt.set_script(bolt_script)
+			get_parent().add_child(bolt)
+			bolt.global_position = global_position + Vector3.UP * 0.6
+			bolt.owner_id = get_instance_id()
+			if bolt.has_method("launch"):
+				bolt.launch(-global_transform.basis.z, velocity)
+		item_cooldown = 0.5
+	elif item_kind == &"spill":
+		var trap_scene = load("res://scenes/objects/SabotageTrap.tscn")
+		if trap_scene:
+			var trap = trap_scene.instantiate()
+			if trap.has_method("_set_forced_type"):
+				trap._set_forced_type("spill")
+			get_parent().add_child(trap)
+			var behind_dir = -velocity.normalized() if velocity.length() > 1.0 else -global_transform.basis.z
+			trap.global_position = global_position + Vector3(behind_dir.x, 0, behind_dir.z) * 2.2
+			trap.global_position.y = 0.1
+			trap.owner_id = get_instance_id()
+		item_cooldown = 0.35
+	else:
+		return
+	item_charges -= 1
+	item_ready = false
+	_play_sfx("powerup", 0.9)
+	if item_charges <= 0:
+		item_kind = &"none"
 
 func stun(duration: float) -> void:
 	is_stunned = max(is_stunned, duration)
@@ -381,6 +445,11 @@ func trigger_mobile_action(action_name: StringName) -> void:
 		velocity.y = jump_force
 		target_squash = 1.18
 		_play_sfx("jump")
+	elif action_name == &"sabotage":
+		if item_charges > 0:
+			_use_item()
+		else:
+			_drop_trap()
 
 func set_can_move(value: bool) -> void:
 	can_move = value

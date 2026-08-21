@@ -2,95 +2,74 @@
 
 Status: implementation-ready handoff
 Owner: GLM 5.2/5.3 polish lane
-Priority: P0 accessibility and player-facing clarity
+Priority: P0 gameplay depth + player-facing clarity
 
 ## Baseline evidence
 
 - `git diff --check` passes.
-- Godot BootTest passes.
-- ModeSmokeTest passes.
-- NetworkSmokeTest passes.
-- LevelClearTest passes.
-- Current verified feature commit: `428ed74`.
+- Full verification ladder green at commit `09ff442` (10 test scripts + real boot).
 - Real two-machine Wi-Fi and physical-device QA remain unverified.
 
-## First vertical slice: accessibility feedback
+## COMPLETED slice: Phase 4B power-up variety + dead-wiring fixes
 
-Implement only shared accessibility feedback and settings. Do not add race modifiers or new game modes in this slice.
+Done in this working session (see git log for the exact commit):
 
-Target files:
+- Six pickup kinds with weighted 60/15/10/8/4/3 distribution
+  (coffee, energy drink, stapler x3, spill x2, printer, extinguisher).
+- Item charges on PlayerChair (`give_item`, `_use_item`, Q fires item first,
+  falls back to sabotage trap when empty). Mobile sabotage action added.
+- New `scripts/StaplerBolt.gd` projectile: fast forward shot, stuns +
+  knockbacks, never hits the firer, self-cleans.
+- Spill item drops a wide forced-type trap (physics-safe wide CylinderShape3D).
+- Printer pickup: paper-plane visual burst + blind flash for nearby players
+  (respects `flash_effects_enabled`).
+- Extinguisher pickup: stuns ALL players within 8u for 2s (self-misuse allowed).
+- Colorblind-safe: every pickup carries a Label3D name; effects captioned.
+- HUD.gd is now actually wired into Evacuation (was dead code): speed bar,
+  boost state with true cooldown, item readout, minimap, floor label.
+- SubtitleOverlay is now mounted in all 4 modes (captions were dead wiring
+  everywhere). New `SubtitleOverlay.mount()` dedupes.
+- MobileControls mounted on Android/iOS in Evacuation (was never instantiated);
+  move/action signals wired to the local chair.
+- Removed duplicate powerup pickup connect in Evacuation.gd.
+- `PowerUpSmokeTest.gd`: 31 checks, all passing.
+- BootTest now also compiles StaplerBolt.gd, HUD.gd, Minimap.gd.
 
-- `scripts/Settings.gd`
-- `scripts/HUD.gd`
-- `scripts/ModeHUD.gd`
-- `scripts/Evacuation.gd`
-- new `scripts/SubtitleOverlay.gd`
-- new focused smoke test under `scripts/`
+## Next vertical slice: Phase 4A themed floors (recommended)
 
-## Required settings
+ROADMAP Phase 4A asks for distinct themed floors: cubicle farm, open office
+with carpet/tile speed zones, stairwell chaos with floor gaps, slippery
+cafeteria + parking-lot exit treatment, plus checkpoint/respawn logic.
 
-Persist through the existing settings system:
+Suggested approach in priority order:
 
-- `screen_shake_enabled`
-- `flash_effects_enabled`
-- `reduced_motion_enabled`
-- `high_contrast_enabled`
-- `subtitles_enabled`
-- `time_scale` for single-player only
+1. Cubicle partitions + plants on floor 1 (visual variety, cheap boxes).
+2. Checkpoint zones at each elevator entrance + `PlayerChair.respawn()`
+   (fall below checkpoint floor - 5u => respawn at last checkpoint).
+3. Slippery cafeteria floor 4 (low-friction physics material on the floor
+   StaticBody3D; PlayerChair already supports it via standard friction).
+4. Water-cooler permanent stun fixtures on floor 2.
+5. Painted parking-lot treatment behind the exit on floor 4.
 
-Multiplayer must force `time_scale = 1.0`.
+Constraints: keep primitive meshes, per-floor noise seeds, elevator pads stay
+as the only floor-to-floor traversal (do NOT reintroduce ramps), and keep
+LevelClearTest passing (it recreates floor/elevator geometry itself — extend
+it if geometry changes).
 
-## Color-independent feedback
-
-Do not communicate these states through color alone:
-
-- Coffee: cup icon/label
-- Exit: `EXIT` label plus directional marker
-- Elevator: elevator/arrow marker
-- Trap: type label/icon
-- Success: check icon plus text
-- Failure/danger: warning icon plus text
-
-Reuse existing procedural/UI style. Avoid external asset dependencies.
-
-## Subtitle contract
-
-`SubtitleOverlay.gd` should expose a small method such as:
-
-```gdscript
-show_caption(text: String, duration := 1.5)
-```
-
-Use it for at least:
-
-- `GO!`
-- `BOOST READY`
-- `BOOST!`
-- `TRAP HIT`
-- `COFFEE COLLECTED`
-- `ELEVATOR`
-- `FINISH`
-
-Captions must respect the setting, clean themselves up, and remain readable on narrow screens.
-
-## TDD / verification
-
-Add a focused smoke test before implementation for:
-
-- settings persistence/defaults
-- multiplayer time-scale clamp
-- subtitle visibility toggle
-- repeated caption replacement/cleanup
-
-Then run:
+## Verification ladder (run all, in order)
 
 ```bash
 git diff --check
 /usr/local/bin/godot --headless --script scripts/BootTest.gd
+/usr/local/bin/godot --headless --path . --script scripts/PowerUpSmokeTest.gd
 /usr/local/bin/godot --headless --path . --script scripts/PauseMenuSmokeTest.gd
 /usr/local/bin/godot --headless --path . --script scripts/ModeSmokeTest.gd
 /usr/local/bin/godot --headless --path . --script scripts/NetworkSmokeTest.gd
 /usr/local/bin/godot --headless --path . --script scripts/LevelClearTest.gd
+/usr/local/bin/godot --headless --path . --script scripts/AccessibilitySmokeTest.gd
+/usr/local/bin/godot --headless --path . --script scripts/RaceModifiersSmokeTest.gd
+/usr/local/bin/godot --headless --path . --script scripts/GhostRacerSmokeTest.gd
+/usr/local/bin/godot --headless --path . --script scripts/StatsRoundTripTest.gd
 /usr/local/bin/godot --headless --path . --quit-after 3
 ```
 

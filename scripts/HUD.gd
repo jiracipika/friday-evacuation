@@ -9,6 +9,7 @@ var status_label: Label
 var speed_bar: ProgressBar
 var boost_bar: ProgressBar
 var minimap: Control
+var item_label: Label
 
 func _ready() -> void:
 	_build_hud()
@@ -72,6 +73,8 @@ func _build_hud() -> void:
 	abilities.add_child(boost_bar)
 	sabotage_label = _make_label("Q  SABOTAGE", 16, Color(1, 1, 1, 0.72))
 	abilities.add_child(sabotage_label)
+	item_label = _make_label("", 16, Color(0.7, 0.9, 1.0))
+	abilities.add_child(item_label)
 	row.add_child(abilities)
 
 func _make_label(text: String, size: int, color: Color) -> Label:
@@ -107,9 +110,27 @@ func set_speed(value: float, max_speed: float = 12.0) -> void:
 		speed_bar.value = clampf(value / max_speed * 100.0, 0.0, 100.0)
 		speed_bar.modulate = Color(0.35, 1.0, 0.55).lerp(Color(1.0, 0.25, 0.15), clampf(value / max_speed, 0.0, 1.0))
 
-func set_boost(cooldown: float, duration: float, active: bool) -> void:
+func set_boost(cooldown: float, duration: float, active: bool, cooldown_max := 3.0) -> void:
 	if boost_bar:
-		boost_bar.value = 100.0 if active else clampf(100.0 - cooldown / 3.0 * 100.0, 0.0, 100.0)
+		boost_bar.value = 100.0 if active else clampf(100.0 - cooldown / cooldown_max * 100.0, 0.0, 100.0)
 	if boost_label:
 		boost_label.text = "☕ BOOST ACTIVE" if active else ("☕ BOOST READY [SPACE]" if cooldown <= 0.0 else "☕ BOOST %.1fs" % cooldown)
 		boost_label.add_theme_color_override("font_color", Color("ffcf55") if active or cooldown <= 0.0 else Color(1, 1, 1, 0.45))
+
+## Phase 4B item readout: kind × charges, or the plain sabotage hint.
+func set_item(kind: StringName, charges: int) -> void:
+	if item_label == null:
+		return
+	if kind == &"none" or charges <= 0:
+		item_label.text = ""
+		return
+	var display := ""
+	match kind:
+		&"stapler":
+			display = "📎 STAPLER ×%d  [Q]" % charges
+		&"spill":
+			display = "💧 SPILL ×%d  [Q]" % charges
+		_:
+			display = "ITEM ×%d  [Q]" % charges
+	item_label.text = display
+	item_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.45) if kind == &"stapler" else Color(1.0, 0.9, 0.4))

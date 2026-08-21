@@ -54,6 +54,10 @@ func _make_mode_hud(title: String, objective: String) -> CanvasLayer:
 		hud.set_script(hud_script)
 		add_child(hud)
 		hud.configure(title, objective, time_limit)
+	# Caption overlay for audio-cue subtitles (no-op when disabled)
+	var overlay_script = load("res://scripts/SubtitleOverlay.gd")
+	if overlay_script and overlay_script.has_method("mount"):
+		overlay_script.mount(hud)
 	return hud
 
 func _build_level() -> void:

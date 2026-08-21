@@ -68,3 +68,19 @@ func show_caption(text: String, duration: float = DEFAULT_DURATION) -> void:
 func _exit_tree() -> void:
 	if is_in_group("caption_overlays"):
 		remove_from_group("caption_overlays")
+
+## Mount the overlay on a CanvasLayer (or any Node parent) if none exists yet.
+## Modes call this once from their HUD setup; multiple calls are no-ops.
+static func mount(parent_node: Node) -> void:
+	if parent_node == null:
+		return
+	var tree := parent_node.get_tree()
+	if tree == null:
+		return
+	for node in tree.get_nodes_in_group("caption_overlays"):
+		if node and is_instance_valid(node):
+			return  # already mounted somewhere in this scene
+	var overlay := Control.new()
+	overlay.name = "SubtitleOverlay"
+	overlay.set_script(load("res://scripts/SubtitleOverlay.gd"))
+	parent_node.add_child(overlay)

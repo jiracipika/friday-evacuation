@@ -30,6 +30,9 @@ func _init() -> void:
 		"res://scripts/SubtitleOverlay.gd",
 		"res://scripts/RaceModifiers.gd",
 		"res://scripts/GhostRacer.gd",
+		"res://scripts/StaplerBolt.gd",
+		"res://scripts/HUD.gd",
+		"res://scripts/Minimap.gd",
 	]
 	
 	var all_pass = true
