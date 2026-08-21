@@ -1058,6 +1058,10 @@ func _spawn_player() -> void:
 		local_player.player_display_name = gm.player_name
 		local_player.player_color = gm.player_color
 	add_child(local_player)
+	# Phase 7A: bind touch controls to the now-existing local chair so the
+	# BOOST ring can mirror its cooldown state
+	if mobile_controls and mobile_controls.has_method("bind_local_chair"):
+		mobile_controls.bind_local_chair(local_player)
 	# Phase 4A: floor 1 spawn is the initial respawn checkpoint
 	if "respawn_point" in local_player:
 		local_player.respawn_point = Vector3(0, 1.0, 0)
@@ -1263,18 +1267,11 @@ func _setup_hud() -> void:
 			chat.set_script(chat_script)
 			chat.name = "ChatOverlay"
 			add_child(chat)
-	# Touch controls on mobile platforms (hidden on desktop)
-	if OS.get_name() in ["Android", "iOS"]:
-		var mc_script = load("res://scripts/MobileControls.gd")
-		if mc_script:
-			mobile_controls = Control.new()
-			mobile_controls.set_script(mc_script)
-			mobile_controls.name = "MobileControls"
-			add_child(mobile_controls)
-			if mobile_controls.has_signal("move_changed"):
-				mobile_controls.move_changed.connect(_on_mobile_move)
-			if mobile_controls.has_signal("action_pressed"):
-				mobile_controls.action_pressed.connect(_on_mobile_action)
+	# Touch controls (mobile platforms, or desktop when FE_TOUCH=1 preview)
+	var mc_script = load("res://scripts/MobileControls.gd")
+	if mc_script and mc_script.has_method("mount_for_mode"):
+		# mount_for_mode owns the direct chair signal routing for every mode.
+		mobile_controls = mc_script.mount_for_mode(self, local_player)
 
 func _on_mobile_move(value: Vector2) -> void:
 	if local_player and is_instance_valid(local_player) and local_player.has_method("set_mobile_input"):

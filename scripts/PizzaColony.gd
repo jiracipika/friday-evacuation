@@ -93,6 +93,11 @@ func _spawn_player() -> void:
 		player.position = Vector3(0, 1.5, 0)
 		player.player_display_name = "Topping"
 		add_child(player)
+	# Phase 7A: touch controls (mobile or FE_TOUCH=1 preview)
+	var mc_script7 = load("res://scripts/MobileControls.gd")
+	if mc_script7 and mc_script7.has_method("mount_for_mode"):
+		mc_script7.mount_for_mode(self, player)
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):

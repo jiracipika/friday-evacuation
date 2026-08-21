@@ -702,6 +702,10 @@ func _spawn_player() -> void:
 		add_child(p)
 		if "suppress_action_jump" in p:
 			p.suppress_action_jump = true
+		# Phase 7A: the shared mount wires joystick/actions directly to p.
+		var mc_script7 = load("res://scripts/MobileControls.gd")
+		if mc_script7 and mc_script7.has_method("mount_for_mode"):
+			mc_script7.mount_for_mode(self, p)
 
 
 func _find_player() -> Node3D:

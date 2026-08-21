@@ -447,6 +447,8 @@ func stun(duration: float) -> void:
 	target_squash = 0.82
 	shake_requested.emit(0.1)
 	_play_sfx("trap")
+	# Platform-safe no-op on desktop; tactile feedback on Android/iOS.
+	Input.vibrate_handheld(60)
 	var a11y = load("res://scripts/Accessibility.gd")
 	if a11y:
 		a11y.caption("STUNNED — TRAP HIT", 1.2)
@@ -460,7 +462,7 @@ func set_mobile_input(value: Vector2) -> void:
 	mobile_input = value
 
 func trigger_mobile_action(action_name: StringName) -> void:
-	if action_name == &"boost" and boost_cd_timer <= 0.0:
+	if action_name == &"boost" and boost_cd_timer <= 0.0 and not boost_locked:
 		_start_boost()
 	elif action_name == &"action" and is_on_floor():
 		velocity.y = jump_force
