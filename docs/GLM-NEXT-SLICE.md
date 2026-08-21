@@ -35,32 +35,54 @@ Done in this working session (see git log for the exact commit):
 - `PowerUpSmokeTest.gd`: 31 checks, all passing.
 - BootTest now also compiles StaplerBolt.gd, HUD.gd, Minimap.gd.
 
-## Next vertical slice: Phase 4A themed floors (recommended)
+## COMPLETED slice: Phase 4A themed floors (commit `18bdbda`)
 
-ROADMAP Phase 4A asks for distinct themed floors: cubicle farm, open office
-with carpet/tile speed zones, stairwell chaos with floor gaps, slippery
-cafeteria + parking-lot exit treatment, plus checkpoint/respawn logic.
+All four floors now have distinct identities; see ROADMAP Phase 4A STATUS
+line for the full inventory. Key facts for follow-up slices:
 
-Suggested approach in priority order:
+- Floor 3 has REAL fall-through gaps; `_floor3_landing_layout()` in
+  Evacuation.gd is the single source of truth and is mirrored in
+  LevelClearTest.gd `FLOOR3_LANDINGS` — keep both in sync on any change.
+- `PlayerChair.set_surface(mult)` / `clear_surface()` is the grip API;
+  `SurfaceZone.gd` (Area3D) applies it on enter/exit. tile 0.55,
+  carpet 1.8, ice 0.16, lot 1.4.
+- `StunFixture.gd` = StaticBody3D + Area3D stun bubble (water cooler
+  solid; spill roll-through). Reusable for 4C hazards.
+- Checkpoints: elevators set `body.respawn_point` on teleport;
+  `Evacuation._respawn_if_fell()` watches during racing.
 
-1. Cubicle partitions + plants on floor 1 (visual variety, cheap boxes).
-2. Checkpoint zones at each elevator entrance + `PlayerChair.respawn()`
-   (fall below checkpoint floor - 5u => respawn at last checkpoint).
-3. Slippery cafeteria floor 4 (low-friction physics material on the floor
-   StaticBody3D; PlayerChair already supports it via standard friction).
-4. Water-cooler permanent stun fixtures on floor 2.
-5. Painted parking-lot treatment behind the exit on floor 4.
+## Next vertical slice: Phase 4C dynamic hazards (recommended)
 
-Constraints: keep primitive meshes, per-floor noise seeds, elevator pads stay
-as the only floor-to-floor traversal (do NOT reintroduce ramps), and keep
-LevelClearTest passing (it recreates floor/elevator geometry itself — extend
-it if geometry changes).
+ROADMAP 4C: Rogue Roombas (wander AI, contact stun + knockback, 2-3 per
+floor), swinging doors (floors 1+4, sin-wave rotation, hit = knockback +
+0.5s stun), fire-drill alarm every 30s (red strobe lights 5Hz for 5s,
++50% friction panic, HUD announce), falling ceiling debris on floor 3
+(warn 1s then fall; hit = 1s stun; despawn after landing).
+
+Implementation notes:
+
+- Build `scripts/Hazards.gd` as a Node3D spawner + per-entity inner or
+  companion scripts; reuse `StunFixture`'s bump pattern for contact stun.
+- Roombas: AnimatableBody3D or CharacterBody3D, pick a direction every
+  3-5s, 4 u/s; keep them ON the landings for floor 3 (sample from
+  `_floor3_landing_layout()` rectangles) or they fall through the gaps.
+- Doors: AnimatableBody3D with rotation driven by sin(time), collision
+  follows automatically; place in floor 1 corridor mouths + floor 4
+  cafeteria entrances.
+- Fire drill: timer in Evacuation.gd, drive existing ceiling-light nodes'
+  energy, bump all chairs' friction via a temporary surface multiplier,
+  HUD status + caption "FIRE DRILL! EVERYBODY PANIC!".
+- Debris: floor 3 only; spawn ABOVE landings (never over gaps), shake 1s
+  (respects reduced_motion), fall, Area3D hit test, queue_free 2s later.
+
+## Verification ladder (run all, in order)
 
 ## Verification ladder (run all, in order)
 
 ```bash
 git diff --check
 /usr/local/bin/godot --headless --script scripts/BootTest.gd
+/usr/local/bin/godot --headless --path . --script scripts/ThemedFloorsSmokeTest.gd
 /usr/local/bin/godot --headless --path . --script scripts/PowerUpSmokeTest.gd
 /usr/local/bin/godot --headless --path . --script scripts/PauseMenuSmokeTest.gd
 /usr/local/bin/godot --headless --path . --script scripts/ModeSmokeTest.gd
