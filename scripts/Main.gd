@@ -176,7 +176,7 @@ func _process(delta: float) -> void:
 
 func _build_menu_theme() -> void:
 	title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
-	title_label.add_theme_font_size_override("font_size", 46)
+	title_label.add_theme_font_size_override("font_size", 42)
 	subtitle_label.add_theme_font_size_override("font_size", 13)
 	desc_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	desc_label.add_theme_font_size_override("font_size", 16)
