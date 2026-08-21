@@ -23,6 +23,7 @@ var traps_placed: int = 0
 var sp_modifiers: bool = false
 var new_personal_best: bool = false
 var ghost_racer: Node3D
+var hazards: Node3D  # Phase 4C Hazards controller
 
 ## Smooth camera state
 var cam_follow_pos: Vector3 = Vector3.ZERO
@@ -207,6 +208,14 @@ func _setup_arena() -> void:
 	_theme_floor2_open_office()
 	_theme_floor3_stairwell()
 	_theme_floor4_cafeteria_and_lot()
+	# Phase 4C dynamic hazards (doors + strobes now; roombas/debris/fire drill
+	# activate at race start)
+	var hazards_script = load("res://scripts/Hazards.gd")
+	if hazards_script:
+		hazards = Node3D.new()
+		hazards.set_script(hazards_script)
+		hazards.name = "Hazards"
+		add_child(hazards)
 
 	# Elevator pads connect floors. Each pad is an Area3D trigger zone that
 	# smoothly lifts the player to the next floor when entered.
@@ -1008,6 +1017,8 @@ func _start_race() -> void:
 	if local_player:
 		local_player.set_can_move(true)
 	_spawn_traps()
+	if hazards and hazards.has_method("start_race"):
+		hazards.start_race()
 
 func _spawn_traps() -> void:
 	var manager = get_node_or_null("/root/GameManager")
@@ -1083,6 +1094,8 @@ func _end_race() -> void:
 	if match_state == &"finished":
 		return
 	match_state = &"finished"
+	if hazards and hazards.has_method("stop"):
+		hazards.stop()
 	if local_player:
 		local_player.set_can_move(false)
 

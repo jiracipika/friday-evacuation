@@ -62,7 +62,7 @@ func _apply_visual() -> void:
 			wide.height = 0.2
 			col_node.shape = wide
 
-func _on_body_entered(body: CharacterBody3D) -> void:
+func _on_body_entered(body: Node3D) -> void:
 	if triggered or not body.is_in_group("players"):
 		return
 	triggered = true
