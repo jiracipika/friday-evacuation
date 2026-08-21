@@ -3,15 +3,20 @@
 extends CharacterBody3D
 
 signal shake_requested(amount: float)
+signal interaction_requested
+signal sabotage_requested
 
 # Visual
 @export var player_color: Color = Color(0.4, 0.8, 1.0)
 @export var player_display_name: String = "Player"
+@export var character_id: String = "deadline_dana"
+@export var use_global_character := true
 
 # Movement tuning — lower accel = smoother starts/stops
-@export var acceleration: float = 20.0
+@export var acceleration: float = 34.0
 @export var max_speed: float = 12.0
-@export var friction: float = 14.0
+@export var friction: float = 16.0
+@export var boost_steering: float = 0.28
 @export var rotation_speed: float = 16.0
 @export var boost_force: float = 28.0
 @export var boost_cooldown: float = 2.5
@@ -21,6 +26,7 @@ signal shake_requested(amount: float)
 # Mode hooks (secondary modes repurpose keys or apply carry penalties;
 # Evacuation leaves all three at defaults)
 var suppress_action_jump := false
+var suppress_sabotage := false
 var boost_locked := false
 var carry_slowdown := 1.0
 
@@ -36,6 +42,7 @@ var chair_wheels: Array[MeshInstance3D] = []
 var chair_seat: MeshInstance3D
 var chair_backrest: MeshInstance3D
 var dust_particles: GPUParticles3D
+var rider_root: Node3D
 var squash_amount: float = 1.0
 var target_squash: float = 1.0
 var landing_velocity: float = 0.0
@@ -64,6 +71,10 @@ var _on_special_surface: bool = false
 
 func _ready() -> void:
 	add_to_group("players")
+	var gm := get_node_or_null("/root/GameManager")
+	if use_global_character and gm and "selected_character_id" in gm:
+		character_id = gm.selected_character_id
+	_apply_character_palette()
 
 	# Floor snap so the chair sticks to slopes and handles ramp-to-floor steps
 	floor_snap_length = 0.4
@@ -189,6 +200,100 @@ func _build_chair_model() -> void:
 		chair_root.add_child(wheel)
 		chair_wheels.append(wheel)
 
+	_build_rider_model(chair_root)
+
+func _apply_character_palette() -> void:
+	var roster = load("res://scripts/CharacterRoster.gd")
+	if not roster:
+		return
+	var character: Dictionary = roster.get_character(character_id)
+	character_id = character["id"]
+
+func _build_rider_model(chair_root: Node3D) -> void:
+	var roster = load("res://scripts/CharacterRoster.gd")
+	if not roster:
+		return
+	var character: Dictionary = roster.get_character(character_id)
+	var body_color := Color.from_string(character["body"], player_color)
+	var accent_color := Color.from_string(character["accent"], Color.WHITE)
+	rider_root = Node3D.new()
+	rider_root.name = "Rider_%s" % character_id
+	chair_root.add_child(rider_root)
+
+	var torso := MeshInstance3D.new()
+	var torso_mesh := CapsuleMesh.new()
+	torso_mesh.radius = 0.28
+	torso_mesh.height = 0.72
+	torso.mesh = torso_mesh
+	torso.position = Vector3(0, 0.92, 0.04)
+	torso.material_override = _character_material(body_color, 0.7)
+	rider_root.add_child(torso)
+
+	var head := MeshInstance3D.new()
+	var head_mesh := SphereMesh.new()
+	head_mesh.radius = 0.24
+	head_mesh.height = 0.48
+	head.mesh = head_mesh
+	head.position = Vector3(0, 1.48, -0.03)
+	head.material_override = _character_material(Color("f0b58f"), 0.8)
+	rider_root.add_child(head)
+
+	# Two high-contrast eyes keep faces readable at gameplay distance.
+	for eye_x in [-0.085, 0.085]:
+		var eye := MeshInstance3D.new()
+		var eye_mesh := SphereMesh.new()
+		eye_mesh.radius = 0.035
+		eye_mesh.height = 0.07
+		eye.mesh = eye_mesh
+		eye.position = Vector3(eye_x, 1.51, -0.235)
+		eye.material_override = _character_material(Color("15151d"), 0.4)
+		rider_root.add_child(eye)
+
+	var badge := MeshInstance3D.new()
+	var badge_mesh := BoxMesh.new()
+	badge_mesh.size = Vector3(0.18, 0.12, 0.035)
+	badge.mesh = badge_mesh
+	badge.position = Vector3(0.16, 1.02, -0.27)
+	badge.material_override = _character_material(accent_color, 0.35, true)
+	rider_root.add_child(badge)
+	_build_character_accessory(rider_root, String(character["accessory"]), accent_color)
+
+func _build_character_accessory(parent: Node3D, accessory: String, color: Color) -> void:
+	var item := MeshInstance3D.new()
+	item.name = "Accessory_%s" % accessory
+	if accessory in ["mop_lance", "waiver_scroll", "coffee_tower"]:
+		var cylinder := CylinderMesh.new()
+		cylinder.top_radius = 0.045 if accessory != "coffee_tower" else 0.11
+		cylinder.bottom_radius = cylinder.top_radius
+		cylinder.height = 1.15 if accessory == "mop_lance" else 0.55
+		item.mesh = cylinder
+		item.position = Vector3(0.48, 1.0, 0.0)
+		item.rotation.z = -0.28 if accessory == "mop_lance" else 0.0
+	elif accessory == "webcam_drone":
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.16
+		sphere.height = 0.32
+		item.mesh = sphere
+		item.position = Vector3(0.55, 1.62, 0.1)
+	else:
+		var box := BoxMesh.new()
+		box.size = Vector3(0.45, 0.3, 0.08)
+		item.mesh = box
+		item.position = Vector3(0.4, 0.95, -0.14)
+		item.rotation.z = -0.2
+	item.material_override = _character_material(color, 0.45, true)
+	parent.add_child(item)
+
+func _character_material(color: Color, roughness_value: float, emissive: bool = false) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = roughness_value
+	if emissive:
+		mat.emission_enabled = true
+		mat.emission = color
+		mat.emission_energy_multiplier = 0.45
+	return mat
+
 func _physics_process(delta: float) -> void:
 	if not can_move:
 		return
@@ -276,9 +381,14 @@ func _apply_visual_feedback(delta: float) -> void:
 			wheel.rotation.x += Vector2(velocity.x, velocity.z).length() * delta * 3.0
 
 func _handle_input(delta: float) -> void:
-	var input_dir = Vector3.ZERO
+	var raw_input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	if mobile_input.length() > 0.1:
+		raw_input += mobile_input
+	raw_input = raw_input.limit_length(1.0)
+	var input_dir := Vector3.ZERO
 
-	# Get camera-relative input
+	# Godot's input vector uses negative Y for forward. Project that onto the
+	# camera's horizontal axes so W always moves into the view, not backward.
 	var cam = get_viewport().get_camera_3d()
 	if cam:
 		var forward = -cam.global_transform.basis.z
@@ -287,44 +397,43 @@ func _handle_input(delta: float) -> void:
 		var right = cam.global_transform.basis.x
 		right.y = 0
 		right = right.normalized()
-		if mobile_input.length() > 0.1:
-			input_dir += forward * -mobile_input.y + right * mobile_input.x
-		if Input.is_action_pressed("move_forward"):
-			input_dir -= forward
-		if Input.is_action_pressed("move_back"):
-			input_dir += forward
-		if Input.is_action_pressed("move_left"):
-			input_dir -= right
-		if Input.is_action_pressed("move_right"):
-			input_dir += right
+		input_dir = right * raw_input.x + forward * -raw_input.y
+	else:
+		input_dir = Vector3(raw_input.x, 0.0, raw_input.y)
 
 	input_dir = input_dir.normalized()
 
 	if input_dir.length() > 0.1:
-		# Smooth acceleration
-		velocity.x += input_dir.x * acceleration * delta
-		velocity.z += input_dir.z * acceleration * delta
-
-		# Update target facing angle
+		# Target-velocity steering is responsive while retaining weaker control
+		# during a boost, so the chair still has readable momentum.
+		var effective_max := max_speed * carry_slowdown
+		var target := Vector2(input_dir.x, input_dir.z) * effective_max
+		var horizontal := Vector2(velocity.x, velocity.z)
+		var control := boost_steering if is_boosting else 1.0
+		horizontal = horizontal.move_toward(target, acceleration * control * delta)
+		velocity.x = horizontal.x
+		velocity.z = horizontal.y
 		smooth_facing = atan2(-input_dir.x, -input_dir.z)
 	else:
-		# Apply friction when no input
 		_apply_friction(delta)
 
-	# Boost
 	if Input.is_action_just_pressed("boost") and boost_cd_timer <= 0 and not boost_locked:
 		_start_boost()
 
-	# Jump (suppressed while a mode repurposes E for grab/interact)
-	if not suppress_action_jump and Input.is_action_just_pressed("action") and is_on_floor():
-		velocity.y = jump_force
-		target_squash = 1.18
-		_play_sfx("jump")
+	if Input.is_action_just_pressed("action"):
+		if suppress_action_jump:
+			interaction_requested.emit()
+		elif is_on_floor():
+			velocity.y = jump_force
+			target_squash = 1.18
+			_play_sfx("jump")
 
 	# Held item (stapler/spill charges) — Q uses the item first; without an
 	# item Q falls back to dropping a sabotage trap (existing behavior).
 	if Input.is_action_just_pressed("sabotage"):
-		if item_charges > 0:
+		if suppress_sabotage:
+			sabotage_requested.emit()
+		elif item_charges > 0:
 			_use_item()
 		else:
 			_drop_trap()
@@ -359,9 +468,9 @@ func _start_boost(force_mult: float = 1.0, duration_mult: float = 1.0) -> void:
 	boost_cd_timer = boost_cooldown
 	var dir = Vector2(velocity.x, velocity.z).normalized()
 	if dir.length() < 0.1:
-		# Boost in facing direction if stationary
-		var fwd = -global_transform.basis.z
-		dir = Vector2(fwd.x, fwd.z).normalized()
+		# The body root does not rotate; ModelParent does. Use controller facing.
+		var facing := get_facing_direction()
+		dir = Vector2(facing.x, facing.z)
 	velocity.x += dir.x * boost_force * force_mult
 	velocity.z += dir.y * boost_force * force_mult
 	if boost_particles:
@@ -379,9 +488,10 @@ func _drop_trap() -> void:
 		return
 	var trap = trap_scene.instantiate()
 	get_parent().add_child(trap)
-	var behind_dir = -velocity.normalized() if velocity.length() > 1.0 else -global_transform.basis.z
-	trap.global_position = global_position + Vector3(behind_dir.x, 0, behind_dir.z) * 2.0
-	trap.global_position.y = 0.1
+	var horizontal_velocity := Vector3(velocity.x, 0.0, velocity.z)
+	var behind_dir := -horizontal_velocity.normalized() if horizontal_velocity.length() > 1.0 else -get_facing_direction()
+	trap.global_position = global_position + behind_dir * 2.0
+	trap.global_position.y = global_position.y + 0.1
 	trap.owner_id = get_instance_id()
 	# Phase 5: replicate player-dropped traps to peers (no-op offline)
 	if trap.has_method("report_drop"):
@@ -415,7 +525,7 @@ func _use_item() -> void:
 			bolt.global_position = global_position + Vector3.UP * 0.6
 			bolt.owner_id = get_instance_id()
 			if bolt.has_method("launch"):
-				bolt.launch(-global_transform.basis.z, velocity)
+				bolt.launch(get_facing_direction(), velocity)
 		item_cooldown = 0.5
 	elif item_kind == &"spill":
 		var trap_scene = load("res://scenes/objects/SabotageTrap.tscn")
@@ -424,8 +534,9 @@ func _use_item() -> void:
 			if trap.has_method("_set_forced_type"):
 				trap._set_forced_type("spill")
 			get_parent().add_child(trap)
-			var behind_dir = -velocity.normalized() if velocity.length() > 1.0 else -global_transform.basis.z
-			trap.global_position = global_position + Vector3(behind_dir.x, 0, behind_dir.z) * 2.2
+			var horizontal_velocity := Vector3(velocity.x, 0.0, velocity.z)
+			var behind_dir := -horizontal_velocity.normalized() if horizontal_velocity.length() > 1.0 else -get_facing_direction()
+			trap.global_position = global_position + behind_dir * 2.2
 			trap.global_position.y = 0.1
 			trap.owner_id = get_instance_id()
 			# NOTE: floor-relative Y so multi-floor traps land correctly on any floor
@@ -464,12 +575,17 @@ func set_mobile_input(value: Vector2) -> void:
 func trigger_mobile_action(action_name: StringName) -> void:
 	if action_name == &"boost" and boost_cd_timer <= 0.0 and not boost_locked:
 		_start_boost()
-	elif action_name == &"action" and is_on_floor():
-		velocity.y = jump_force
-		target_squash = 1.18
-		_play_sfx("jump")
+	elif action_name == &"action":
+		if suppress_action_jump:
+			interaction_requested.emit()
+		elif is_on_floor():
+			velocity.y = jump_force
+			target_squash = 1.18
+			_play_sfx("jump")
 	elif action_name == &"sabotage":
-		if item_charges > 0:
+		if suppress_sabotage:
+			sabotage_requested.emit()
+		elif item_charges > 0:
 			_use_item()
 		else:
 			_drop_trap()
@@ -512,3 +628,8 @@ func _smooth_facing_reset() -> void:
 	smooth_facing = respawn_facing
 	if model_parent:
 		model_parent.rotation.y = respawn_facing
+
+## World-space forward matching the visible chair. The CharacterBody3D root is
+## intentionally not rotated, so gameplay actions must never use its basis.
+func get_facing_direction() -> Vector3:
+	return Vector3(-sin(smooth_facing), 0.0, -cos(smooth_facing)).normalized()

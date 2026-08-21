@@ -134,8 +134,8 @@ func _update_camera(delta: float) -> void:
 		var dir_norm = move_dir.normalized()
 		cam_offset = Vector3(-dir_norm.x * 3.0, 6.0, -dir_norm.z * 3.0)
 	else:
-		var fwd = -local_player.global_transform.basis.z
-		cam_offset = Vector3(fwd.x * 3.0, 6.0, fwd.z * 3.0)
+		var fwd: Vector3 = local_player.get_facing_direction() if local_player.has_method("get_facing_direction") else -local_player.global_transform.basis.z
+		cam_offset = Vector3(-fwd.x * 3.0, 6.0, -fwd.z * 3.0)
 
 	var look_ahead = move_dir * 0.3
 	var target_cam_pos = player_pos + cam_offset
@@ -1162,7 +1162,7 @@ func _on_player_reached_exit(body: Node3D) -> void:
 			return
 	finish_order.append({
 		"player_id": player_id,
-		"name": body.player_display_name if body.has_method("get_player_display_name") else "Unknown",
+		"name": body.player_display_name if "player_display_name" in body else "Unknown",
 		"time": timer
 	})
 	if body == local_player:

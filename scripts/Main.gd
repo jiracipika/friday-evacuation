@@ -34,6 +34,8 @@ const MODE_INFO = [
 	},
 ]
 
+const MODE_STATUS := ["PLAYABLE", "PLAYABLE", "SHOPPER PLAYABLE", "PROTOTYPE"]
+
 var selected_index: int = 0
 var buttons: Array[Button] = []
 var settings_overlay: Control
@@ -43,6 +45,9 @@ var credits_button: Button
 var utility_row: HBoxContainer
 var modifier_row: HBoxContainer
 var modifier_toggles: Array[CheckButton] = []
+var character_row: HBoxContainer
+var character_select: OptionButton
+var character_detail: Label
 var stats_label: Label
 var menu_time: float = 0.0
 
@@ -60,6 +65,7 @@ func _ready() -> void:
 	get_window().title = "Friday 5PM: Evacuation"
 	_build_mode_buttons()
 	_select_mode(0)
+	_build_character_selector()
 	
 	play_button.pressed.connect(_on_play)
 	_build_modifier_row()
@@ -103,7 +109,7 @@ func _build_mode_buttons() -> void:
 		var btn = Button.new()
 		var card_script = load("res://scripts/ModeCard.gd")
 		btn.set_script(card_script)
-		btn.configure(info.title, info.subtitle, "PLAYABLE" if i == 0 else "PROTOTYPE", info.color)
+		btn.configure(info.title, info.subtitle, MODE_STATUS[i], info.color)
 		btn.custom_minimum_size = Vector2(0, 62)
 		btn.pressed.connect(_select_mode.bind(i))
 		mode_list.add_child(btn)
@@ -135,6 +141,57 @@ func _build_modifier_row() -> void:
 		idx += 1
 	modifier_row.visible = selected_index == 0
 
+func _build_character_selector() -> void:
+	var roster = load("res://scripts/CharacterRoster.gd")
+	if not roster:
+		return
+	character_row = HBoxContainer.new()
+	character_row.name = "CharacterSelector"
+	character_row.custom_minimum_size = Vector2(0, 44)
+	character_row.add_theme_constant_override("separation", 10)
+	$VBox.add_child(character_row)
+	$VBox.move_child(character_row, play_button.get_index())
+	var label := Label.new()
+	label.text = "RIDER"
+	label.custom_minimum_size.x = 62
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
+	character_row.add_child(label)
+	character_select = OptionButton.new()
+	character_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	character_select.add_theme_font_size_override("font_size", 14)
+	character_row.add_child(character_select)
+	character_detail = Label.new()
+	character_detail.custom_minimum_size.x = 250
+	character_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	character_detail.add_theme_font_size_override("font_size", 11)
+	character_detail.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
+	character_row.add_child(character_detail)
+	var selected := 0
+	var characters: Array[Dictionary] = roster.all()
+	for i in range(characters.size()):
+		var character: Dictionary = characters[i]
+		character_select.add_item("%s — %s" % [character["name"], character["role"]])
+		character_select.set_item_metadata(i, character["id"])
+		if character["id"] == GameManager.selected_character_id:
+			selected = i
+	character_select.select(selected)
+	character_select.item_selected.connect(_on_character_selected)
+	_on_character_selected(selected)
+
+func _on_character_selected(index: int) -> void:
+	var roster = load("res://scripts/CharacterRoster.gd")
+	if not roster or not character_select:
+		return
+	var character_id := String(character_select.get_item_metadata(index))
+	var character: Dictionary = roster.get_character(character_id)
+	GameManager.selected_character_id = character_id
+	GameManager.player_color = Color.from_string(character["body"], GameManager.player_color)
+	GameManager.save_identity()
+	if character_detail:
+		character_detail.text = character["tagline"]
+		character_detail.tooltip_text = "%s • %s" % [character["silhouette"], character["accessory"]]
+
 func _select_mode(idx: int) -> void:
 	selected_index = idx
 	var info = MODE_INFO[idx]
@@ -151,9 +208,9 @@ func _select_mode(idx: int) -> void:
 		else:
 			buttons[i].disabled = i == idx
 		if i == idx:
-			buttons[i].text = ">> %s\n%s  •  %s <<" % [MODE_INFO[i].title, MODE_INFO[i].subtitle, "PLAYABLE" if i == 0 else "PROTOTYPE"]
+			buttons[i].text = ">> %s\n%s  •  %s <<" % [MODE_INFO[i].title, MODE_INFO[i].subtitle, MODE_STATUS[i]]
 		else:
-			buttons[i].text = "%s\n%s  •  %s" % [MODE_INFO[i].title, MODE_INFO[i].subtitle, "PLAYABLE" if i == 0 else "PROTOTYPE"]
+			buttons[i].text = "%s\n%s  •  %s" % [MODE_INFO[i].title, MODE_INFO[i].subtitle, MODE_STATUS[i]]
 
 func _on_play() -> void:
 	GameManager.select_mode(MODE_INFO[selected_index].mode)

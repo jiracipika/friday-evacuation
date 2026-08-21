@@ -357,9 +357,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		pause_menu.create(self, Callable())
 		get_viewport().set_input_as_handled()
 		return
-	if round_active and event.is_action_pressed("action"):
-		_try_grab_or_throw()
-		get_viewport().set_input_as_handled()
 
 func _try_grab_or_throw() -> void:
 	if not player or not is_instance_valid(player):
@@ -702,6 +699,8 @@ func _spawn_player() -> void:
 		add_child(p)
 		if "suppress_action_jump" in p:
 			p.suppress_action_jump = true
+		if p.has_signal("interaction_requested"):
+			p.interaction_requested.connect(_try_grab_or_throw)
 		# Phase 7A: the shared mount wires joystick/actions directly to p.
 		var mc_script7 = load("res://scripts/MobileControls.gd")
 		if mc_script7 and mc_script7.has_method("mount_for_mode"):
