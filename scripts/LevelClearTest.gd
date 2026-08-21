@@ -29,10 +29,13 @@ func _run_test():
 	world.name = "TestWorld"
 	root.add_child(world)
 
-	# Build floors
+	# Build floors. Floor 3 (y=12) uses the REAL gapped landing layout
+	# from Evacuation._floor3_landing_layout() — kept in sync deliberately
+	# so this test exercises the actual shipping geometry.
 	_build_floor(Vector3(0, 0, 0))
 	_build_floor(Vector3(0, 6, 0))
-	_build_floor(Vector3(0, 12, 0))
+	for slab in FLOOR3_LANDINGS:
+		_build_landing(slab)
 	_build_floor(Vector3(0, 18, 0))
 
 	# Build elevators (Area3D trigger zones)
@@ -156,6 +159,27 @@ func _simulate():
 		test_passed = false
 
 	_finish()
+
+const FLOOR3_LANDINGS: Array = [
+	{"x": 0.0, "z": 17.5, "w": 40.0, "d": 5.0},
+	{"x": 0.0, "z": -17.5, "w": 40.0, "d": 5.0},
+	{"x": 17.5, "z": 0.0, "w": 5.0, "d": 40.0},
+	{"x": -17.5, "z": 0.0, "w": 5.0, "d": 40.0},
+	{"x": 12.0, "z": 14.0, "w": 8.0, "d": 8.0},
+	{"x": -12.0, "z": 14.0, "w": 8.0, "d": 8.0},
+	{"x": 0.0, "z": 14.0, "w": 16.0, "d": 3.0},
+	{"x": 0.0, "z": 6.0, "w": 8.0, "d": 30.0},
+]
+
+func _build_landing(slab: Dictionary):
+	var landing := StaticBody3D.new()
+	landing.position = Vector3(slab["x"], 12.0, slab["z"])
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(slab["w"], 0.2, slab["d"])
+	col.shape = shape
+	landing.add_child(col)
+	world.add_child(landing)
 
 func _build_floor(pos: Vector3):
 	var floor_node = StaticBody3D.new()

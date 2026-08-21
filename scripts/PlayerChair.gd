@@ -42,6 +42,12 @@ var item_charges: int = 0
 var item_ready: bool = true  # fire-rate gate so Q spam cannot stack zips
 var item_cooldown: float = 0.0
 
+# Phase 4A themed-floor support
+var respawn_point: Vector3 = Vector3.ZERO
+var respawn_facing: float = 0.0
+var _surface_friction_mult: float = 1.0  # grip multiplier from surface zones
+var _on_special_surface: bool = false
+
 # Nodes
 @onready var mesh: MeshInstance3D = $ModelParent/ChairMesh
 @onready var collision: CollisionShape3D = $CollisionShape3D
@@ -330,9 +336,10 @@ func _apply_gravity(delta: float) -> void:
 		velocity.y -= gravity * delta
 
 func _apply_friction(delta: float) -> void:
-	# Horizontal friction only — frame-rate independent
+	# Horizontal friction only — frame-rate independent.
+	# Surface zones (tile/ice) scale friction so grip varies per floor area.
 	var hori = Vector2(velocity.x, velocity.z)
-	var friction_factor = 1.0 - exp(-friction * delta)
+	var friction_factor = 1.0 - exp(-friction * _surface_friction_mult * delta)
 	hori = hori.lerp(Vector2.ZERO, friction_factor)
 	velocity.x = hori.x
 	velocity.z = hori.y
@@ -455,3 +462,37 @@ func set_can_move(value: bool) -> void:
 	can_move = value
 	if not value:
 		velocity = Vector3.ZERO
+
+## Phase 4A: surface-grip API. SurfaceZone areas call these on enter/exit so
+## tile/ice patches change handling without new physics materials plumbing.
+func set_surface(friction_mult: float) -> void:
+	_surface_friction_mult = clampf(friction_mult, 0.05, 4.0)
+	_on_special_surface = not is_equal_approx(friction_mult, 1.0)
+
+func clear_surface() -> void:
+	_surface_friction_mult = 1.0
+	_on_special_surface = false
+
+## Phase 4A: teleport to the last checkpoint with a brief stun, preserving
+## the respawn point set by the mode (elevator checkpoints / floor starts).
+func respawn() -> void:
+	global_position = respawn_point
+	velocity = Vector3.ZERO
+	is_stunned = 0.8
+	if model_parent:
+		model_parent.rotation.y = respawn_facing
+	_smooth_facing_reset()
+	_play_sfx("trap")
+	var a11y = load("res://scripts/Accessibility.gd")
+	if a11y:
+		a11y.caption("RESPAWNED", 1.0)
+
+## Called by elevators after they move the respawn point, so respawning
+## faces onward along the course rather than backward.
+func _update_respawn_facing() -> void:
+	respawn_facing = smooth_facing
+
+func _smooth_facing_reset() -> void:
+	smooth_facing = respawn_facing
+	if model_parent:
+		model_parent.rotation.y = respawn_facing

@@ -80,6 +80,7 @@ func _process(delta: float) -> void:
 		&"racing":
 			timer += delta
 			_update_timer_display()
+			_respawn_if_fell()
 			if local_player and is_instance_valid(local_player):
 				top_speed = max(top_speed, Vector2(local_player.velocity.x, local_player.velocity.z).length())
 				_update_hud()
@@ -92,6 +93,23 @@ func _process(delta: float) -> void:
 			pass
 
 	_update_camera(delta)
+
+## Phase 4A: if a player falls through a floor-3 gap (or off any floor),
+## respawn them at their last checkpoint. Watched during racing only.
+func _respawn_if_fell() -> void:
+	for body in get_tree().get_nodes_in_group("players"):
+		if not (body is CharacterBody3D and is_instance_valid(body)):
+			continue
+		if not "respawn_point" in body:
+			continue
+		var floor_y: float = body.respawn_point.y
+		# Falling more than 5 units below the checkpoint floor = fell
+		if body.global_position.y < floor_y - 5.0:
+			if body.has_method("respawn"):
+				body.respawn()
+				var a11y = load("res://scripts/Accessibility.gd")
+				if a11y:
+					a11y.caption("FELL! RESPAWNED AT CHECKPOINT", 1.4)
 
 func _update_camera(delta: float) -> void:
 	if not local_player or not is_instance_valid(local_player):
@@ -183,6 +201,13 @@ func _setup_arena() -> void:
 	_build_floor(Vector3(0, 18, 0), Color(0.10, 0.18, 0.15), 3)
 	_setup_environment()
 
+	# Phase 4A themed dressing per floor (kept out of _build_floor so the
+	# base geometry stays reusable and LevelClearTest-syncable)
+	_theme_floor1_cubicles()
+	_theme_floor2_open_office()
+	_theme_floor3_stairwell()
+	_theme_floor4_cafeteria_and_lot()
+
 	# Elevator pads connect floors. Each pad is an Area3D trigger zone that
 	# smoothly lifts the player to the next floor when entered.
 	# This avoids Godot 4 CharacterBody3D slope/stair physics issues entirely.
@@ -193,6 +218,355 @@ func _setup_arena() -> void:
 	_spawn_obstacles()
 	_spawn_powerups()
 	_add_exit_marker()
+
+# --- PHASE 4A THEMED FLOORS ---
+
+## Floor 1 — Cubicle Farm: partition grid with a central corridor, plants.
+func _theme_floor1_cubicles() -> void:
+	var partition_mat := StandardMaterial3D.new()
+	partition_mat.albedo_color = Color(0.23, 0.29, 0.35)  # gray-blue #3a4a5a-ish
+	partition_mat.roughness = 0.9
+	for gx in range(-2, 3):
+		for gz in range(-2, 3):
+			if gx == 0 and gz >= -1 and gz <= 1:
+				continue  # main corridor down the center
+			if absf(gx * 8.0) > 15.0 or absf(gz * 8.0) > 15.0:
+				continue
+			var cub := _make_cubicle_partition()
+			cub.position = Vector3(gx * 8.0, 0.4, gz * 8.0)
+			add_child(cub)
+	# Office plants as soft obstacles at corridor mouths
+	for plant_pos in [Vector3(-4, 0, -14), Vector3(4, 0, -14), Vector3(-4, 0, 14), Vector3(4, 0, 14)]:
+		var plant := _make_plant()
+		plant.position = plant_pos
+		add_child(plant)
+
+func _make_cubicle_partition() -> StaticBody3D:
+	var part := StaticBody3D.new()
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(5.4, 0.8, 0.25)
+	col.shape = shape
+	col.position = Vector3(0, 0.4, 0)
+	part.add_child(col)
+	var mesh_node := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(5.4, 0.8, 0.25)
+	mesh_node.mesh = mesh
+	mesh_node.position = Vector3(0, 0.4, 0)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.23, 0.29, 0.35)
+	mat.roughness = 0.9
+	mesh_node.material_override = mat
+	part.add_child(mesh_node)
+	return part
+
+func _make_plant() -> StaticBody3D:
+	var plant := StaticBody3D.new()
+	var pot_col := CollisionShape3D.new()
+	var pot_shape := CylinderShape3D.new()
+	pot_shape.radius = 0.4
+	pot_shape.height = 1.2
+	pot_col.shape = pot_shape
+	pot_col.position = Vector3(0, 0.6, 0)
+	plant.add_child(pot_col)
+
+	var trunk := MeshInstance3D.new()
+	var trunk_mesh := CylinderMesh.new()
+	trunk_mesh.top_radius = 0.09
+	trunk_mesh.bottom_radius = 0.12
+	trunk_mesh.height = 0.7
+	trunk.mesh = trunk_mesh
+	trunk.position = Vector3(0, 0.35, 0)
+	var trunk_mat := StandardMaterial3D.new()
+	trunk_mat.albedo_color = Color(0.35, 0.24, 0.14)
+	trunk.material_override = trunk_mat
+	plant.add_child(trunk)
+
+	for i in range(3):
+		var blob := MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.42 + 0.08 * i
+		sphere.height = 0.84 + 0.16 * i
+		blob.mesh = sphere
+		blob.position = Vector3((i - 1) * 0.18, 0.95 + i * 0.22, (1 - i) * 0.12)
+		var leaf_mat := StandardMaterial3D.new()
+		leaf_mat.albedo_color = Color(0.16, 0.38, 0.2).lightened(0.05 * i)
+		leaf_mat.roughness = 0.95
+		blob.material_override = leaf_mat
+		plant.add_child(blob)
+	return plant
+
+## Floor 2 — Open Office: conference tables, water-cooler stun fixtures,
+## tile (fast) vs carpet (grippy) speed zones.
+func _theme_floor2_open_office() -> void:
+	var y := 6.0
+	# Two conference tables flanking the center
+	for tx in [-6.0, 6.0]:
+		var table := _make_conference_table()
+		table.position = Vector3(tx, y, 0)
+		add_child(table)
+	# Water coolers — permanent stun fixtures (roadmap 4A)
+	for cooler_pos in [Vector3(-12, y, 10), Vector3(12, y, 10), Vector3(0, y, -12)]:
+		var cooler := _make_stun_fixture(0)  # WATER_COOLER
+		cooler.position = cooler_pos
+		add_child(cooler)
+	# Speed zones: tile strip (fast, slick) vs carpet patch (grippy)
+	var tile := _make_surface_zone(0.55, Vector3(10, 2.0, 6), Color(0.55, 0.75, 1.0, 0.10))
+	tile.position = Vector3(0, y + 0.15, 8)
+	add_child(tile)
+	var carpet := _make_surface_zone(1.8, Vector3(8, 2.0, 8), Color(0.35, 0.6, 0.4, 0.12))
+	carpet.position = Vector3(-10, y + 0.15, -8)
+	add_child(carpet)
+
+func _make_conference_table() -> StaticBody3D:
+	var table := StaticBody3D.new()
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(4, 0.75, 1.2)
+	col.shape = shape
+	col.position = Vector3(0, 0.375, 0)
+	table.add_child(col)
+	var mesh_node := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(4, 0.75, 1.2)
+	mesh_node.mesh = mesh
+	mesh_node.position = Vector3(0, 0.375, 0)
+	mesh_node.material_override = _make_wood_material()
+	table.add_child(mesh_node)
+	return table
+
+func _make_stun_fixture(style_value: int) -> StaticBody3D:
+	var fixture_script = load("res://scripts/StunFixture.gd")
+	var node := StaticBody3D.new()
+	node.set_script(fixture_script)
+	node.style = style_value
+	return node
+
+func _make_surface_zone(friction_mult: float, zone_size: Vector3, tint_color: Color) -> Area3D:
+	var zone_script = load("res://scripts/SurfaceZone.gd")
+	var zone := Area3D.new()
+	zone.set_script(zone_script)
+	zone.friction_mult = friction_mult
+	zone.zone_size = zone_size
+	zone.tint = tint_color
+	return zone
+
+## Floor 3 — Stairwell Chaos: no desks, dexterity floor with fall-through
+## gaps between concrete landings, warning stripes, and stacked crates.
+## Floor 3 — Stairwell Chaos: dexterity floor with fall-through gaps between
+## concrete landings, warning stripes, and crates as obstacles.
+func _theme_floor3_stairwell() -> void:
+	var y := 12.0
+	for slab in _floor3_landing_layout():
+		var landing := StaticBody3D.new()
+		landing.position = Vector3(slab["x"], y, slab["z"])
+		add_child(landing)
+		var col := CollisionShape3D.new()
+		var shape := BoxShape3D.new()
+		shape.size = Vector3(slab["w"], 0.2, slab["d"])
+		col.shape = shape
+		landing.add_child(col)
+		var mesh_node := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(slab["w"], 0.2, slab["d"])
+		mesh_node.mesh = mesh
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.32, 0.33, 0.36)
+		mat.roughness = 0.85
+		mesh_node.material_override = mat
+		landing.add_child(mesh_node)
+	# Warning stripes at the gap edges (visual only)
+	for stripe_pos in _floor3_stripe_positions():
+		var stripe := MeshInstance3D.new()
+		var quad := BoxMesh.new()
+		quad.size = Vector3(2.4, 0.02, 0.5)
+		stripe.mesh = quad
+		stripe.position = stripe_pos
+		var smat := StandardMaterial3D.new()
+		smat.albedo_color = Color(1.0, 0.75, 0.1, 0.85)
+		smat.emission_enabled = true
+		smat.emission = Color(0.9, 0.6, 0.05)
+		smat.emission_energy_multiplier = 0.5
+		smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		stripe.material_override = smat
+		add_child(stripe)
+	# Crates as dexterity obstacles on the landings
+	for crate_spec in [
+		{"pos": Vector3(-10, y, 6), "rot": 0.3},
+		{"pos": Vector3(9, y, -6), "rot": -0.5},
+		{"pos": Vector3(0, y, -14), "rot": 0.2},
+	]:
+		var crate := _make_crate()
+		crate.position = crate_spec["pos"]
+		crate.rotation.y = crate_spec["rot"]
+		add_child(crate)
+
+func _floor3_landing_layout() -> Array[Dictionary]:
+	# Perimeter ring walkway + cross-strips between elevator pads; the center
+	# pockets are open holes — fall through and respawn at the floor 3 start.
+	return [
+		{"x": 0.0, "z": 17.5, "w": 40.0, "d": 5.0},
+		{"x": 0.0, "z": -17.5, "w": 40.0, "d": 5.0},
+		{"x": 17.5, "z": 0.0, "w": 5.0, "d": 40.0},
+		{"x": -17.5, "z": 0.0, "w": 5.0, "d": 40.0},
+		{"x": 12.0, "z": 14.0, "w": 8.0, "d": 8.0},
+		{"x": -12.0, "z": 14.0, "w": 8.0, "d": 8.0},
+		{"x": 0.0, "z": 14.0, "w": 16.0, "d": 3.0},
+		{"x": 0.0, "z": 6.0, "w": 8.0, "d": 30.0},
+	]
+
+func _floor3_stripe_positions() -> Array[Vector3]:
+	return [
+		Vector3(0, 12.1, 15.0), Vector3(0, 12.1, -15.0),
+		Vector3(15.0, 12.1, 0), Vector3(-15.0, 12.1, 0),
+	]
+
+func _make_crate() -> StaticBody3D:
+	var crate := StaticBody3D.new()
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(1.4, 1.4, 1.4)
+	col.shape = shape
+	col.position = Vector3(0, 0.7, 0)
+	crate.add_child(col)
+	var mesh_node := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(1.4, 1.4, 1.4)
+	mesh_node.mesh = mesh
+	mesh_node.position = Vector3(0, 0.7, 0)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.45, 0.34, 0.2)
+	mat.roughness = 0.9
+	mesh_node.material_override = mat
+	crate.add_child(mesh_node)
+	return crate
+
+## Floor 4 — Cafeteria + Parking Lot: ice-slick floor, round tables, spill
+## stun puddles, then concrete lot behind the exit with painted lines and
+## parked-car obstacles.
+func _theme_floor4_cafeteria_and_lot() -> void:
+	var y := 18.0
+	# Ice-slick cafeteria floor (big slip zone)
+	var ice := _make_surface_zone(0.16, Vector3(26, 2.0, 26), Color(0.7, 0.9, 1.0, 0.08))
+	ice.position = Vector3(0, y + 0.15, 0)
+	add_child(ice)
+	# Round tables
+	for table_pos in [Vector3(-9, y, -7), Vector3(9, y, -7), Vector3(-9, y, 7), Vector3(9, y, 7)]:
+		var table := _make_round_table()
+		table.position = table_pos
+		add_child(table)
+	# Spill puddles — stun fixtures
+	for spill_pos in [Vector3(-4, y, 0), Vector3(4, y, 3), Vector3(0, y, -4)]:
+		var spill := _make_stun_fixture(1)
+		spill.position = spill_pos
+		add_child(spill)
+	# Parking lot grip zone behind the exit
+	var lot := _make_surface_zone(1.4, Vector3(36, 2.0, 10), Color(0.5, 0.5, 0.55, 0.10))
+	lot.position = Vector3(0, y + 0.15, 16)
+	add_child(lot)
+	# Painted parking lines (visual)
+	for lx in [-16, -8, 0, 8, 16]:
+		var line := MeshInstance3D.new()
+		var line_mesh := BoxMesh.new()
+		line_mesh.size = Vector3(0.25, 0.02, 6)
+		line.mesh = line_mesh
+		line.position = Vector3(lx, y + 0.12, 16)
+		var lmat := StandardMaterial3D.new()
+		lmat.albedo_color = Color(0.9, 0.9, 0.85, 0.7)
+		lmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		lmat.emission_enabled = true
+		lmat.emission = Color(0.8, 0.8, 0.75)
+		lmat.emission_energy_multiplier = 0.2
+		line.material_override = lmat
+		add_child(line)
+	# Parked cars as obstacles
+	for car_spec in [
+		{"pos": Vector3(-12, y, 18), "rot": 0.0},
+		{"pos": Vector3(4, y, 18), "rot": 0.0},
+	]:
+		var car := _make_parked_car()
+		car.position = car_spec["pos"]
+		car.rotation.y = car_spec["rot"]
+		add_child(car)
+
+func _make_round_table() -> StaticBody3D:
+	var table := StaticBody3D.new()
+	var col := CollisionShape3D.new()
+	var shape := CylinderShape3D.new()
+	shape.radius = 1.1
+	shape.height = 0.75
+	col.shape = shape
+	col.position = Vector3(0, 0.375, 0)
+	table.add_child(col)
+	var top := MeshInstance3D.new()
+	var top_mesh := CylinderMesh.new()
+	top_mesh.top_radius = 1.15
+	top_mesh.bottom_radius = 1.15
+	top_mesh.height = 0.08
+	top.mesh = top_mesh
+	top.position = Vector3(0, 0.75, 0)
+	var tmat := StandardMaterial3D.new()
+	tmat.albedo_color = Color(0.55, 0.57, 0.6)
+	tmat.roughness = 0.4
+	top.material_override = tmat
+	table.add_child(top)
+	var leg := MeshInstance3D.new()
+	var leg_mesh := CylinderMesh.new()
+	leg_mesh.top_radius = 0.12
+	leg_mesh.bottom_radius = 0.18
+	leg_mesh.height = 0.72
+	leg.mesh = leg_mesh
+	leg.position = Vector3(0, 0.36, 0)
+	leg.material_override = tmat
+	table.add_child(leg)
+	return table
+
+func _make_parked_car() -> StaticBody3D:
+	var car := StaticBody3D.new()
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.55, 0.12, 0.12)
+	mat.roughness = 0.35
+	mat.metallic = 0.4
+	var body_col := CollisionShape3D.new()
+	var body_shape := BoxShape3D.new()
+	body_shape.size = Vector3(1.9, 0.9, 4.2)
+	body_col.shape = body_shape
+	body_col.position = Vector3(0, 0.55, 0)
+	car.add_child(body_col)
+	var body := MeshInstance3D.new()
+	var body_mesh := BoxMesh.new()
+	body_mesh.size = Vector3(1.9, 0.9, 4.2)
+	body.mesh = body_mesh
+	body.position = Vector3(0, 0.55, 0)
+	body.material_override = mat
+	car.add_child(body)
+	var cabin := MeshInstance3D.new()
+	var cabin_mesh := BoxMesh.new()
+	cabin_mesh.size = Vector3(1.7, 0.7, 2.2)
+	cabin.mesh = cabin_mesh
+	cabin.position = Vector3(0, 1.25, -0.2)
+	var cmat := StandardMaterial3D.new()
+	cmat.albedo_color = Color(0.15, 0.17, 0.2, 0.9)
+	cmat.roughness = 0.2
+	cmat.metallic = 0.6
+	cabin.material_override = cmat
+	car.add_child(cabin)
+	for wheel_spec in [
+		Vector3(-0.95, 0.35, 1.4), Vector3(0.95, 0.35, 1.4),
+		Vector3(-0.95, 0.35, -1.4), Vector3(0.95, 0.35, -1.4),
+	]:
+		var wheel := MeshInstance3D.new()
+		var wmesh := CylinderMesh.new()
+		wmesh.top_radius = 0.35
+		wmesh.bottom_radius = 0.35
+		wmesh.height = 0.25
+		wheel.mesh = wmesh
+		wheel.rotation.z = PI / 2.0
+		wheel.position = wheel_spec
+		wheel.material_override = mat
+		car.add_child(wheel)
+	return car
 
 # --- FLOOR/RAMP GUIDANCE ---
 func _apply_player_modifiers() -> void:
@@ -224,7 +598,7 @@ func _maybe_spawn_ghost() -> void:
 		Vector3(0, 1.0, 0),
 		Vector3(10, 0.5, 8),
 		Vector3(-8, 6.5, -6),
-		Vector3(9, 12.5, 9),
+		Vector3(2, 12.5, 9),
 		Vector3(-6, 18.5, 6),
 		Vector3(0, 19.0, 14.5),
 	]
@@ -245,6 +619,14 @@ func _on_ghost_finished(ghost_name: String, ghost_time: float) -> void:
 		a11y.caption("GHOST FINISHED — " + str(snappedf(ghost_time, 0.1)) + "s", 2.0)
 
 func _build_floor(pos: Vector3, color: Color, floor_index: int = 0) -> void:
+	# Floor 3 (index 2) is the Stairwell Chaos floor: its base slab is
+	# REPLACED by concrete landings with real fall-through gaps, so the
+	# uniform slab (mesh + collision) is skipped for that floor only.
+	if floor_index == 2:
+		_add_floor_number(pos, floor_index)
+		_spawn_ceiling_lights(pos, floor_index)
+		_build_floor_walls(pos, color, floor_index)
+		return
 	var floor_node = StaticBody3D.new()
 	floor_node.position = pos
 	add_child(floor_node)
@@ -270,7 +652,9 @@ func _build_floor(pos: Vector3, color: Color, floor_index: int = 0) -> void:
 		_add_exit_indicators(pos)
 
 	_spawn_ceiling_lights(pos, floor_index)
+	_build_floor_walls(pos, color, floor_index)
 
+func _build_floor_walls(pos: Vector3, color: Color, floor_index: int) -> void:
 	for i in range(4):
 		var wall = StaticBody3D.new()
 		wall.position = pos + Vector3([0, 20, 0, -20][i], 1.5, [20, 0, -20, 0][i])
@@ -509,6 +893,11 @@ func _build_elevator(from_pos: Vector3, to_pos: Vector3, target_floor: int) -> v
 			# Teleport to destination
 			body.global_position = to_pos + Vector3(0, 1.0, 0)
 			body.velocity = Vector3.ZERO
+			# Advance the respawn checkpoint to this floor's entry point
+			if "respawn_point" in body:
+				body.respawn_point = to_pos + Vector3(0, 1.0, 0)
+				if body.has_method("_update_respawn_facing"):
+					body._update_respawn_facing()
 			# Play boost sound
 			var audio = get_node_or_null("/root/AudioManager")
 			if audio and audio.has_method("play_sfx"):
@@ -530,9 +919,11 @@ func _spawn_obstacles() -> void:
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 1337  # Fixed seed for consistent layout
 
+	# Floor 3 (y=12) is the gapped stairwell — desks would float over holes
+	var floor_choices := [0, 6, 18]
 	for i in range(15):
 		var desk = _make_desk()
-		var floor_y = [0, 6, 12, 18][rng.randi() % 4]
+		var floor_y = floor_choices[rng.randi() % floor_choices.size()]
 		desk.position = Vector3(
 			rng.randf_range(-15, 15),
 			floor_y + 0.5,
@@ -587,6 +978,9 @@ func _spawn_player() -> void:
 	local_player = player_scene.instantiate()
 	local_player.position = Vector3(0, 1.0, 0)
 	add_child(local_player)
+	# Phase 4A: floor 1 spawn is the initial respawn checkpoint
+	if "respawn_point" in local_player:
+		local_player.respawn_point = Vector3(0, 1.0, 0)
 	players.append({"id": 1, "name": local_player.player_display_name})
 
 # --- GAME FLOW ---
@@ -628,9 +1022,11 @@ func _spawn_traps() -> void:
 	if sp_modifiers and RaceModifiersScript.is_active(RaceModifiersScript.Modifier.DOUBLE_TRAPS):
 		trap_count = 8
 
+	# Floor 3 traps would float over stairwell gaps — use floors 1/2/4 only
+	var trap_floors := [0.5, 6.5, 18.5]
 	for i in range(trap_count):
 		var trap = trap_scene.instantiate()
-		var floor_y = [0.5, 6.5, 12.5, 18.5][i % 4]
+		var floor_y = trap_floors[i % trap_floors.size()]
 		trap.position = Vector3(
 			randf_range(-15, 15),
 			floor_y,

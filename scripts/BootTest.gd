@@ -33,6 +33,8 @@ func _init() -> void:
 		"res://scripts/StaplerBolt.gd",
 		"res://scripts/HUD.gd",
 		"res://scripts/Minimap.gd",
+		"res://scripts/SurfaceZone.gd",
+		"res://scripts/StunFixture.gd",
 	]
 	
 	var all_pass = true
