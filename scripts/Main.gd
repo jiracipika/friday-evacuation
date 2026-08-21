@@ -1,6 +1,8 @@
 # Main.gd — Main menu / mode select screen
 extends Control
 
+const UI_THEME = preload("res://scripts/UITheme.gd")
+
 const MODE_INFO = [
 	{
 		"title": "FRIDAY 5PM: EVACUATION",
@@ -38,10 +40,10 @@ var settings_overlay: Control
 var lobby_overlay: Control
 var settings_button: Button
 var credits_button: Button
+var utility_row: HBoxContainer
 var modifier_row: HBoxContainer
 var modifier_toggles: Array[CheckButton] = []
 var stats_label: Label
-var title_base_y: float = 0.0
 var menu_time: float = 0.0
 
 # UI nodes
@@ -61,17 +63,22 @@ func _ready() -> void:
 	
 	play_button.pressed.connect(_on_play)
 	_build_modifier_row()
+	utility_row = HBoxContainer.new()
+	utility_row.add_theme_constant_override("separation", 8)
+	$VBox.add_child(utility_row)
 	settings_button = Button.new()
 	settings_button.text = "⚙ SETTINGS"
-	settings_button.custom_minimum_size = Vector2(0, 46)
-	settings_button.add_theme_font_size_override("font_size", 16)
-	$VBox.add_child(settings_button)
+	settings_button.custom_minimum_size = Vector2(0, 42)
+	settings_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_button.add_theme_font_size_override("font_size", 14)
+	utility_row.add_child(settings_button)
 	settings_button.pressed.connect(_open_settings)
 	credits_button = Button.new()
 	credits_button.text = "★ CREDITS"
-	credits_button.custom_minimum_size = Vector2(0, 46)
-	credits_button.add_theme_font_size_override("font_size", 16)
-	$VBox.add_child(credits_button)
+	credits_button.custom_minimum_size = Vector2(0, 42)
+	credits_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	credits_button.add_theme_font_size_override("font_size", 14)
+	utility_row.add_child(credits_button)
 	credits_button.pressed.connect(_open_credits)
 	stats_label = Label.new()
 	stats_label.text = ""
@@ -83,7 +90,6 @@ func _ready() -> void:
 	if stats:
 		stats_label.text = stats.get_summary_line()
 		stats.stats_updated.connect(func(): stats_label.text = stats.get_summary_line())
-	title_base_y = title_label.position.y
 	_build_menu_theme()
 	host_button.visible = true
 	host_button.text = "MULTIPLAYER LOBBY"
@@ -140,7 +146,10 @@ func _select_mode(idx: int) -> void:
 		modifier_row.visible = idx == 0
 	
 	for i in range(buttons.size()):
-		buttons[i].disabled = i == idx
+		if buttons[i].has_method("set_selected"):
+			buttons[i].set_selected(i == idx)
+		else:
+			buttons[i].disabled = i == idx
 		if i == idx:
 			buttons[i].text = ">> %s\n%s  •  %s <<" % [MODE_INFO[i].title, MODE_INFO[i].subtitle, "PLAYABLE" if i == 0 else "PROTOTYPE"]
 		else:
@@ -163,31 +172,22 @@ func _open_credits() -> void:
 func _process(delta: float) -> void:
 	menu_time += delta
 	if title_label:
-		title_label.position.y = title_base_y + sin(menu_time * 2.0) * 3.0
+		title_label.modulate.a = 0.96 + sin(menu_time * 2.0) * 0.04
 
 func _build_menu_theme() -> void:
-	var card_style = StyleBoxFlat.new()
-	card_style.bg_color = Color("1c1c2e")
-	card_style.border_color = Color(1, 1, 1, 0.12)
-	card_style.set_border_width_all(1)
-	card_style.set_corner_radius_all(10)
-	card_style.content_margin_left = 16.0
-	card_style.content_margin_right = 16.0
-	for button in buttons:
-		button.add_theme_stylebox_override("normal", card_style)
-		button.add_theme_stylebox_override("hover", _make_button_style(Color(0.15, 0.15, 0.25), Color("ff9a1a"), 2))
-		button.add_theme_stylebox_override("pressed", _make_button_style(Color(0.22, 0.18, 0.12), Color("ffb52e"), 3))
-	play_button.add_theme_stylebox_override("normal", _make_button_style(Color("ff9a1a"), Color("ffcf55"), 2))
-	play_button.add_theme_color_override("font_color", Color("0a0a0f"))
-	play_button.add_theme_color_override("font_hover_color", Color.WHITE)
-
-func _make_button_style(bg: Color, border: Color, width: int) -> StyleBoxFlat:
-	var style = StyleBoxFlat.new()
-	style.bg_color = bg
-	style.border_color = border
-	style.set_border_width_all(width)
-	style.set_corner_radius_all(10)
-	return style
+	title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
+	title_label.add_theme_font_size_override("font_size", 46)
+	subtitle_label.add_theme_font_size_override("font_size", 13)
+	desc_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
+	desc_label.add_theme_font_size_override("font_size", 16)
+	UI_THEME.apply_primary(play_button)
+	UI_THEME.apply_secondary(host_button, UI_THEME.color(UI_THEME.CYAN))
+	UI_THEME.apply_secondary(join_button, UI_THEME.color(UI_THEME.LIME))
+	UI_THEME.apply_secondary(back_button, UI_THEME.color(UI_THEME.CORAL))
+	if settings_button:
+		UI_THEME.apply_secondary(settings_button, UI_THEME.color(UI_THEME.CYAN))
+	if credits_button:
+		UI_THEME.apply_secondary(credits_button, UI_THEME.color(UI_THEME.VIOLET))
 
 func _open_lobby() -> void:
 	if lobby_overlay:
