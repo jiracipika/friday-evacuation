@@ -596,6 +596,8 @@ Replace the current uniform floor generation with distinct themed floors:
 
 **VERIFY:** At least 3 different power-up types visible in a single race. Each has a distinct visual and effect.
 
+**STATUS: COMPLETE (commit `37166a7`, verified).** All six kinds implemented with the exact weighted distribution. Distinct procedural meshes + per-kind OmniLight3D + colorblind-safe Label3D name on every pickup. Item charges (stapler ×3 fired forward via new `StaplerBolt.gd` projectile; spill ×2 wide puddle trap behind), printer paper-burst + blind flash (respects `flash_effects_enabled`), extinguisher 8u/2s area stun. `PowerUpSmokeTest.gd` (31 checks) verifies distribution (coffee ≈60% over 6000 rolls), forced-type traps, charge consumption, bolt flight, per-kind collision+label, HUD item readout, overlay dedupe, and energy-drink boost multipliers. Also fixed while in here: HUD.gd was dead code (never instantiated — now wired into Evacuation with true boost-cooldown bar, item readout, minimap, floor label); SubtitleOverlay was mounted by zero modes (captions silently dropped — now mounted in all 4 via new `SubtitleOverlay.mount()`); MobileControls was never instantiated (now mounted on Android/iOS); removed a duplicate powerup pickup connect in Evacuation.gd.
+
 ### 4C: Dynamic Hazards
 
 **New file: scripts/Hazards.gd (loaded by Evacuation.gd)**
