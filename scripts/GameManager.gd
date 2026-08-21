@@ -12,6 +12,7 @@ enum GameMode {
 
 # Player data
 var player_name: String = "Player1"
+var player_color: Color = Color(0.4, 0.8, 1.0)
 var selected_mode: GameMode = GameMode.EVACUATION
 
 # Multiplayer
@@ -28,6 +29,33 @@ var players_in_lobby: Array[String] = []
 var race_results: Array[Dictionary] = []
 
 signal mode_selected(mode: GameMode)
+
+const PLAYER_COLORS: Array[Color] = [
+	Color(0.4, 0.8, 1.0),   # cyan-blue
+	Color(1.0, 0.6, 0.1),  # orange
+	Color(0.72, 0.4, 1.0), # violet
+	Color(0.95, 0.35, 0.4),# coral
+	Color(0.45, 0.9, 0.4), # lime
+	Color(1.0, 0.85, 0.3), # amber
+	Color(0.4, 0.85, 0.75),# teal
+	Color(0.9, 0.9, 0.95), # white
+]
+
+func _ready() -> void:
+	_load_identity()
+
+func _load_identity() -> void:
+	var config := ConfigFile.new()
+	if config.load("user://identity.cfg") == OK:
+		player_name = config.get_value("player", "name", player_name)
+		var color_hex: String = config.get_value("player", "color", player_color.to_html(false))
+		player_color = Color.from_string(color_hex, player_color)
+
+func save_identity() -> void:
+	var config := ConfigFile.new()
+	config.set_value("player", "name", player_name)
+	config.set_value("player", "color", player_color.to_html(false))
+	config.save("user://identity.cfg")
 
 func select_mode(mode: GameMode) -> void:
 	selected_mode = mode

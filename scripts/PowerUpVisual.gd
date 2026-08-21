@@ -39,6 +39,8 @@ const EXTINGUISHER_STUN := 2.0
 const PRINTER_BLIND_RADIUS := 8.0
 
 var kind: Kind = Kind.COFFEE
+## Unique per-match name used for cross-peer despawn sync ("PU_3_5" style).
+var sync_name: String = ""
 var base_y: float = 0.0
 var time_offset: float = 0.0
 var glow_radius: float = 0.0
@@ -56,6 +58,8 @@ static func pick_weighted(rng: RandomNumberGenerator) -> int:
 	return Kind.COFFEE
 
 func _ready() -> void:
+	if sync_name.is_empty():
+		sync_name = "PU_%d" % get_instance_id()
 	base_y = position.y
 	time_offset = float(get_instance_id() % 1000) * 0.01
 
@@ -251,6 +255,8 @@ func _on_body_entered(body: Node3D) -> void:
 	if fx:
 		fx.burst(get_parent(), global_position + Vector3.UP * 0.2, KIND_COLORS[kind], 16)
 
+	_report_pickup()
+
 	match kind:
 		Kind.COFFEE:
 			if a11y:
@@ -277,6 +283,7 @@ func _on_body_entered(body: Node3D) -> void:
 			if a11y:
 				a11y.caption("EXTINGUISHER — EVERYONE FREEZES", 1.4)
 			_extinguish_nearby()
+			_report_area_stuns([Kind.EXTINGUISHER, 2.0])
 		_:
 			pass
 
@@ -355,3 +362,24 @@ func _extinguish_nearby() -> void:
 			node.stun(EXTINGUISHER_STUN)
 		if fx:
 			fx.burst(get_parent(), node.global_position + Vector3.UP * 0.4, Color(0.9, 0.95, 1.0), 10)
+
+
+## Phase 5 sync: report that THIS peer took the pickup so others despawn it.
+func _report_pickup() -> void:
+	var network = get_node_or_null("/root/Network")
+	if network and network.has_method("report_pickup_taken"):
+		network.report_pickup_taken(sync_name)
+
+## Phase 5 sync: area-effect pickups (extinguisher) stun remote players on
+## their own machines. Victim peer ids come from the mode's remote map.
+func _report_area_stuns(effect: Array) -> void:
+	var network = get_node_or_null("/root/Network")
+	if network == null or not network.has_method("report_remote_stun"):
+		return
+	var mode = get_parent()
+	if mode == null:
+		return
+	# Remote players dictionary on the mode (peer_id -> chair)
+	if "remote_players" in mode:
+		for peer_id in mode.remote_players:
+			network.report_remote_stun(int(peer_id), float(effect[1]))

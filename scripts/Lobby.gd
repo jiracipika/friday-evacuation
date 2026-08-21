@@ -6,6 +6,9 @@ signal close_requested
 
 var status_label: Label
 var address_edit: LineEdit
+var name_edit: LineEdit
+var color_row: HBoxContainer
+var swatch_buttons: Array[Button] = []
 var host_button: Button
 var join_button: Button
 var ready_button: Button
@@ -38,6 +41,39 @@ func _ready() -> void:
 	status_label.text = "Choose HOST or enter a LAN address to JOIN."
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(status_label)
+
+	# --- Identity: name + color (Phase 5) ---
+	var gm = get_node_or_null("/root/GameManager")
+	name_edit = LineEdit.new()
+	name_edit.placeholder_text = "Your name"
+	name_edit.text = gm.player_name if gm else "Player1"
+	name_edit.max_length = 16
+	name_edit.text_changed.connect(_on_name_changed)
+	box.add_child(name_edit)
+	color_row = HBoxContainer.new()
+	color_row.add_theme_constant_override("separation", 6)
+	box.add_child(color_row)
+	if gm and "PLAYER_COLORS" in gm:
+		for color in gm.PLAYER_COLORS:
+			var swatch := Button.new()
+			swatch.custom_minimum_size = Vector2(36, 30)
+			swatch.focus_mode = Control.FOCUS_NONE
+			var style := StyleBoxFlat.new()
+			style.bg_color = color
+			style.set_corner_radius_all(8)
+			swatch.add_theme_stylebox_override("normal", style)
+			var hover_style := style.duplicate()
+			hover_style.border_color = Color.WHITE
+			hover_style.set_border_width_all(2)
+			swatch.add_theme_stylebox_override("hover", hover_style)
+			var pressed_style := style.duplicate()
+			pressed_style.border_color = Color(1, 1, 1, 0.6)
+			pressed_style.set_border_width_all(3)
+			swatch.add_theme_stylebox_override("pressed", pressed_style)
+			swatch.pressed.connect(_on_color_picked.bind(color))
+			color_row.add_child(swatch)
+			swatch_buttons.append(swatch)
+	_mark_selected_swatch()
 	address_edit = LineEdit.new()
 	address_edit.placeholder_text = "LAN address (default: 127.0.0.1)"
 	address_edit.text = "127.0.0.1"
@@ -91,6 +127,27 @@ func _ready() -> void:
 		network.match_started.connect(_on_match_started)
 		network.discover_lan_hosts()
 	_refresh_players()
+
+func _on_name_changed(new_text: String) -> void:
+	var gm = get_node_or_null("/root/GameManager")
+	if gm:
+		gm.player_name = new_text.strip_edges().substr(0, 16) if new_text.strip_edges() != "" else "Player1"
+		gm.save_identity()
+
+func _on_color_picked(color: Color) -> void:
+	var gm = get_node_or_null("/root/GameManager")
+	if gm:
+		gm.player_color = color
+		gm.save_identity()
+	_mark_selected_swatch()
+
+func _mark_selected_swatch() -> void:
+	var gm = get_node_or_null("/root/GameManager")
+	if gm == null:
+		return
+	for i in range(swatch_buttons.size()):
+		var selected: bool = i < gm.PLAYER_COLORS.size() and gm.PLAYER_COLORS[i].is_equal_approx(gm.player_color)
+		swatch_buttons[i].modulate = Color.WHITE if selected else Color(1, 1, 1, 0.45)
 
 func _host() -> void:
 	if network and network.host_game():
@@ -170,8 +227,13 @@ func _refresh_players() -> void:
 	if not player_list:
 		return
 	player_list.clear()
-	player_list.add_item("You  •  %s" % ("READY" if lobby_ready else "NOT READY"))
+	var own_id: int = network.multiplayer.get_unique_id() if network else 1
 	if network:
 		for peer_id in network.connected_players:
-			var peer_ready = network.ready_players.get(peer_id, false)
-			player_list.add_item("Player_%d  •  %s" % [peer_id, "READY" if peer_ready else "NOT READY"])
+			var peer_ready: bool = network.ready_players.get(peer_id, false)
+			var display_name: String = String(network.connected_players[peer_id])
+			if int(peer_id) == own_id:
+				display_name += "  (you)"
+			player_list.add_item("%s  •  %s" % [display_name, "READY" if peer_ready else "NOT READY"])
+			if network.has_method("get_player_color"):
+				player_list.set_item_custom_fg_color(player_list.item_count - 1, network.get_player_color(int(peer_id)))

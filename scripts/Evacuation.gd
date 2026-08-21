@@ -55,6 +55,12 @@ func _ready() -> void:
 		network.remote_player_state.connect(_on_remote_player_state)
 		network.player_connected.connect(_on_network_player_connected)
 		network.player_disconnected.connect(_on_network_player_disconnected)
+		if network.has_signal("world_trap_dropped"):
+			network.world_trap_dropped.connect(_on_world_trap_dropped)
+		if network.has_signal("world_pickup_taken"):
+			network.world_pickup_taken.connect(_on_world_pickup_taken)
+		if network.has_signal("player_stunned"):
+			network.player_stunned.connect(_on_remote_stun)
 		for peer_id in network.connected_players:
 			if int(peer_id) != multiplayer.get_unique_id():
 				_on_network_player_connected(int(peer_id), network.connected_players[peer_id])
@@ -87,7 +93,8 @@ func _process(delta: float) -> void:
 				_update_hud()
 				var network = get_node_or_null("/root/Network")
 				if network and network.peer:
-					network.broadcast_player_state(local_player.global_position, local_player.velocity)
+					var sync_rot: float = local_player.model_parent.rotation.y if "model_parent" in local_player and local_player.model_parent else 0.0
+					network.broadcast_player_state(local_player.global_position, local_player.velocity, sync_rot)
 			if finish_order.size() >= players.size() or timer >= time_limit:
 				_end_race()
 		&"finished":
@@ -168,6 +175,9 @@ func _on_network_player_connected(peer_id: int, player_name: String) -> void:
 		return
 	var remote = player_scene.instantiate()
 	remote.player_display_name = player_name
+	var network_node = get_node_or_null("/root/Network")
+	if network_node and network_node.has_method("get_player_color"):
+		remote.player_color = network_node.get_player_color(peer_id)
 	remote.set_can_move(false)
 	remote.name = "Remote_%d" % peer_id
 	add_child(remote)
@@ -179,11 +189,67 @@ func _on_network_player_disconnected(peer_id: int) -> void:
 		remote.queue_free()
 	remote_players.erase(peer_id)
 
-func _on_remote_player_state(peer_id: int, position: Vector3, remote_velocity: Vector3) -> void:
+func _on_remote_player_state(peer_id: int, position: Vector3, remote_velocity: Vector3, rot_y: float = 0.0) -> void:
 	var remote = remote_players.get(peer_id)
 	if remote and is_instance_valid(remote):
 		remote.global_position = remote.global_position.lerp(position, 0.45)
 		remote.velocity = remote_velocity
+		# Rotation: lerp model toward the reported facing (Phase 5 sync)
+		if "model_parent" in remote and remote.model_parent:
+			var current_rot: float = remote.model_parent.rotation.y
+			var diff := angle_difference(current_rot, rot_y)
+			remote.model_parent.rotation.y = current_rot + diff * 0.5
+
+## Phase 5: remote player dropped a trap — spawn it locally (skip if it's
+## our own drop echoing back).
+func _on_world_trap_dropped(peer_id: int, position: Vector3, trap_type: String, forced: bool) -> void:
+	var network = get_node_or_null("/root/Network")
+	if network and peer_id == network.multiplayer.get_unique_id():
+		return  # already spawned locally at drop time
+	var trap_scene = load("res://scenes/objects/SabotageTrap.tscn")
+	if not trap_scene:
+		return
+	var trap = trap_scene.instantiate()
+	if forced and trap.has_method("_set_forced_type"):
+		trap._set_forced_type(trap_type)
+	trap.world_spawned = true
+	add_child(trap)
+	trap.global_position = position
+	_remote_event_caption("%s dropped a trap!" % _peer_display_name(peer_id))
+
+## Phase 5: remote player took a pickup — despawn the same pickup locally.
+func _on_world_pickup_taken(peer_id: int, pickup_name: String) -> void:
+	var network = get_node_or_null("/root/Network")
+	if network and peer_id == network.multiplayer.get_unique_id():
+		return
+	for child in get_children():
+		if "sync_name" in child and child.sync_name == pickup_name:
+			child.queue_free()
+			break
+	_remote_event_caption("%s grabbed %s" % [_peer_display_name(peer_id), pickup_name])
+
+## Phase 5: a stun fired on another peer's machine applies to our chair if
+## we're the victim.
+func _on_remote_stun(peer_id: int, duration: float) -> void:
+	var network = get_node_or_null("/root/Network")
+	if network == null:
+		return
+	var own_id: int = network.multiplayer.get_unique_id()
+	if peer_id != own_id:
+		return
+	if local_player and is_instance_valid(local_player) and local_player.has_method("stun"):
+		local_player.stun(duration)
+
+func _peer_display_name(peer_id: int) -> String:
+	var network = get_node_or_null("/root/Network")
+	if network and network.connected_players.has(peer_id):
+		return String(network.connected_players[peer_id])
+	return "Player %d" % peer_id
+
+func _remote_event_caption(text: String) -> void:
+	var a11y = load("res://scripts/Accessibility.gd")
+	if a11y:
+		a11y.caption(text, 1.2)
 
 # --- SETUP ---
 
@@ -970,6 +1036,7 @@ func _spawn_powerups() -> void:
 
 	for i in range(8):
 		var pu = PowerUp.create(PowerUp.pick_weighted(rng))
+		pu.sync_name = "PU_%d" % i
 		var floor_y = [0.5, 6.5, 12.5, 18.5][rng.randi() % 4]
 		pu.position = Vector3(
 			rng.randf_range(-12, 12),
@@ -986,6 +1053,10 @@ func _spawn_player() -> void:
 		return
 	local_player = player_scene.instantiate()
 	local_player.position = Vector3(0, 1.0, 0)
+	var gm = get_node_or_null("/root/GameManager")
+	if gm:
+		local_player.player_display_name = gm.player_name
+		local_player.player_color = gm.player_color
 	add_child(local_player)
 	# Phase 4A: floor 1 spawn is the initial respawn checkpoint
 	if "respawn_point" in local_player:
@@ -1033,16 +1104,24 @@ func _spawn_traps() -> void:
 	if sp_modifiers and RaceModifiersScript.is_active(RaceModifiersScript.Modifier.DOUBLE_TRAPS):
 		trap_count = 8
 
-	# Floor 3 traps would float over stairwell gaps — use floors 1/2/4 only
+	# Floor 3 traps would float over stairwell gaps — use floors 1/2/4 only.
+	# Deterministic across peers: seeded RNG, type derived from position so
+	# every machine spawns the identical world (Phase 5 determinism).
 	var trap_floors := [0.5, 6.5, 18.5]
+	var trap_rng := RandomNumberGenerator.new()
+	trap_rng.seed = 4242
 	for i in range(trap_count):
 		var trap = trap_scene.instantiate()
 		var floor_y = trap_floors[i % trap_floors.size()]
 		trap.position = Vector3(
-			randf_range(-15, 15),
+			trap_rng.randf_range(-15, 15),
 			floor_y,
-			randf_range(-15, 15)
+			trap_rng.randf_range(-15, 15)
 		)
+		# Position-derived type keeps all peers in sync without an RPC
+		if trap.has_method("_set_forced_type"):
+			var type_roll: int = absi(int(trap.position.x * 13.0 + trap.position.z * 7.0)) % 3
+			trap._set_forced_type(["water", "banana", "stapler"][type_roll])
 		if trap.has_method("_set_owner"):
 			trap._set_owner(network.multiplayer_peer.get_unique_id() if network and network.multiplayer_peer else 1)
 		traps_placed += 1
@@ -1175,6 +1254,15 @@ func _setup_hud() -> void:
 		var overlay_script = load("res://scripts/SubtitleOverlay.gd")
 		if overlay_script and overlay_script.has_method("mount"):
 			overlay_script.mount(hud)
+	# Phase 5B: chat overlay (dormant unless a network peer exists)
+	var network_chat = get_node_or_null("/root/Network")
+	if network_chat and network_chat.peer:
+		var chat_script = load("res://scripts/ChatOverlay.gd")
+		if chat_script:
+			var chat = CanvasLayer.new()
+			chat.set_script(chat_script)
+			chat.name = "ChatOverlay"
+			add_child(chat)
 	# Touch controls on mobile platforms (hidden on desktop)
 	if OS.get_name() in ["Android", "iOS"]:
 		var mc_script = load("res://scripts/MobileControls.gd")

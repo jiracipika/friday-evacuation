@@ -9,6 +9,7 @@ var trap_type: String = "water"  # "water", "banana", "stapler", "spill"
 var triggered := false
 var owner_id: int = 0  # instance id of the player who placed this trap
 var forced_type: String = ""  # set before add_child to skip random selection
+var world_spawned: bool = false  # true = deterministic arena trap, not player-dropped
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
@@ -27,6 +28,15 @@ func _set_forced_type(kind: String) -> void:
 	if trap_type != kind and not is_inside_tree():
 		trap_type = kind
 		_apply_visual()
+
+## Phase 5: report this player-dropped trap to other peers (no-op offline).
+func report_drop() -> void:
+	if world_spawned or not is_inside_tree():
+		return
+	var network = get_node_or_null("/root/Network")
+	if network and network.has_method("report_trap_drop"):
+		var sender_id := owner_id
+		network.report_trap_drop(global_position, trap_type, forced_type != "")
 
 func _apply_visual() -> void:
 	var mat = StandardMaterial3D.new()

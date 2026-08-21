@@ -14,8 +14,9 @@ var discovery_timer := 0.0
 var host_name := "Friday 5PM Host"
 var host_address := ""
 var connected_players: Dictionary = {} # peer_id -> player name
+var player_colors: Dictionary = {} # peer_id -> Color (html string over RPC)
 var ready_players: Dictionary = {} # peer_id -> bool
-var player_states: Dictionary = {} # peer_id -> {position, velocity}
+var player_states: Dictionary = {} # peer_id -> {position, velocity, rot_y}
 
 signal player_connected(peer_id: int, player_name: String)
 signal player_disconnected(peer_id: int)
@@ -23,9 +24,13 @@ signal server_started(port: int)
 signal connection_failed()
 signal connection_succeeded()
 signal lan_host_found(address: String, name: String, player_count: int)
-signal remote_player_state(peer_id: int, position: Vector3, velocity: Vector3)
+signal remote_player_state(peer_id: int, position: Vector3, velocity: Vector3, rot_y: float)
 signal player_ready_changed(peer_id: int, is_ready: bool)
 signal match_started()
+signal world_trap_dropped(peer_id: int, position: Vector3, trap_type: String, forced: bool)
+signal world_pickup_taken(peer_id: int, pickup_name: String)
+signal player_stunned(peer_id: int, duration: float)
+signal chat_message(peer_id: int, sender_name: String, text: String)
 
 func _process(delta: float) -> void:
 	if not discovery_active:
@@ -50,6 +55,7 @@ func host_game(port: int = DEFAULT_PORT) -> bool:
 	_ensure_multiplayer_signals()
 	var manager = get_node_or_null("/root/GameManager")
 	connected_players[1] = manager.player_name if manager else "Host"
+	player_colors[1] = manager.player_color.to_html(false) if manager else Color(0.4, 0.8, 1.0).to_html(false)
 	ready_players[1] = false
 	_start_discovery(true)
 	server_started.emit(port)
@@ -96,6 +102,7 @@ func _on_peer_connected(peer_id: int) -> void:
 	if not multiplayer.is_server():
 		return
 	connected_players[peer_id] = "Player_%d" % peer_id
+	player_colors[peer_id] = Color(0.4, 0.8, 1.0).to_html(false)
 	ready_players[peer_id] = false
 	player_connected.emit(peer_id, connected_players[peer_id])
 	_broadcast_roster()
@@ -103,6 +110,7 @@ func _on_peer_connected(peer_id: int) -> void:
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	connected_players.erase(peer_id)
+	player_colors.erase(peer_id)
 	ready_players.erase(peer_id)
 	player_states.erase(peer_id)
 	player_disconnected.emit(peer_id)
@@ -112,8 +120,23 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 func _on_connected_to_server() -> void:
 	connection_succeeded.emit()
+	var manager = get_node_or_null("/root/GameManager")
+	var cname: String = manager.player_name if manager else "Player"
+	var ccolor: String = manager.player_color.to_html(false) if manager else Color(0.4, 0.8, 1.0).to_html(false)
+	submit_identity.rpc_id(1, cname, ccolor)
 	request_roster.rpc_id(1)
 	print("[NET] Connected to LAN host")
+
+## Clients send their chosen name/color once connected; server stores and
+## rebroadcasts the roster so every peer knows every identity.
+@rpc("any_peer", "reliable", "call_remote")
+func submit_identity(player_name: String, color_html: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender := int(multiplayer.get_remote_sender_id())
+	connected_players[sender] = player_name
+	player_colors[sender] = color_html
+	_broadcast_roster()
 
 func _on_connection_failed() -> void:
 	connection_failed.emit()
@@ -143,17 +166,17 @@ func _start_discovery(as_host: bool) -> void:
 
 func _stop_discovery() -> void:
 	discovery_active = false
-	if discovery_socket.is_socket_connected():
+	if discovery_socket.is_bound():
 		discovery_socket.close()
 
 func _request_host_discovery() -> void:
-	if not discovery_socket.is_socket_connected():
+	if not discovery_socket.is_bound():
 		return
 	discovery_socket.set_dest_address("255.255.255.255", DISCOVERY_PORT)
 	discovery_socket.put_packet("FRIDAY5PM_DISCOVER".to_utf8_buffer())
 
 func _advertise_host() -> void:
-	if not discovery_socket.is_socket_connected():
+	if not discovery_socket.is_bound():
 		var bind_err = discovery_socket.bind(DISCOVERY_PORT)
 		if bind_err != OK:
 			return
@@ -227,42 +250,157 @@ func begin_match() -> void:
 func request_roster() -> void:
 	if multiplayer.is_server():
 		var sender = multiplayer.get_remote_sender_id()
-		send_roster.rpc_id(sender, connected_players, ready_players)
+		send_roster.rpc_id(sender, connected_players, ready_players, player_colors)
 
 func _broadcast_roster() -> void:
 	if is_server():
-		broadcast_roster.rpc(connected_players, ready_players)
+		broadcast_roster.rpc(connected_players, ready_players, player_colors)
 
 @rpc("authority", "reliable", "call_remote")
-func send_roster(names: Dictionary, readiness: Dictionary) -> void:
-	connected_players = names
+func send_roster(names: Dictionary, readiness: Dictionary, colors: Dictionary) -> void:
+	# Re-key as int: peer ids arrive as Floats inside RPC Dictionaries and
+	# float keys never match int lookups (get_player_color, roster prints).
+	connected_players.clear()
 	ready_players = readiness
+	player_colors = colors
+	for key in names.keys():
+		connected_players[int(key)] = names[key]
+	var rkeys: Array = readiness.keys()
+	for key in rkeys:
+		ready_players[int(key)] = readiness[key]
+	var ckeys: Array = colors.keys()
+	for key in ckeys:
+		player_colors[int(key)] = colors[key]
 	for peer_id in connected_players:
 		if int(peer_id) != multiplayer.get_unique_id():
 			player_connected.emit(int(peer_id), connected_players[peer_id])
 
 @rpc("authority", "reliable", "call_remote")
-func broadcast_roster(names: Dictionary, readiness: Dictionary) -> void:
-	send_roster(names, readiness)
+func broadcast_roster(names: Dictionary, readiness: Dictionary, colors: Dictionary) -> void:
+	send_roster(names, readiness, colors)
 
-func broadcast_player_state(position: Vector3, velocity: Vector3) -> void:
+func get_player_color(peer_id: int) -> Color:
+	return Color.from_string(player_colors.get(peer_id, "66ccff"), Color(0.4, 0.8, 1.0))
+
+func broadcast_player_state(position: Vector3, velocity: Vector3, rot_y: float = 0.0) -> void:
 	if peer and multiplayer.multiplayer_peer and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
 		if is_server():
-			_relay_player_state(multiplayer.get_unique_id(), position, velocity)
+			_relay_player_state(multiplayer.get_unique_id(), position, velocity, rot_y)
 		else:
-			submit_player_state.rpc_id(1, position, velocity)
+			submit_player_state.rpc_id(1, position, velocity, rot_y)
 
 @rpc("any_peer", "unreliable", "call_remote")
-func submit_player_state(position: Vector3, velocity: Vector3) -> void:
+func submit_player_state(position: Vector3, velocity: Vector3, rot_y: float) -> void:
 	if multiplayer.is_server():
 		var sender = multiplayer.get_remote_sender_id()
-		_relay_player_state(sender, position, velocity)
+		_relay_player_state(sender, position, velocity, rot_y)
 
-func _relay_player_state(peer_id: int, position: Vector3, velocity: Vector3) -> void:
-	player_states[peer_id] = {"position": position, "velocity": velocity}
-	broadcast_player_state_rpc.rpc(peer_id, position, velocity)
+func _relay_player_state(peer_id: int, position: Vector3, velocity: Vector3, rot_y: float) -> void:
+	player_states[peer_id] = {"position": position, "velocity": velocity, "rot_y": rot_y}
+	# Emit locally too: the relaying server must drive its OWN remote chairs
+	# (the announce RPC is call_remote, so it never fires back on the host).
+	remote_player_state.emit(peer_id, position, velocity, rot_y)
+	broadcast_player_state_rpc.rpc(peer_id, position, velocity, rot_y)
 
 @rpc("authority", "unreliable", "call_remote")
-func broadcast_player_state_rpc(peer_id: int, position: Vector3, velocity: Vector3) -> void:
-	player_states[peer_id] = {"position": position, "velocity": velocity}
-	remote_player_state.emit(peer_id, position, velocity)
+func broadcast_player_state_rpc(peer_id: int, position: Vector3, velocity: Vector3, rot_y: float) -> void:
+	player_states[peer_id] = {"position": position, "velocity": velocity, "rot_y": rot_y}
+	remote_player_state.emit(peer_id, position, velocity, rot_y)
+
+
+# ---------------- Phase 5 world-event replication ----------------
+# Interactive objects must appear/disappear on every peer. Host relays:
+# clients report, server rebroadcasts to all (including reporter via loopback).
+
+func report_trap_drop(position: Vector3, trap_type: String, forced: bool) -> void:
+	if not _world_sync_active():
+		return
+	if is_server():
+		_relay_trap_drop(multiplayer.get_unique_id(), position, trap_type, forced)
+	else:
+		submit_trap_drop.rpc_id(1, position, trap_type, forced)
+
+@rpc("any_peer", "reliable", "call_remote")
+func submit_trap_drop(position: Vector3, trap_type: String, forced: bool) -> void:
+	if multiplayer.is_server():
+		var sender = multiplayer.get_remote_sender_id()
+		_relay_trap_drop(sender, position, trap_type, forced)
+
+func _relay_trap_drop(peer_id: int, position: Vector3, trap_type: String, forced: bool) -> void:
+	world_trap_dropped.emit(peer_id, position, trap_type, forced)
+	announce_trap_drop.rpc(peer_id, position, trap_type, forced)
+
+@rpc("authority", "reliable", "call_remote")
+func announce_trap_drop(peer_id: int, position: Vector3, trap_type: String, forced: bool) -> void:
+	world_trap_dropped.emit(peer_id, position, trap_type, forced)
+
+func report_pickup_taken(pickup_name: String) -> void:
+	if not _world_sync_active():
+		return
+	if is_server():
+		_relay_pickup_taken(multiplayer.get_unique_id(), pickup_name)
+	else:
+		submit_pickup_taken.rpc_id(1, pickup_name)
+
+@rpc("any_peer", "reliable", "call_remote")
+func submit_pickup_taken(pickup_name: String) -> void:
+	if multiplayer.is_server():
+		var sender = multiplayer.get_remote_sender_id()
+		_relay_pickup_taken(sender, pickup_name)
+
+func _relay_pickup_taken(peer_id: int, pickup_name: String) -> void:
+	world_pickup_taken.emit(peer_id, pickup_name)
+	announce_pickup_taken.rpc(peer_id, pickup_name)
+
+@rpc("authority", "reliable", "call_remote")
+func announce_pickup_taken(peer_id: int, pickup_name: String) -> void:
+	world_pickup_taken.emit(peer_id, pickup_name)
+
+## Remote stun application (stapler bolt / extinguisher / roomba hits on
+## remote peers): the victim's own client applies the stun locally.
+func report_remote_stun(peer_id: int, duration: float) -> void:
+	if not _world_sync_active():
+		return
+	if is_server():
+		announce_remote_stun.rpc(peer_id, duration)
+	else:
+		relay_remote_stun.rpc_id(1, peer_id, duration)
+
+@rpc("any_peer", "reliable", "call_remote")
+func relay_remote_stun(peer_id: int, duration: float) -> void:
+	if multiplayer.is_server():
+		announce_remote_stun.rpc(peer_id, duration)
+
+@rpc("authority", "reliable", "call_remote")
+func announce_remote_stun(peer_id: int, duration: float) -> void:
+	player_stunned.emit(peer_id, duration)
+
+func send_chat(text: String) -> void:
+	text = text.strip_edges().substr(0, 120)
+	if text.is_empty():
+		return
+	var sender_name := "Player"
+	var manager = get_node_or_null("/root/GameManager")
+	if manager:
+		sender_name = manager.player_name
+	if is_server():
+		_relay_chat(multiplayer.get_unique_id(), sender_name, text)
+	else:
+		submit_chat.rpc_id(1, sender_name, text)
+
+@rpc("any_peer", "reliable", "call_remote")
+func submit_chat(sender_name: String, text: String) -> void:
+	if multiplayer.is_server():
+		var sender = multiplayer.get_remote_sender_id()
+		_relay_chat(sender, sender_name, text)
+
+func _relay_chat(peer_id: int, sender_name: String, text: String) -> void:
+	chat_message.emit(peer_id, sender_name, text)
+	announce_chat.rpc(peer_id, sender_name, text)
+
+@rpc("authority", "reliable", "call_remote")
+func announce_chat(peer_id: int, sender_name: String, text: String) -> void:
+	chat_message.emit(peer_id, sender_name, text)
+
+func _world_sync_active() -> bool:
+	return peer != null and multiplayer.multiplayer_peer != null and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED

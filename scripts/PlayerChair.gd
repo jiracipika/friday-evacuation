@@ -376,6 +376,9 @@ func _drop_trap() -> void:
 	trap.global_position = global_position + Vector3(behind_dir.x, 0, behind_dir.z) * 2.0
 	trap.global_position.y = 0.1
 	trap.owner_id = get_instance_id()
+	# Phase 5: replicate player-dropped traps to peers (no-op offline)
+	if trap.has_method("report_drop"):
+		trap.report_drop()
 
 ## Phase 4B: give the player N charges of a held item, replacing any previous one.
 func give_item(kind: StringName, charges: int) -> void:
@@ -418,6 +421,10 @@ func _use_item() -> void:
 			trap.global_position = global_position + Vector3(behind_dir.x, 0, behind_dir.z) * 2.2
 			trap.global_position.y = 0.1
 			trap.owner_id = get_instance_id()
+			# NOTE: floor-relative Y so multi-floor traps land correctly on any floor
+			trap.global_position.y = global_position.y + 0.1
+			if trap.has_method("report_drop"):
+				trap.report_drop()
 		item_cooldown = 0.35
 	else:
 		return
