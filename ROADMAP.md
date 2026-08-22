@@ -841,6 +841,19 @@ claimed from headless tests.
 
 5. **Win condition**: Last player standing, or first to claim 5 pepperoni.
 
+**STATUS: COMPLETE for the single-player slice (commit `f74a9cd`, verified).**
+Zoned pizza (crust rim / cheese plain / sauce sea at 55% speed / 10 pepperoni
+pads). Continuous-presence claims: 3s neutral, 5s steal, leaving resets
+progress. Owned pads generate cheese (+50% topping chance) every 5s; standing
+still on the cheese plain harvests +2 per 3s. E builds crust-wall forts ahead
+of the chair's facing for 5 cheese + 3 toppings. Chef walks the rim with
+accelerating speed; a rotating red pizza-cutter line sweeps every 9s
+(distance-to-line check, comedy launch elimination); olive bombs land near
+the player every 6s with a 2s fuse and 4m stun zone. Win by claiming all
+pepperoni or surviving 120s; falling off the edge eliminates. Multiplayer
+last-standing/contest mechanics remain network QA. `PizzaColonySmokeTest.gd`
+verifies 32 gameplay assertions (5/5 deterministic consecutive runs).
+
 ---
 
 ## Phase 7: MOBILE & CROSS-PLATFORM
