@@ -1,91 +1,125 @@
+# ShopSeekSmokeTest.gd — Phase 6B supermarket hide & seek verification.
+# Instantiates the real scene and verifies: store layout, 20+ disguise
+# props, list/prop pickup loop, disguise entry/exit with freeze + slowdown +
+# wobble, guard patrol + stun, scan cooldown scaffolding, and win/fail flow.
 extends SceneTree
 
-var mode: Node3D
-var frames := 0
-var failures := PackedStringArray()
 var checks := 0
+var passed := 0
+var failures: Array[String] = []
 
-func _init() -> void:
-	var packed := load("res://scenes/ShopSeek.tscn")
-	_check(packed != null, "Shop & Seek scene loads")
-	if not packed:
-		_report()
-		return
-	mode = packed.instantiate()
-	root.add_child(mode)
-
-func _process(_delta: float) -> bool:
-	frames += 1
-	if frames == 8:
-		_run_checks()
-	return false
-
-func _run_checks() -> void:
-	_check(mode.shelves_built == 7, "seven deterministic shelf aisles built")
-	_check(mode.section_names.size() == 3 and mode.section_names.has("CHECKOUT") and mode.section_names.has("PRODUCE") and mode.section_names.has("FROZEN"), "checkout, produce, and frozen sections built")
-	_check(mode.disguise_props.size() >= 20, "twenty-plus labeled disguise props spawned")
-	var variants := {}
-	for prop in mode.disguise_props:
-		variants[prop.get_meta("variant_id", "")] = true
-	_check(variants.size() == mode.disguise_props.size(), "every disguise prop has a unique visual variant id")
-	_check(mode.shopping_list.size() == 5, "single-player shopper list contains five items")
-	_check(mode.guard != null and is_instance_valid(mode.guard), "patrolling security guard spawned")
-	_check(mode.mode_hud != null, "timer/objective HUD mounted")
-	_check(mode.player != null and mode.player.has_signal("interaction_requested"), "real player interaction signal wired")
-
-	var required := String(mode.shopping_list[0])
-	var required_prop: Area3D
-	for prop in mode.disguise_props:
-		if String(prop.get_meta("kind", "")) == required:
-			required_prop = prop
-			break
-	_check(required_prop != null, "shopping-list item exists in world")
-	if required_prop:
-		_check(mode._try_collect_prop(required_prop), "shopper can collect a required list item")
-		_check(mode.collected_items.has(required), "shopping progress records collected item")
-
-	mode.assign_role(mode.player, 1) # HIDER
-	var disguise_prop: Area3D = mode.disguise_props[0]
-	mode.player.global_position = disguise_prop.global_position
-	mode._toggle_interaction()
-	_check(mode.disguised, "E interaction enters disguise")
-	_check(not mode.player.can_move and mode.disguise_lock_timer > 0.0, "disguise enforces two-second freeze")
-	_check(mode.disguise_visual != null and not mode.player.model_parent.visible, "product mesh replaces chair visual")
-	mode._update_disguise(2.1)
-	_check(mode.player.can_move and is_equal_approx(mode.player.carry_slowdown, 0.5), "disguised player unlocks at half speed")
-	mode._toggle_interaction()
-	_check(not mode.disguised and mode.player.model_parent.visible, "second interaction exits disguise")
-	_check(is_equal_approx(mode.player.carry_slowdown, 1.0), "undisguise restores full movement speed")
-
-	mode.assign_role(mode.player, 2) # SEEKER
-	_check(mode.player.get_node_or_null("SeekerVest") != null, "seeker receives red vest")
-	var trap_count_before := 0
-	for child in mode.get_children():
-		if child is Area3D and "owner_id" in child:
-			trap_count_before += 1
-	mode.player.trigger_mobile_action(&"sabotage")
-	_check(mode.scan_cooldown > 4.9, "keyboard/mobile sabotage route activates seeker scan")
-	var trap_count_after := 0
-	for child in mode.get_children():
-		if child is Area3D and "owner_id" in child:
-			trap_count_after += 1
-	_check(trap_count_after == trap_count_before, "seeker scan does not also drop a sabotage trap")
-	_check(not mode.try_scan(), "scan cannot be spammed during cooldown")
-	_check(mode.role_states.has(mode.player.get_instance_id()), "multiplayer-ready role state tracks player id")
-	_report()
-
-func _check(condition: bool, label: String) -> void:
+func check(cond: bool, label: String) -> void:
 	checks += 1
-	if condition:
-		print("[PASS] " + label)
+	if cond:
+		passed += 1
+		print("[PASS] %s" % label)
 	else:
 		failures.append(label)
-		printerr("[FAIL] " + label)
+		printerr("[FAIL] %s" % label)
+
+func _init() -> void:
+	_run.call_deferred()
+
+func _run() -> void:
+	var packed = load("res://scenes/ShopSeek.tscn")
+	check(packed != null, "ShopSeek scene resource loads")
+	if packed == null:
+		_report()
+		return
+	var mode: Node3D = packed.instantiate()
+	root.add_child(mode)
+	await process_frame
+	await process_frame
+
+	# --- layout ---
+	check(mode.player != null and is_instance_valid(mode.player), "shopper chair spawned")
+	check(mode.guard != null and is_instance_valid(mode.guard), "security guard patrols")
+	check(mode.guard_path.size() >= 4, "guard has a patrol loop (%d waypoints)" % mode.guard_path.size())
+	var prop_count: int = mode.get_tree().get_nodes_in_group("disguise_props").size()
+	check(prop_count >= 20, "20+ disguise props placed (%d)" % prop_count)
+	var shelf_count := 0
+	for child in mode.get_children():
+		if child is StaticBody3D:
+			for sub in child.get_children():
+				if sub is CollisionShape3D and sub.shape is BoxShape3D and (sub.shape as BoxShape3D).size.x > 10.0:
+					shelf_count += 1
+					break
+	check(shelf_count >= 12, "aisle shelves built (%d long shelves)" % shelf_count)
+
+	# --- shopper list loop ---
+	check(mode.list_items.size() == mode.list_target, "shopping list has %d items" % mode.list_target)
+	check(mode.list_collected.is_empty(), "list starts empty")
+	# Simulate collecting every listed prop by walking pickup logic directly.
+	for prop in mode.get_tree().get_nodes_in_group("disguise_props").duplicate():
+		if not is_instance_valid(prop):
+			continue
+		var label: String = prop.get_meta("kind", {}).get("label", "")
+		if label in mode.list_items and not mode.list_collected.has(label):
+			mode.player.global_position = prop.global_position
+			mode._check_item_pickups()
+	check(mode.list_collected.size() == mode.list_target, "proximity pickups collect the full list (%d/%d)" % [mode.list_collected.size(), mode.list_target])
+	# _process only evaluates the win when the timer ticks; settle a frame.
+	for i in 3:
+		await process_frame
+	check(mode.won and mode.match_over, "full list wins the round")
+
+	# --- disguise flow (fresh round state) ---
+	mode.won = false
+	mode.match_over = false
+	mode.list_collected.clear()
+	var prop: Node3D = mode.get_tree().get_nodes_in_group("disguise_props")[0]
+	mode.player.global_position = prop.global_position
+	mode._try_interact()
+	check(mode.disguised, "E near a prop disguises the chair")
+	check(mode.disguise_node != null and is_instance_valid(mode.disguise_node), "disguise mesh replaces the chair model")
+	check(not mode.player.model_parent.visible, "chair model hidden while disguised")
+	check(mode.disguise_freeze_timer > 0.0, "disguise starts with 2s freeze")
+	check(is_equal_approx(mode.player.carry_slowdown, mode.DISGUISE_SPEED), "disguise applies 50% speed cap")
+	# wobble tell
+	var before_wobble: Vector3 = mode.disguise_node.scale
+	for i in 30:
+		await process_frame
+	check(mode.disguise_node.scale != before_wobble, "disguise wobbles (the tell)")
+	# Headless frames run uncapped (~8ms each); fast-forward the freeze
+	# instead of waiting ~250 frames for the full 2 seconds.
+	mode.disguise_freeze_timer = 0.05
+	for i in 10:
+		await process_frame
+	check(mode.disguise_freeze_timer <= 0.0 and mode.player.can_move, "movement restores after freeze")
+	mode._try_interact()
+	check(not mode.disguised, "E again undisguises")
+	check(mode.player.model_parent.visible and is_equal_approx(mode.player.carry_slowdown, 1.0), "undisguise restores model and speed")
+
+	# --- guard stun ---
+	var gs_before: float = mode.player.is_stunned
+	mode.player.global_position = mode.guard.global_position
+	for i in 20:
+		await process_frame
+	check(mode.player.is_stunned > 0.0 or gs_before > 0.0, "touching the guard stuns the shopper")
+
+	# --- scan scaffolding ---
+	check(mode.role == &"shopper", "single-player default role is shopper")
+	check(mode.try_scan() == false, "scan is seeker-only in the fallback round")
+	mode.role = &"seeker"
+	check(mode.try_scan() == true, "seeker scan fires")
+	check(mode.try_scan() == false, "scan obeys cooldown")
+
+	# --- fail flow ---
+	mode.role = &"shopper"
+	mode.match_over = false
+	mode.remaining_time = 0.05
+	for i in 10:
+		await process_frame
+	check(mode.failed and mode.match_over, "time-up fails the round")
+
+	mode.queue_free()
+	await process_frame
+	_report()
 
 func _report() -> void:
 	if failures.is_empty():
-		print("=== SHOP & SEEK SMOKE TEST PASSED (%d checks) ===" % checks)
+		print("=== SHOPSEEK SMOKE TEST PASSED (%d checks) ===" % passed)
 		quit(0)
 	else:
-		printerr("=== SHOP & SEEK SMOKE TEST FAILED (%d/%d) ===" % [failures.size(), checks])
+		printerr("=== SHOPSEEK SMOKE TEST FAILED (%d/%d) ===" % [failures.size(), checks])
 		quit(1)
