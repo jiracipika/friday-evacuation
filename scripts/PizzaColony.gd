@@ -487,9 +487,15 @@ func _spawn_player() -> void:
 	var player_scene = load("res://scenes/PlayerChair.tscn")
 	if player_scene:
 		player = player_scene.instantiate()
-		player.position = Vector3(0, 1.5, 12)
 		player.player_display_name = "Topping"
 		add_child(player)
+		# PackedScene resources are cached across repeated scene instances in one
+		# tree. A prior eliminated chair can otherwise leak its launched transform
+		# or velocity into a fresh survival round once disabled bodies simulate
+		# physics correctly. Canonicalize after add_child so the live transform wins.
+		player.global_position = Vector3(0, 1.5, 12)
+		player.velocity = Vector3.ZERO
+		player.set_can_move(true)
 		if "suppress_action_jump" in player:
 			player.suppress_action_jump = true
 	# Phase 7A: touch controls (mobile or FE_TOUCH=1 preview)

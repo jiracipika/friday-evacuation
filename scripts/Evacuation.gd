@@ -31,6 +31,12 @@ var cam_look_target: Vector3 = Vector3.ZERO
 var camera_base_fov: float = 70.0
 var camera_shake: float = 0.0
 var camera_shake_time: float = 0.0
+var camera_initialized := false
+var camera_tracked_player_y := 0.0
+const CAMERA_DISTANCE := 7.5
+const CAMERA_HEIGHT := 4.2
+const CAMERA_LOOK_HEIGHT := 1.0
+const CAMERA_COLLISION_MARGIN := 0.35
 
 ## Nodes
 @onready var countdown_label: Label3D = $Arena/CountdownLabel
@@ -125,21 +131,33 @@ func _update_camera(delta: float) -> void:
 	if not camera:
 		return
 
-	var player_pos = local_player.global_position
-	var player_vel = local_player.velocity
-	var move_dir = Vector3(player_vel.x, 0, player_vel.z)
-	var cam_offset: Vector3
+	var player_pos: Vector3 = local_player.global_position
+	var player_vel: Vector3 = local_player.velocity
+	var move_dir := Vector3(player_vel.x, 0.0, player_vel.z)
+	var fwd: Vector3 = local_player.get_facing_direction() if local_player.has_method("get_facing_direction") else -local_player.global_transform.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
 
-	if move_dir.length() > 2.0:
-		var dir_norm = move_dir.normalized()
-		cam_offset = Vector3(-dir_norm.x * 3.0, 6.0, -dir_norm.z * 3.0)
-	else:
-		var fwd: Vector3 = local_player.get_facing_direction() if local_player.has_method("get_facing_direction") else -local_player.global_transform.basis.z
-		cam_offset = Vector3(-fwd.x * 3.0, 6.0, -fwd.z * 3.0)
+	# Follow the visible chair facing, not raw velocity. Velocity-facing cameras
+	# whip 180 degrees during a reverse and make camera-relative steering fight
+	# itself. The lower height also stays safely below the next floor (the old
+	# +6 offset placed the camera directly inside the floor slab, blacking out
+	# the entire gameplay view).
+	var target_cam_pos := player_pos - fwd * CAMERA_DISTANCE + Vector3.UP * CAMERA_HEIGHT
+	var speed := move_dir.length()
+	var look_ahead := move_dir.normalized() * minf(speed * 0.22, 2.0) if speed > 0.1 else Vector3.ZERO
+	var target_look := player_pos + Vector3.UP * CAMERA_LOOK_HEIGHT + look_ahead
+	target_cam_pos = _resolve_camera_occlusion(target_look, target_cam_pos)
 
-	var look_ahead = move_dir * 0.3
-	var target_cam_pos = player_pos + cam_offset
-	var target_look = player_pos + look_ahead
+	# Elevator teleports cross a floor slab. Snap camera state to the new floor
+	# rather than interpolating the camera through solid geometry.
+	if camera_initialized and absf(player_pos.y - camera_tracked_player_y) > 3.0:
+		camera_initialized = false
+	camera_tracked_player_y = player_pos.y
+	if not camera_initialized:
+		cam_follow_pos = target_cam_pos
+		cam_look_target = target_look
+		camera_initialized = true
 
 	var cam_lerp = 1.0 - exp(-8.0 * delta)
 	var look_lerp = 1.0 - exp(-6.0 * delta)
@@ -151,7 +169,7 @@ func _update_camera(delta: float) -> void:
 	camera.look_at(cam_look_target)
 	camera_shake = maxf(camera_shake - delta * 0.9, 0.0)
 	camera_shake_time += delta * 34.0
-	var speed_ratio = clampf(move_dir.length() / 12.0, 0.0, 1.0)
+	var speed_ratio = clampf(speed / 12.0, 0.0, 1.0)
 	camera.fov = lerpf(camera.fov, camera_base_fov + speed_ratio * 5.0, 1.0 - exp(-7.0 * delta))
 	if camera_shake > 0.0:
 		var shake_offset = Vector3(
@@ -160,6 +178,21 @@ func _update_camera(delta: float) -> void:
 			sin(camera_shake_time * 1.47) * camera_shake
 		)
 		camera.global_position += shake_offset
+
+func _resolve_camera_occlusion(origin: Vector3, desired: Vector3) -> Vector3:
+	var world := get_world_3d()
+	if world == null:
+		return desired
+	var exclude: Array[RID] = []
+	if local_player and is_instance_valid(local_player):
+		exclude.append(local_player.get_rid())
+	var query := PhysicsRayQueryParameters3D.create(origin, desired, 0xFFFFFFFF, exclude)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	var hit := world.direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return desired
+	return (hit["position"] as Vector3) + (hit["normal"] as Vector3) * CAMERA_COLLISION_MARGIN
 
 func _request_camera_shake(amount: float) -> void:
 	var a11y_shake = load("res://scripts/Accessibility.gd")
@@ -670,7 +703,9 @@ func _maybe_spawn_ghost() -> void:
 	ghost_racer.set_script(ghost_script)
 	# Course: start → each floor's far side → exit ring on floor 4
 	var course: Array[Vector3] = [
-		Vector3(0, 1.0, 0),
+		# Start in a neighboring lane so the translucent ghost does not occupy
+		# the player's chair/camera focal point during the opening countdown.
+		Vector3(-1.8, 1.0, 0),
 		Vector3(10, 0.5, 8),
 		Vector3(-8, 6.5, -6),
 		Vector3(2, 12.5, 9),
@@ -869,7 +904,7 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 			var light = OmniLight3D.new()
 			light.position = floor_pos + Vector3(x, 3.0, z)
 			light.light_color = Color(1.0, 0.92, 0.78)
-			light.light_energy = 0.75
+			light.light_energy = 1.05
 			light.omni_range = 22.0
 			light.shadow_enabled = false
 			light.light_bake_mode = OmniLight3D.BAKE_STATIC
@@ -893,7 +928,15 @@ func _setup_environment() -> void:
 	if not world or not world.environment:
 		return
 	var env = world.environment
-	env.ambient_light_energy = 0.42
+	# Preserve the dark office mood without crushing gameplay into black. The
+	# scene resource used a near-black ambient color, so increasing energy alone
+	# still left chairs, hazards, and routes unreadable on GL Compatibility.
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.72, 0.76, 0.9)
+	env.ambient_light_energy = 0.95
+	var key_light := get_node_or_null("DirectionalLight3D") as DirectionalLight3D
+	if key_light:
+		key_light.light_energy = 1.1
 	env.fog_enabled = false
 	env.glow_enabled = false
 	env.glow_strength = 0.8
@@ -1072,6 +1115,8 @@ func _spawn_player() -> void:
 func _start_countdown() -> void:
 	match_state = &"countdown"
 	timer = countdown_seconds
+	if local_player:
+		local_player.set_can_move(false)
 	if countdown_label:
 		countdown_label.text = str(int(countdown_seconds))
 		countdown_label.visible = true
@@ -1132,9 +1177,12 @@ func _spawn_traps() -> void:
 		add_child(trap)
 
 func _update_timer_display() -> void:
+	var remaining := maxf(time_limit - timer, 0.0)
+	var timer_text := "%d:%02d" % [floori(remaining / 60.0), int(remaining) % 60]
 	if timer_label:
-		var remaining = time_limit - timer
-		timer_label.text = "TIME: %d" % int(remaining)
+		timer_label.text = timer_text
+	if hud_ext and is_instance_valid(hud_ext) and hud_ext.has_method("set_timer_text"):
+		hud_ext.set_timer_text(timer_text)
 
 func _update_hud() -> void:
 	if hud_ext == null or not is_instance_valid(hud_ext):
@@ -1254,6 +1302,10 @@ func _setup_hud() -> void:
 			hud_ext.set_script(hud_script)
 			hud_ext.layer = 10
 			add_child(hud_ext)
+			# HUD.gd owns the race timer. Keeping the legacy scene label visible
+			# draws two timers on top of each other.
+			if timer_label:
+				timer_label.visible = false
 		# Caption overlay for audio-cue subtitles (no-op when disabled)
 		var overlay_script = load("res://scripts/SubtitleOverlay.gd")
 		if overlay_script and overlay_script.has_method("mount"):

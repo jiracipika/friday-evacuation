@@ -296,6 +296,14 @@ func _character_material(color: Color, roughness_value: float, emissive: bool = 
 
 func _physics_process(delta: float) -> void:
 	if not can_move:
+		# Disabling control must not disable physics. Modes use this for
+		# countdowns, disguises, remote chairs, and comedy elimination launches.
+		# set_can_move(false) clears existing momentum; an explicit impulse set
+		# afterward still needs to move the body.
+		_apply_gravity(delta)
+		move_and_slide()
+		_apply_visual_feedback(delta)
+		_smooth_facing(delta)
 		return
 
 	# Stun timer

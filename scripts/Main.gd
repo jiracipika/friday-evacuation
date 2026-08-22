@@ -34,7 +34,7 @@ const MODE_INFO = [
 	},
 ]
 
-const MODE_STATUS := ["PLAYABLE", "PLAYABLE", "SHOPPER PLAYABLE", "PROTOTYPE"]
+const MODE_STATUS := ["PLAYABLE", "DELIVERY PLAYABLE", "SHOPPER PLAYABLE", "SURVIVAL PLAYABLE"]
 
 var selected_index: int = 0
 var buttons: Array[Button] = []
@@ -74,14 +74,14 @@ func _ready() -> void:
 	$VBox.add_child(utility_row)
 	settings_button = Button.new()
 	settings_button.text = "⚙ SETTINGS"
-	settings_button.custom_minimum_size = Vector2(0, 42)
+	settings_button.custom_minimum_size = Vector2(0, 32)
 	settings_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_button.add_theme_font_size_override("font_size", 14)
 	utility_row.add_child(settings_button)
 	settings_button.pressed.connect(_open_settings)
 	credits_button = Button.new()
 	credits_button.text = "★ CREDITS"
-	credits_button.custom_minimum_size = Vector2(0, 42)
+	credits_button.custom_minimum_size = Vector2(0, 32)
 	credits_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	credits_button.add_theme_font_size_override("font_size", 14)
 	utility_row.add_child(credits_button)
@@ -110,7 +110,7 @@ func _build_mode_buttons() -> void:
 		var card_script = load("res://scripts/ModeCard.gd")
 		btn.set_script(card_script)
 		btn.configure(info.title, info.subtitle, MODE_STATUS[i], info.color)
-		btn.custom_minimum_size = Vector2(0, 62)
+		btn.custom_minimum_size = Vector2(0, 44)
 		btn.pressed.connect(_select_mode.bind(i))
 		mode_list.add_child(btn)
 		buttons.append(btn)
@@ -147,7 +147,7 @@ func _build_character_selector() -> void:
 		return
 	character_row = HBoxContainer.new()
 	character_row.name = "CharacterSelector"
-	character_row.custom_minimum_size = Vector2(0, 44)
+	character_row.custom_minimum_size = Vector2(0, 38)
 	character_row.add_theme_constant_override("separation", 10)
 	$VBox.add_child(character_row)
 	$VBox.move_child(character_row, play_button.get_index())
@@ -233,7 +233,7 @@ func _process(delta: float) -> void:
 
 func _build_menu_theme() -> void:
 	title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
-	title_label.add_theme_font_size_override("font_size", 42)
+	title_label.add_theme_font_size_override("font_size", 30)
 	subtitle_label.add_theme_font_size_override("font_size", 13)
 	desc_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	desc_label.add_theme_font_size_override("font_size", 16)

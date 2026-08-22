@@ -7,6 +7,7 @@ var phase := 0
 var elapsed := 0.0
 var interaction_count := 0
 var failures := PackedStringArray()
+var disabled_launch_start := Vector3.ZERO
 
 func _init() -> void:
 	_setup.call_deferred()
@@ -64,6 +65,14 @@ func _process(delta: float) -> bool:
 				chair.trigger_mobile_action(&"action")
 				_check(interaction_count == 1, "mobile action emits interaction when jump is repurposed")
 				_check(is_zero_approx(chair.velocity.y), "repurposed mobile action does not jump")
+				disabled_launch_start = chair.global_position
+				chair.set_can_move(false)
+				chair.velocity = Vector3(10.0, 8.0, 0.0)
+				phase = 1
+				elapsed = 0.0
+		1:
+			if elapsed >= 0.25:
+				_check(chair.global_position.x > disabled_launch_start.x + 1.0, "disabled controls still simulate explicit launch impulses")
 				_report()
 	return false
 

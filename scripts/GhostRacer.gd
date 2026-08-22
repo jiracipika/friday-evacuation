@@ -33,15 +33,23 @@ func _build_visual() -> void:
 	capsule.mesh = cap_mesh
 	var mat := StandardMaterial3D.new()
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(0.55, 0.75, 1.0, 0.35)
+	mat.albedo_color = Color(0.55, 0.75, 1.0, 0.2)
 	mat.emission_enabled = true
 	mat.emission = Color(0.35, 0.55, 1.0)
-	mat.emission_energy_multiplier = 0.6
+	mat.emission_energy_multiplier = 0.28
 	mat.no_depth_test = false
 	capsule.material_override = mat
 	capsule.position = Vector3(0, 0.9, 0)
 	add_child(capsule)
 	_mesh_parent = capsule
+	var label := Label3D.new()
+	label.text = "GHOST"
+	label.font_size = 28
+	label.outline_size = 8
+	label.modulate = Color(0.55, 0.8, 1.0, 0.85)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.position = Vector3(0, 2.0, 0)
+	add_child(label)
 
 	if not waypoints.is_empty():
 		position = waypoints[0]
