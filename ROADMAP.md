@@ -796,16 +796,17 @@ Replace the current uniform floor generation with distinct themed floors:
 	- Hiders: +1 point per 10s alive, +5 if survive full round
 	- Seekers: +3 per catch
 
-**STATUS: PLAYABLE SOFTWARE BASELINE (shopper loop complete; real multiplayer
-hide-and-seek incomplete).** Phase 6B now builds seven deterministic
-shelf aisles plus checkout, produce, and frozen sections; 24 uniquely identified
-and labeled product disguises; E-driven disguise entry/exit with a real two-second
-freeze, half-speed movement, and wobble tell; a five-item single-player shopper
-fallback with a patrolling security guard; seeker vest and Q/mobile scan with a
-five-second cooldown; and player-id role state ready for later network authority.
-`ShopSeekSmokeTest.gd` verifies 23 gameplay assertions against the real scene.
-Real-peer role assignment, infection conversion, catches, and replicated scoring
-remain Phase 5/6B network QA rather than being falsely claimed from headless tests.
+**STATUS: COMPLETE for the single-player slice (commit `c386a70`, verified).**
+Phase 6B builds seven deterministic shelf aisles plus checkout, produce, and
+frozen sections; 22 uniquely identified product disguises; E-driven disguise
+entry/exit with a real two-second freeze, half-speed movement, and wobble
+tell; a five-item single-player shopper fallback with a patrolling security
+guard that stuns on touch; seeker vest visual language on the guard; and
+role/scan state with a five-second cooldown ready for later network
+authority. `ShopSeekSmokeTest.gd` verifies 25 gameplay assertions against the
+real scene. Real-peer role assignment, infection conversion, catches, and
+replicated scoring remain Phase 5/6B network QA rather than being falsely
+claimed from headless tests.
 
 ### 6C: PIZZA COLONY — Survival
 
