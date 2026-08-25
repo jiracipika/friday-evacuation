@@ -1,0 +1,114 @@
+name: Build Friday Evacuation
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'ROADMAP.md'
+      - 'GLM_HANDOFF.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    name: Export ${{ matrix.preset }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: "macOS"
+            artifact: friday-evacuation-macos.zip
+            path: builds/friday-evacuation-macos.zip
+          - preset: "Web"
+            artifact: friday-evacuation-web
+            path: builds/friday-evacuation-web
+          - preset: "Android"
+            artifact: friday-evacuation.apk
+            path: builds/friday-evacuation.apk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        shell: bash
+        run: |
+          brew install godot@4 2>/dev/null || brew install godot || true
+          GODOT_BIN="$(brew --prefix godot)/bin/godot"
+          if [ ! -x "$GODOT_BIN" ]; then
+            curl -L -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_macos.universal.zip"
+            unzip -q /tmp/godot.zip -d /tmp/godot
+            GODOT_BIN="$(find /tmp/godot -name 'Godot' -type f | head -1)"
+            chmod +x "$GODOT_BIN"
+          fi
+          echo "GODOT_BIN=$GODOT_BIN" >> "$GITHUB_ENV"
+          "$GODOT_BIN" --version
+
+      - name: Import project resources
+        shell: bash
+        run: |
+          "$GODOT_BIN" --headless --path . --import --quit 2>&1 | tail -5 || true
+          "$GODOT_BIN" --headless --path . --script scripts/BootTest.gd 2>&1 | tail -5
+
+      - name: Install export templates
+        shell: bash
+        run: |
+          mkdir -p "$HOME/Library/Application Support/Godot/export_templates/4.7.1.stable"
+          curl -L -o /tmp/templates.tpz "https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_export_templates.tpz"
+          tar -xzf /tmp/templates.tpz --strip-components=1 -C "$HOME/Library/Application Support/Godot/export_templates/4.7.1.stable"
+          ls "$HOME/Library/Application Support/Godot/export_templates/4.7.1.stable" | head -5
+
+      - name: Android debug keystore (if needed)
+        if: matrix.preset == 'Android'
+        shell: bash
+        run: |
+          if [ ! -f ~/.android/debug.keystore ]; then
+            mkdir -p ~/.android
+            keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999
+          fi
+
+      - name: Export ${{ matrix.preset }}
+        shell: bash
+        run: |
+          mkdir -p builds
+          "$GODOT_BIN" --headless --path . --export-release "${{ matrix.preset }}" "${{ matrix.path }}" 2>&1 | tail -20
+          ls -la builds/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.path }}
+          if-no-files-found: error
+
+  release:
+    name: Attach builds to release
+    needs: export
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create/update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: continuous
+          name: Continuous Build
+          body: Automated build from ${{ github.sha }}. Assets are rebuilt on every push to main.
+          prerelease: true
+          files: |
+            artifacts/friday-evacuation-macos.zip
+            artifacts/friday-evacuation.apk
+            artifacts/friday-evacuation-web/index.html
+            artifacts/friday-evacuation-web/index.js
+            artifacts/friday-evacuation-web/index.wasm
+            artifacts/friday-evacuation-web/index.pck
