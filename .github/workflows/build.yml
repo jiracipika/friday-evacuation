@@ -76,8 +76,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p builds
-          mkdir -p builds/friday-evacuation-web
-          "$GODOT_BIN" --headless --path . --export-release "${{ matrix.preset }}" "${{ matrix.path }}" 2>&1 | tail -20
+          # No path override: each preset's export_path in export_presets.cfg
+          # is authoritative (the web preset needs its full index.html path).
+          "$GODOT_BIN" --headless --path . --export-release "${{ matrix.preset }}" 2>&1 | tail -20
           ls -la builds/
 
       - name: Upload artifact
