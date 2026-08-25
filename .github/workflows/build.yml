@@ -13,6 +13,9 @@ on:
 permissions:
   contents: write
 
+env:
+  GODOT_VERSION: 4.7.1
+
 jobs:
   export:
     name: Export ${{ matrix.preset }}
@@ -34,17 +37,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Godot
+      - name: Setup Godot (official release binary)
         shell: bash
         run: |
-          brew install godot@4 2>/dev/null || brew install godot || true
-          GODOT_BIN="$(brew --prefix godot)/bin/godot"
-          if [ ! -x "$GODOT_BIN" ]; then
-            curl -L -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_macos.universal.zip"
-            unzip -q /tmp/godot.zip -d /tmp/godot
-            GODOT_BIN="$(find /tmp/godot -name 'Godot' -type f | head -1)"
-            chmod +x "$GODOT_BIN"
-          fi
+          curl -L -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -name 'Godot' -type f | head -1)"
+          chmod +x "$GODOT_BIN"
+          # Remove macOS quarantine attr so the unsigned binary runs on the runner
+          xattr -dr com.apple.quarantine "$GODOT_BIN" || true
           echo "GODOT_BIN=$GODOT_BIN" >> "$GITHUB_ENV"
           "$GODOT_BIN" --version
 
@@ -57,10 +58,10 @@ jobs:
       - name: Install export templates
         shell: bash
         run: |
-          mkdir -p "$HOME/Library/Application Support/Godot/export_templates/4.7.1.stable"
-          curl -L -o /tmp/templates.tpz "https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_export_templates.tpz"
-          tar -xzf /tmp/templates.tpz --strip-components=1 -C "$HOME/Library/Application Support/Godot/export_templates/4.7.1.stable"
-          ls "$HOME/Library/Application Support/Godot/export_templates/4.7.1.stable" | head -5
+          mkdir -p "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          curl -L -o /tmp/templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          tar -xzf /tmp/templates.tpz --strip-components=1 -C "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          ls "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable" | head -5
 
       - name: Android debug keystore (if needed)
         if: matrix.preset == 'Android'
