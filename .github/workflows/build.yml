@@ -29,7 +29,7 @@ jobs:
             path: builds/friday-evacuation-macos.zip
           - preset: "Web"
             artifact: friday-evacuation-web
-            path: builds/friday-evacuation-web/
+            path: builds/friday-evacuation-web
           - preset: "Android"
             artifact: friday-evacuation.apk
             path: builds/friday-evacuation.apk
@@ -76,6 +76,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p builds
+          mkdir -p builds/friday-evacuation-web
           "$GODOT_BIN" --headless --path . --export-release "${{ matrix.preset }}" "${{ matrix.path }}" 2>&1 | tail -20
           ls -la builds/
 
