@@ -37,6 +37,14 @@ const CAMERA_DISTANCE := 7.5
 const CAMERA_HEIGHT := 4.2
 const CAMERA_LOOK_HEIGHT := 1.0
 const CAMERA_COLLISION_MARGIN := 0.35
+## Distance-based visibility culling for stacked-floor content (Phase 7C).
+## Whole floors 2+ floors away hide entirely; the adjacent floor keeps
+## emissive fixtures but drops its 9 OmniLights and non-emissive clutter.
+## The player's own floor always renders fully.
+var _floor_groups: Dictionary = {}  # floor_index -> Array[Node]
+var _culled_floors: Dictionary = {}  # floor_index -> bool (currently hidden)
+const CULL_HIDE_DISTANCE_FLOORS := 2
+const CULL_LIGHT_DISTANCE_FLOORS := 1
 
 ## Nodes
 @onready var countdown_label: Label3D = $Arena/CountdownLabel
@@ -107,6 +115,7 @@ func _process(delta: float) -> void:
 			pass
 
 	_update_camera(delta)
+	_update_floor_culling()
 
 ## Phase 4A: if a player falls through a floor-3 gap (or off any floor),
 ## respawn them at their last checkpoint. Watched during racing only.
@@ -166,7 +175,8 @@ func _update_camera(delta: float) -> void:
 	cam_look_target = cam_look_target.lerp(target_look, look_lerp)
 
 	camera.global_position = cam_follow_pos
-	camera.look_at(cam_look_target)
+	if not cam_follow_pos.is_equal_approx(cam_look_target):
+		camera.look_at(cam_look_target)
 	camera_shake = maxf(camera_shake - delta * 0.9, 0.0)
 	camera_shake_time += delta * 34.0
 	var speed_ratio = clampf(speed / 12.0, 0.0, 1.0)
@@ -899,6 +909,7 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 	var light_group = Node3D.new()
 	light_group.name = "CeilingLights_%s" % str(int(floor_pos.y))
 	add_child(light_group)
+	_register_floor_node(floor_index, light_group)
 	for x in [-12.0, 0.0, 12.0]:
 		for z in [-12.0, 0.0, 12.0]:
 			var light = OmniLight3D.new()
@@ -922,6 +933,45 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 			fixture_mat.emission_energy_multiplier = 1.4
 			fixture.material_override = fixture_mat
 			light_group.add_child(fixture)
+
+## Phase 7C: track per-floor visual nodes for distance culling. StaticBody3D
+## collision is NEVER hidden — hidden bodies keep colliding in Godot, but we
+## register only visual/decor groups so gameplay is untouched either way.
+func _register_floor_node(floor_index: int, node: Node) -> void:
+	if not _floor_groups.has(floor_index):
+		_floor_groups[floor_index] = [] as Array[Node]
+	(_floor_groups[floor_index] as Array[Node]).append(node)
+
+func _update_floor_culling() -> void:
+	if local_player == null or not is_instance_valid(local_player):
+		return
+	var current := _current_floor_index()
+	for floor_index in _floor_groups.keys():
+		var distance := absi(floor_index - current)
+		# Far floors: hide whole visual groups (fixtures included).
+		var should_hide := distance >= CULL_HIDE_DISTANCE_FLOORS
+		if should_hide != bool(_culled_floors.get(floor_index, false)):
+			_culled_floors[floor_index] = should_hide
+			for node in _floor_groups[floor_index]:
+				if is_instance_valid(node):
+					(node as Node).visible = not should_hide
+		# Adjacent floor: drop its OmniLights but keep emissive fixtures.
+		var should_drop_lights := distance >= CULL_LIGHT_DISTANCE_FLOORS and not should_hide
+		if should_drop_lights:
+			_set_floor_lights_enabled(floor_index, false)
+		else:
+			_set_floor_lights_enabled(floor_index, true)
+
+func _set_floor_lights_enabled(floor_index: int, enabled: bool) -> void:
+	if not _floor_groups.has(floor_index):
+		return
+	for node in _floor_groups[floor_index]:
+		if not is_instance_valid(node):
+			continue
+		for light in (node as Node).find_children("*", "OmniLight3D", true, false):
+			if (light as OmniLight3D).visible == enabled:
+				continue
+			(light as OmniLight3D).visible = enabled
 
 func _setup_environment() -> void:
 	var world = get_node_or_null("WorldEnvironment") as WorldEnvironment
