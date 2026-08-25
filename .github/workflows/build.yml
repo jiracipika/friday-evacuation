@@ -97,7 +97,7 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          path: .
           merge-multiple: true
 
       - name: Create/update release
@@ -108,6 +108,6 @@ jobs:
           body: Automated build from ${{ github.sha }}. Assets are rebuilt on every push to main.
           prerelease: true
           files: |
-            friday-evacuation-macos.zip
-            friday-evacuation.apk
-            friday-evacuation-web/*
+            ./friday-evacuation-macos.zip
+            ./friday-evacuation.apk
+            ./friday-evacuation-web/*
