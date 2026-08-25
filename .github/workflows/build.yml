@@ -29,7 +29,7 @@ jobs:
             path: builds/friday-evacuation-macos.zip
           - preset: "Web"
             artifact: friday-evacuation-web
-            path: builds/friday-evacuation-web
+            path: builds/friday-evacuation-web/
           - preset: "Android"
             artifact: friday-evacuation.apk
             path: builds/friday-evacuation.apk
@@ -89,7 +89,7 @@ jobs:
       - name: Zip web build for release
         if: matrix.preset == 'Web'
         run: |
-          cd builds && zip -qr friday-evacuation-web.zip friday-evacuation-web
+          cd builds && zip -qr friday-evacuation-web.zip friday-evacuation-web/
 
       - name: Upload web zip artifact
         if: matrix.preset == 'Web'
