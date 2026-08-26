@@ -174,6 +174,7 @@ func _process(delta: float) -> void:
 				_start_round(round_index + 1)
 		return
 	remaining_time = maxf(remaining_time - delta, 0.0)
+	load("res://scripts/FollowCamera.gd").update(get_node_or_null("Camera3D") as Camera3D, player, delta)
 	_update_carry()
 	_update_push_zones(delta)
 	_update_cargo_events(delta)

@@ -80,6 +80,7 @@ func _process(delta: float) -> void:
 		# reach into other live instances (also saves battery on clients).
 		return
 	remaining_time = maxf(remaining_time - delta, 0.0)
+	load("res://scripts/FollowCamera.gd").update(get_node_or_null("Camera3D") as Camera3D, player, delta)
 	_update_zone_speed()
 	_update_claims(delta)
 	_update_resources(delta)

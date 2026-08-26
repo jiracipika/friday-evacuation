@@ -86,6 +86,7 @@ func _process(delta: float) -> void:
 	if match_over:
 		return
 	remaining_time = maxf(remaining_time - delta, 0.0)
+	load("res://scripts/FollowCamera.gd").update(get_node_or_null("Camera3D") as Camera3D, player, delta)
 	_update_disguise(delta)
 	_update_guard(delta)
 	_update_scan_timer(delta)
