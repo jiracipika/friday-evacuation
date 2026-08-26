@@ -70,7 +70,15 @@ jobs:
           mkdir -p builds/friday-evacuation-web
           # No path override: each preset's export_path in export_presets.cfg
           # is authoritative (the web preset needs its full index.html path).
-          "$GODOT_BIN" --headless --path . --export-release "${{ matrix.preset }}" 2>&1 | tail -20
+          # NOTE: the Android signer still attempts internal release signing,
+          # fails to find a keystore and exits 1 — but the UNSIGNED APK is
+          # fully written at that point (we sign it ourselves next step), so
+          # only the missing-APK case is fatal here.
+          "$GODOT_BIN" --headless --path . --export-release "${{ matrix.preset }}" 2>&1 | tail -20 || true
+          if [ "${{ matrix.preset }}" = "Android" ] && [ ! -f builds/friday-evacuation.apk ]; then
+            echo "Android export did not produce an APK" >&2
+            exit 1
+          fi
           ls -la builds/
 
       - name: Sign Android APK (zipalign + v1/v2/v3 apksigner)
@@ -88,7 +96,7 @@ jobs:
             --ks-pass pass:android --key-pass pass:android \
             --out /tmp/signed.apk /tmp/aligned.apk
           mv /tmp/signed.apk builds/friday-evacuation.apk
-          "$AS" verify --print-certs builds/friday-evacuation.apk
+          "$AS" verify builds/friday-evacuation.apk
 
       - name: Re-sign macOS app ad-hoc and re-zip
         if: matrix.preset == 'macOS'
@@ -96,10 +104,15 @@ jobs:
         run: |
           set -euo pipefail
           cd builds
-          APP=$(find . -maxdepth 1 -name "*.app" | head -1)
+          rm -rf _resign
+          mkdir _resign
+          # The preset exports straight to a ZIP containing the .app bundle.
+          unzip -q friday-evacuation-macos.zip -d _resign
+          APP=$(find _resign -maxdepth 2 -name "*.app" | head -1)
+          test -n "$APP"
           # Ad-hoc identity replaces the stale Godot-team signature left by
-          # the export template ('--deep' keeps it simple here; main binary
-          # carries the code).
+          # the export template ('code has no resources...' -> Gatekeeper
+          # reports the app as damaged without this).
           codesign --force --deep --sign - "$APP"
           codesign --verify --deep --strict "$APP"
           rm -f friday-evacuation-macos.zip
