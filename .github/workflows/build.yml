@@ -155,6 +155,8 @@ jobs:
       - name: Deploy to Vercel
         run: |
           npm i -g vercel@latest
-          vercel deploy public --prebuilt --prod --yes --token "$VERCEL_TOKEN" --name friday-evacuation
+          # Static deployment: point vercel at the public/ directory directly
+          # (--prebuilt is only for `vercel build` output; we have raw files)
+          cd public && vercel deploy . --prod --yes --token "$VERCEL_TOKEN" --name friday-evacuation
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
