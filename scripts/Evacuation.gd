@@ -372,10 +372,15 @@ func _make_cubicle_partition() -> StaticBody3D:
 	mesh.size = Vector3(5.4, 0.8, 0.25)
 	mesh_node.mesh = mesh
 	mesh_node.position = Vector3(0, 0.4, 0)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.23, 0.29, 0.35)
-	mat.roughness = 0.9
-	mesh_node.material_override = mat
+	# Textured cubicle fabric (was dead flat color + unused inline material).
+	var helper = load("res://scripts/WallMaterials.gd")
+	if helper != null and helper.has_method("make_partition"):
+		mesh_node.material_override = helper.make_partition(randi() % 3)
+	else:
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.23, 0.29, 0.35)
+		mat.roughness = 0.9
+		mesh_node.material_override = mat
 	part.add_child(mesh_node)
 	return part
 
@@ -812,6 +817,12 @@ func _make_carpet_material(base_color: Color, floor_index: int = 0) -> StandardM
 	return mat
 
 func _make_wall_material(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
+	# Phase: textured office walls (grain + sheen bands + wainscot), cached
+	# per floor in WallMaterials. Falls back to the old flat color if the
+	# helper is unavailable (keeps standalone tests compiling).
+	var helper = load("res://scripts/WallMaterials.gd")
+	if helper != null and helper.has_method("make"):
+		return helper.make(base_color, floor_index)
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = base_color.darkened(0.3)
 	mat.roughness = 0.88
@@ -978,18 +989,33 @@ func _setup_environment() -> void:
 	if not world or not world.environment:
 		return
 	var env = world.environment
-	# Preserve the dark office mood without crushing gameplay into black. The
-	# scene resource used a near-black ambient color, so increasing energy alone
-	# still left chairs, hazards, and routes unreadable on GL Compatibility.
+	# Moody-but-readable office night: slightly cooler and dimmer than the
+	# old flat-bright wash so emissive fixtures and warm pools of light pop,
+	# while ambient stays high enough that GL Compatibility keeps chairs,
+	# hazards and routes readable.
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.72, 0.76, 0.9)
-	env.ambient_light_energy = 0.95
+	env.ambient_light_energy = 0.82
 	var key_light := get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if key_light:
-		key_light.light_energy = 1.1
+		key_light.light_energy = 1.05
+		key_light.light_color = Color(1.0, 0.93, 0.82)
+	# Fog+glow default OFF here (Settings quality gate decides at runtime;
+	# LOW profile never pays for them), but configured when enabled.
 	env.fog_enabled = false
+	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_depth_begin = 18.0
+	env.fog_depth_end = 60.0
+	env.fog_light_color = Color(0.16, 0.17, 0.24)
+	env.fog_density = 0.35
 	env.glow_enabled = false
-	env.glow_strength = 0.8
+	env.glow_strength = 0.9
+	env.glow_hdr_threshold = 1.1
+	# Filmic tonemap: free contrast/rollover improvement that keeps emissive
+	# fixtures from clipping while deepening shadows — the "office at night"
+	# grade without any post-process pass cost.
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_white = 6.0
 
 func _build_elevator(from_pos: Vector3, to_pos: Vector3, target_floor: int) -> void:
 	# Visual platform at the entry point
