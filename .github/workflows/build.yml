@@ -63,15 +63,6 @@ jobs:
           tar -xzf /tmp/templates.tpz --strip-components=1 -C "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
           ls "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable" | head -5
 
-      - name: Android debug keystore (if needed)
-        if: matrix.preset == 'Android'
-        shell: bash
-        run: |
-          if [ ! -f ~/.android/debug.keystore ]; then
-            mkdir -p ~/.android
-            keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore ~/.android/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999
-          fi
-
       - name: Export ${{ matrix.preset }}
         shell: bash
         run: |
@@ -81,6 +72,39 @@ jobs:
           # is authoritative (the web preset needs its full index.html path).
           "$GODOT_BIN" --headless --path . --export-release "${{ matrix.preset }}" 2>&1 | tail -20
           ls -la builds/
+
+      - name: Sign Android APK (zipalign + v1/v2/v3 apksigner)
+        if: matrix.preset == 'Android'
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+          BT=$(ls "$SDK/build-tools" | sort -V | tail -1)
+          ZA="$SDK/build-tools/$BT/zipalign"; AS="$SDK/build-tools/$BT/apksigner"
+          cp android/debug.keystore "$HOME/.android/fe_debug.keystore"
+          # zipalign MUST run before signing or the v2 signature breaks.
+          "$ZA" -f 4 builds/friday-evacuation.apk /tmp/aligned.apk
+          "$AS" sign --ks "$HOME/.android/fe_debug.keystore" --ks-key-alias androiddebugkey \
+            --ks-pass pass:android --key-pass pass:android \
+            --out /tmp/signed.apk /tmp/aligned.apk
+          mv /tmp/signed.apk builds/friday-evacuation.apk
+          "$AS" verify --print-certs builds/friday-evacuation.apk
+
+      - name: Re-sign macOS app ad-hoc and re-zip
+        if: matrix.preset == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd builds
+          APP=$(find . -maxdepth 1 -name "*.app" | head -1)
+          # Ad-hoc identity replaces the stale Godot-team signature left by
+          # the export template ('--deep' keeps it simple here; main binary
+          # carries the code).
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict "$APP"
+          rm -f friday-evacuation-macos.zip
+          ditto -c -k --keepParent "$APP" friday-evacuation-macos.zip
+          shasum -a 256 friday-evacuation-macos.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
