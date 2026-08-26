@@ -10,6 +10,9 @@ on:
       - 'docs/**'
   workflow_dispatch:
 
+env:
+  GODOT_VERSION: 4.7.1
+
 permissions:
   contents: write
 
@@ -127,3 +130,34 @@ jobs:
             ./friday-evacuation-macos.zip
             ./friday-evacuation.apk
             ./friday-evacuation-web.zip
+
+  deploy-web:
+    name: Deploy web build to Vercel
+    needs: export
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Download web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: friday-evacuation-web
+          path: public
+          merge-multiple: true
+
+      - name: Add COOP/COEP headers for threads
+        run: |
+          # Godot 4 web builds benefit from cross-origin isolation headers
+          cat > public/_headers <<'EOF'
+          /*
+            Cross-Origin-Opener-Policy: same-origin
+            Cross-Origin-Embedder-Policy: credentialless
+            Cross-Origin-Resource-Policy: cross-origin
+          EOF
+          ls public/
+
+      - name: Deploy to Vercel
+        run: |
+          npm i -g vercel@latest
+          vercel deploy public --prebuilt --prod --yes --token "$VERCEL_TOKEN" --name friday-evacuation
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
