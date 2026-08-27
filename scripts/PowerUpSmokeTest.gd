@@ -64,7 +64,11 @@ func _run_tests() -> void:
 	trap2.queue_free()
 
 	# --- 3. PlayerChair give_item / _use_item ----------------------------
+	# Park the chair AWAY from the origin: pickups spawn near (0,0,0) in
+	# step 4 and an overlapping chair would instantly collect them
+	# (body_entered -> queue_free mid-loop -> freed-instance crash/hang).
 	var chair = ChairScene.instantiate()
+	chair.position = Vector3(0, 1.0, 40)
 	test_root.add_child(chair)
 	await physics_frame
 	check(chair.item_kind == &"none" and chair.item_charges == 0, "chair starts with no item")
@@ -102,8 +106,13 @@ func _run_tests() -> void:
 	# --- 4. Pickup nodes of every kind build cleanly ---------------------
 	for kind_key in PowerUp.WEIGHTS:
 		var pu = PowerUp.create(kind_key)
+		pu.position = Vector3(1000, 1.0, 1000)   # isolation: no chair overlap
+		pu.set_meta("no_autodespawn", true)
 		test_root.add_child(pu)
 		await process_frame
+		if not is_instance_valid(pu):
+			check(false, "pickup %s survived its build frame" % PowerUp.KIND_NAMES[kind_key])
+			continue
 		var label3d: Label3D = null
 		for child in pu.get_children():
 			if child is Label3D:
@@ -115,7 +124,7 @@ func _run_tests() -> void:
 				has_collision = true
 		check(has_collision, "pickup %s has collision shape" % PowerUp.KIND_NAMES[kind_key])
 		pu.queue_free()
-	await process_frame
+		await process_frame
 
 	# --- 5. HUD set_item / set_boost ------------------------------------
 	var hud_layer = CanvasLayer.new()

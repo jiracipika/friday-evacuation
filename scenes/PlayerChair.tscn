@@ -44,6 +44,8 @@ text = "Player"
 font_size = 48
 outline_size = 12
 billboard = 1
+no_depth_test = true
+render_priority = 10
 
 [node name="BoostParticles" type="GPUParticles3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -0.5)

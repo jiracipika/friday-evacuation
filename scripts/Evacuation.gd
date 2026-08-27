@@ -223,9 +223,16 @@ func _on_network_player_connected(peer_id: int, player_name: String) -> void:
 	if network_node and network_node.has_method("get_player_color"):
 		remote.player_color = network_node.get_player_color(peer_id)
 	remote.set_can_move(false)
+	remote.position = _slot_for_peer(int(peer_id))
 	remote.name = "Remote_%d" % peer_id
 	add_child(remote)
 	remote_players[peer_id] = remote
+
+func _own_peer_id() -> int:
+	var network = get_node_or_null("/root/Network")
+	if network and network.peer:
+		return network.multiplayer.get_unique_id()
+	return 1
 
 func _on_network_player_disconnected(peer_id: int) -> void:
 	var remote = remote_players.get(peer_id)
@@ -1285,12 +1292,34 @@ func _spawn_powerups() -> void:
 
 # --- PLAYER SPAWN ---
 
+## Deterministic start slots: two staggered rows behind the origin line.
+## Slot index derives from peer id ordering, so every machine assigns the
+## SAME slot to the same peer without extra syncing.
+const START_SLOTS := [
+	Vector3(0, 1.0, 0), Vector3(-2.5, 1.0, 2.0), Vector3(2.5, 1.0, 2.0),
+	Vector3(-5.0, 1.0, 4.0), Vector3(0.0, 1.0, 4.0), Vector3(5.0, 1.0, 4.0),
+	Vector3(-7.5, 1.0, 6.0), Vector3(7.5, 1.0, 6.0),
+]
+
+func _slot_for_peer(peer_id: int) -> Vector3:
+	var network = get_node_or_null("/root/Network")
+	var ids: Array = []
+	if network and not network.connected_players.is_empty():
+		ids = network.connected_players.keys()
+	else:
+		ids = [1]
+	ids.sort_custom(func(a, b): return int(a) < int(b))
+	var idx := ids.find(peer_id)
+	if idx < 0:
+		idx = 0
+	return START_SLOTS[idx % START_SLOTS.size()]
+
 func _spawn_player() -> void:
 	var player_scene = load("res://scenes/PlayerChair.tscn")
 	if not player_scene:
 		return
 	local_player = player_scene.instantiate()
-	local_player.position = Vector3(0, 1.0, 0)
+	local_player.position = _slot_for_peer(_own_peer_id())
 	var gm = get_node_or_null("/root/GameManager")
 	if gm:
 		local_player.player_display_name = gm.player_name
@@ -1302,7 +1331,7 @@ func _spawn_player() -> void:
 		mobile_controls.bind_local_chair(local_player)
 	# Phase 4A: floor 1 spawn is the initial respawn checkpoint
 	if "respawn_point" in local_player:
-		local_player.respawn_point = Vector3(0, 1.0, 0)
+		local_player.respawn_point = local_player.position
 	players.append({"id": 1, "name": local_player.player_display_name})
 
 # --- GAME FLOW ---
