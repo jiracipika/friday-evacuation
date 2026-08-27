@@ -3,6 +3,7 @@
 extends CharacterBody3D
 
 signal shake_requested(amount: float)
+signal stunned  # emitted on any stun (trap/roomba/debris) for announcer hooks
 signal interaction_requested
 signal sabotage_requested
 
@@ -633,6 +634,7 @@ func stun(duration: float) -> void:
 	target_squash = 0.82
 	shake_requested.emit(0.1)
 	_play_sfx("trap")
+	stunned.emit()
 	# Platform-safe no-op on desktop; tactile feedback on Android/iOS.
 	Input.vibrate_handheld(60)
 	var a11y = load("res://scripts/Accessibility.gd")

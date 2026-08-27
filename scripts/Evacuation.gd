@@ -23,6 +23,7 @@ var traps_placed: int = 0
 var sp_modifiers: bool = false
 var new_personal_best: bool = false
 var ghost_racer: Node3D
+var announcer: Node = null
 var hazards: Node3D  # Phase 4C Hazards controller
 
 ## Smooth camera state
@@ -64,6 +65,8 @@ func _ready() -> void:
 	camera_base_fov = camera.fov if camera else 70.0
 	if local_player and local_player.has_signal("shake_requested"):
 		local_player.shake_requested.connect(_request_camera_shake)
+	if local_player and local_player.has_signal("stunned"):
+		local_player.stunned.connect(func(): _announcer().say("trap", _const_lines("TRAP_HIT_LINES")))
 	var network = get_node_or_null("/root/Network")
 	if network:
 		network.remote_player_state.connect(_on_remote_player_state)
@@ -122,6 +125,9 @@ func _process(delta: float) -> void:
 					var sync_rot: float = local_player.model_parent.rotation.y if "model_parent" in local_player and local_player.model_parent else 0.0
 					network.broadcast_player_state(local_player.global_position, local_player.velocity, sync_rot)
 			if finish_order.size() >= players.size() or timer >= time_limit:
+				if timer >= time_limit and finish_order.size() < players.size():
+					# Timed out before finishing: sassy loss line.
+					_announcer().say("misc", _const_lines("LOSE_LINES"), true)
 				_end_race()
 		&"finished":
 			pass
@@ -1369,11 +1375,25 @@ func _start_race() -> void:
 	var a11y = load("res://scripts/Accessibility.gd")
 	if a11y:
 		a11y.caption("GO!", 1.0)
+	_announcer().say("misc", _const_lines("START_LINES"), true)
 	if local_player:
 		local_player.set_can_move(true)
 	_spawn_traps()
 	if hazards and hazards.has_method("start_race"):
 		hazards.start_race()
+
+## Lazily mount the race announcer (a11y caption hype).
+func _announcer() -> Node:
+	if announcer == null or not is_instance_valid(announcer):
+		var AnnouncerScript = load("res://scripts/Announcer.gd")
+		announcer = AnnouncerScript.mount(self)
+	return announcer
+
+## Fetch a String array constant off Announcer.gd by name (avoids needing
+## the class_name global at parse time in this standalone-checked file).
+func _const_lines(const_name: String) -> Array:
+	var AnnouncerScript = load("res://scripts/Announcer.gd")
+	return AnnouncerScript.get(const_name)
 
 func _spawn_traps() -> void:
 	var manager = get_node_or_null("/root/GameManager")
@@ -1454,7 +1474,8 @@ func _on_player_reached_exit(body: Node3D) -> void:
 		var a11y = load("res://scripts/Accessibility.gd")
 		if a11y:
 			a11y.caption("FINISH!", 2.0)
-	_end_race()
+		_announcer().say("misc", _const_lines("WIN_LINES"), true)
+		_end_race()
 
 func _end_race() -> void:
 	if match_state == &"finished":
