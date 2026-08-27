@@ -27,6 +27,7 @@ signal lan_host_found(address: String, name: String, player_count: int)
 signal remote_player_state(peer_id: int, position: Vector3, velocity: Vector3, rot_y: float)
 signal player_ready_changed(peer_id: int, is_ready: bool)
 signal match_started()
+var match_running := false   # set on begin_match; late joiners skip lobby
 signal world_trap_dropped(peer_id: int, position: Vector3, trap_type: String, forced: bool)
 signal world_pickup_taken(peer_id: int, pickup_name: String)
 signal player_stunned(peer_id: int, duration: float)
@@ -125,6 +126,8 @@ func _on_connected_to_server() -> void:
 	var ccolor: String = manager.player_color.to_html(false) if manager else Color(0.4, 0.8, 1.0).to_html(false)
 	submit_identity.rpc_id(1, cname, ccolor)
 	request_roster.rpc_id(1)
+	# Late-join: ask the host whether a match is already running.
+	request_match_state.rpc_id(1)
 	print("[NET] Connected to LAN host")
 
 ## Clients send their chosen name/color once connected; server stores and
@@ -163,6 +166,13 @@ func _start_discovery(as_host: bool) -> void:
 		if bind_err != OK:
 			# A second local game instance may already own the port; fall back to an ephemeral port for direct testing.
 			discovery_socket.bind(0)
+	else:
+		# Bind ONCE up front with a loud error: silent dead advertising made
+		# hosts invisible on LAN while looking perfectly normal locally.
+		var bind_err = discovery_socket.bind(DISCOVERY_PORT)
+		if bind_err != OK:
+			push_error("[NET] Cannot bind discovery UDP %d (another instance/app owns it?) — LAN SCAN WILL NOT FIND THIS HOST. Friends can still JOIN by typing this machine's IP: %s" % [DISCOVERY_PORT, local_ip()])
+			host_address = local_ip()
 
 func _stop_discovery() -> void:
 	discovery_active = false
@@ -174,6 +184,18 @@ func _request_host_discovery() -> void:
 		return
 	discovery_socket.set_dest_address("255.255.255.255", DISCOVERY_PORT)
 	discovery_socket.put_packet("FRIDAY5PM_DISCOVER".to_utf8_buffer())
+
+## Best-effort local IPv4 (first private-range address), "" if unavailable.
+static func local_ip() -> String:
+	for addr in IP.get_local_addresses():
+		var s := String(addr)
+		if s.begins_with("192.168.") or s.begins_with("10.") \
+				or s.begins_with("172.16.") or s.begins_with("172.17.") \
+				or s.begins_with("172.18.") or s.begins_with("172.19.") \
+				or s.begins_with("172.2") or s.begins_with("172.30.") \
+				or s.begins_with("172.31."):
+			return s
+	return ""
 
 func _advertise_host() -> void:
 	if not discovery_socket.is_bound():
@@ -244,6 +266,18 @@ func start_match() -> bool:
 
 @rpc("authority", "reliable", "call_local")
 func begin_match() -> void:
+	match_running = true
+	match_started.emit()
+
+## Called by a client right after connecting: if the host is mid-match,
+## drop the new peer straight into the race instead of the dead lobby.
+@rpc("any_peer", "reliable", "call_remote")
+func request_match_state() -> void:
+	if multiplayer.is_server() and match_running:
+		confirm_match_state.rpc_id(multiplayer.get_remote_sender_id())
+
+@rpc("authority", "reliable", "call_remote")
+func confirm_match_state() -> void:
 	match_started.emit()
 
 @rpc("any_peer", "reliable", "call_remote")
