@@ -67,6 +67,12 @@ func _ready() -> void:
 		local_player.shake_requested.connect(_request_camera_shake)
 	if local_player and local_player.has_signal("stunned"):
 		local_player.stunned.connect(func(): _announcer().say("trap", _const_lines("TRAP_HIT_LINES")))
+	# Panic-cam: PiP of the rider's own face while boosting/stunned.
+	# Mounted onto the HUD CanvasLayer so it inherits HUD layering (above
+	# the 3D view) instead of fighting scene-space UI.
+	var PanicCamScript = load("res://scripts/PanicCam.gd")
+	if PanicCamScript and hud:
+		PanicCamScript.mount(hud, local_player)
 	var network = get_node_or_null("/root/Network")
 	if network:
 		network.remote_player_state.connect(_on_remote_player_state)
@@ -1111,13 +1117,15 @@ func _setup_environment() -> void:
 	env.tonemap_white = 6.0
 	# Vignette: cheap post-process edge darkening that focuses the read on
 	# the arena center; gated by quality (LOW keeps it off for mobile GPUs).
+	# NOTE: `vignette_enabled` doesn't exist on Environment in GL Compatibility
+	# (movie-maker/compat renderer) — guard the property's existence.
 	var vignette := GradientTexture1D.new()
 	var grad := Gradient.new()
 	grad.set_color(0, Color(1, 1, 1, 1))
 	grad.set_color(1, Color(0.42, 0.44, 0.52, 1))
 	vignette.gradient = grad
-	env.vignette_enabled = _quality_allows_post()
-	if env.vignette_enabled:
+	if _quality_allows_post() and "vignette_enabled" in env:
+		env.vignette_enabled = true
 		env.vignette = vignette
 	_spawn_dust_motes()
 
@@ -1141,13 +1149,11 @@ func _spawn_dust_motes() -> void:
 		motes.lifetime = 7.0
 		motes.preprocess = 6.0     # start already-spread, no visible burst-in
 		motes.position = Vector3(0, float(floor_index) * 6.0 + 2.2, 0)
-		motes.draw_pass_1 = QuadMesh.new()
 		var mesh_mat := StandardMaterial3D.new()
 		mesh_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mesh_mat.albedo_color = Color(1.0, 0.98, 0.9, 0.45)
 		mesh_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		mesh_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		(motes.draw_pass_1 as QuadMesh).material = mesh_mat
 		mat_res.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
 		mat_res.emission_box_extents = Vector3(17, 1.4, 17)
 		mat_res.direction = Vector3(0.15, -1, 0)
@@ -1157,6 +1163,13 @@ func _spawn_dust_motes() -> void:
 		mat_res.initial_velocity_max = 0.22
 		mat_res.scale_min = 0.02
 		mat_res.scale_max = 0.06
+		# GL Compatibility quirk: QuadMesh particles ignore process-material
+		# scale unless the mesh itself is tiny — a 1m quad renders as a
+		# window-sized billboard (the "floating gray cards" bug).
+		var mote_mesh := QuadMesh.new()
+		mote_mesh.size = Vector2(0.04, 0.04)
+		mote_mesh.material = mesh_mat
+		motes.draw_pass_1 = mote_mesh
 		motes.process_material = mat_res
 		add_child(motes)
 
