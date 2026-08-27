@@ -122,6 +122,8 @@ func _ready() -> void:
 		network.connection_failed.connect(_on_failed)
 		network.player_connected.connect(_on_player_changed)
 		network.player_disconnected.connect(_on_player_disconnected)
+		if not multiplayer.is_server():
+			multiplayer.server_disconnected.connect(_on_host_lost)
 		network.player_ready_changed.connect(_on_ready_changed)
 		network.lan_host_found.connect(_on_lan_host_found)
 		network.match_started.connect(_on_match_started)
@@ -221,6 +223,11 @@ func _on_player_changed(_peer_id: int, _name: String) -> void:
 	_refresh_players()
 
 func _on_player_disconnected(_peer_id: int) -> void:
+	_refresh_players()
+
+func _on_host_lost() -> void:
+	status_label.text = "HOST DISCONNECTED"
+	network.close_connection()
 	_refresh_players()
 
 func _refresh_players() -> void:

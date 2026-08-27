@@ -69,6 +69,8 @@ func _ready() -> void:
 		network.remote_player_state.connect(_on_remote_player_state)
 		network.player_connected.connect(_on_network_player_connected)
 		network.player_disconnected.connect(_on_network_player_disconnected)
+		if not multiplayer.is_server():
+			multiplayer.server_disconnected.connect(_on_host_lost)
 		if network.has_signal("world_trap_dropped"):
 			network.world_trap_dropped.connect(_on_world_trap_dropped)
 		if network.has_signal("world_pickup_taken"):
@@ -78,6 +80,15 @@ func _ready() -> void:
 		for peer_id in network.connected_players:
 			if int(peer_id) != multiplayer.get_unique_id():
 				_on_network_player_connected(int(peer_id), network.connected_players[peer_id])
+
+## Host vanished mid-race: don't strand the client in a dead simulation —
+## caption what happened and bounce back to the main menu after a beat.
+func _on_host_lost() -> void:
+	_remote_event_caption("HOST DISCONNECTED — returning to menu")
+	var timer := get_tree().create_timer(2.0)
+	timer.timeout.connect(func():
+		if is_inside_tree():
+			_on_back_to_menu())
 
 	var exit_zone = $Arena/ExitZone
 	if exit_zone:
