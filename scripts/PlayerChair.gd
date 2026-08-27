@@ -238,9 +238,27 @@ func _build_rider_model(chair_root: Node3D) -> void:
 	head.material_override = _character_material(Color("f0b58f"), 0.8)
 	rider_root.add_child(head)
 
+	# Comedy face decal + googly eyes (FaceStudio; fallback-safe).
+	var face_lib = load("res://scripts/FaceStudio.gd")
+	if face_lib != null and face_lib.has_method("variant_for"):
+		var variant: String = face_lib.variant_for(character_id)
+		var decal := MeshInstance3D.new()
+		decal.name = "FaceDecal"
+		var decal_mesh := SphereMesh.new()
+		decal_mesh.radius = 0.245
+		decal_mesh.height = 0.49
+		decal.mesh = decal_mesh
+		decal.position = Vector3(0, 1.48, -0.026)
+		decal.material_override = face_lib.make_head_overlay(variant)
+		rider_root.add_child(decal)
+		_googly_eyes(rider_root, face_lib)
+		for n in rider_root.find_children("LegacyEye*", "MeshInstance3D", true, false):
+			n.visible = false
+
 	# Two high-contrast eyes keep faces readable at gameplay distance.
 	for eye_x in [-0.085, 0.085]:
 		var eye := MeshInstance3D.new()
+		eye.name = "LegacyEye"
 		var eye_mesh := SphereMesh.new()
 		eye_mesh.radius = 0.035
 		eye_mesh.height = 0.07
@@ -284,6 +302,52 @@ func _build_character_accessory(parent: Node3D, accessory: String, color: Color)
 	item.material_override = _character_material(color, 0.45, true)
 	parent.add_child(item)
 
+## Googly eyes: textured spheres in front of the face decal; pupils wobble
+## on a spring-damper reacting to chair acceleration (comedy centerpiece).
+var _googly_velocity: Vector2 = Vector2.ZERO
+var _googly_offsets: Vector2 = Vector2.ZERO
+var _prev_velocity: Vector3 = Vector3.ZERO
+
+func _googly_eyes(parent: Node3D, face_lib) -> void:
+	for side in [-1.0, 1.0]:
+		var g := MeshInstance3D.new()
+		g.name = "GooglyEye_%s" % ("L" if side < 0 else "R")
+		var gm := SphereMesh.new()
+		gm.radius = 0.055
+		gm.height = 0.11
+		g.mesh = gm
+		var mat := StandardMaterial3D.new()
+		mat.albedo_texture = face_lib.googly_texture(0.0)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		mat.alpha_scissor_threshold = 0.5
+		mat.roughness = 0.25
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		g.material_override = mat
+		g.position = Vector3(side * 0.085, 1.54, -0.225)
+		parent.add_child(g)
+
+func _update_googly_eyes(delta: float) -> void:
+	if rider_root == null or not is_instance_valid(rider_root):
+		return
+	var accel := (velocity - _prev_velocity) / maxf(delta, 0.001)
+	_prev_velocity = velocity
+	var target := Vector2(
+		clampf(-accel.dot(global_transform.basis.x) * 0.0006, -0.010, 0.010),
+		clampf(-accel.y * 0.00015, -0.008, 0.008))
+	var boost_scale := 2.4 if is_boosting else 1.0
+	var stiffness := 90.0
+	var damping := 12.0
+	_googly_velocity += (target - _googly_offsets) * stiffness * delta
+	_googly_velocity *= maxf(1.0 - damping * delta, 0.0)
+	_googly_offsets += _googly_velocity * delta
+	var face_lib = load("res://scripts/FaceStudio.gd")
+	if face_lib == null or not face_lib.has_method("googly_texture"):
+		return
+	var tex: ImageTexture = face_lib.googly_texture(_googly_offsets.x * 200.0 * boost_scale)
+	for g in rider_root.find_children("GooglyEye*", "MeshInstance3D", true, false):
+		if is_instance_valid(g):
+			(g as MeshInstance3D).material_override.albedo_texture = tex
+
 func _character_material(color: Color, roughness_value: float, emissive: bool = false) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
@@ -303,6 +367,7 @@ func _physics_process(delta: float) -> void:
 		_apply_gravity(delta)
 		move_and_slide()
 		_apply_visual_feedback(delta)
+		_update_googly_eyes(delta)
 		_smooth_facing(delta)
 		return
 
@@ -316,6 +381,7 @@ func _physics_process(delta: float) -> void:
 		_apply_friction(delta)
 		move_and_slide()
 		_apply_visual_feedback(delta)
+		_update_googly_eyes(delta)
 		return
 	else:
 		if model_parent:
@@ -355,6 +421,7 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_apply_visual_feedback(delta)
+	_update_googly_eyes(delta)
 	if dust_particles:
 		dust_particles.emitting = is_on_floor() and Vector2(velocity.x, velocity.z).length() > 4.0 and not is_boosting
 

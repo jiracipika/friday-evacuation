@@ -92,6 +92,7 @@ func _ready() -> void:
 			menu.pressed.connect(_on_back_to_menu)
 
 func _process(delta: float) -> void:
+	_tick_light_flicker(delta)
 	match match_state:
 		&"countdown":
 			timer -= delta
@@ -933,6 +934,7 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 	light_group.name = "CeilingLights_%s" % str(int(floor_pos.y))
 	add_child(light_group)
 	_register_floor_node(floor_index, light_group)
+	_build_ceiling_grid(floor_pos, light_group)
 	for x in [-12.0, 0.0, 12.0]:
 		for z in [-12.0, 0.0, 12.0]:
 			var light = OmniLight3D.new()
@@ -956,6 +958,61 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 			fixture_mat.emission_energy_multiplier = 1.4
 			fixture.material_override = fixture_mat
 			light_group.add_child(fixture)
+			# Flicker: a few fixtures buzz irregularly (Lethal Company vibe).
+			if (x + z) == 0.0 or (x == 12.0 and z == -12.0):
+				fixture.set_meta("flicker", true)
+
+var _flicker_t := 0.0
+var _flicker_fixtures: Array = []
+func _process_flicker(delta: float) -> void:
+	pass
+
+## Irregular fluorescent buzz on flagged fixtures — cheap dread.
+func _tick_light_flicker(delta: float) -> void:
+	_flicker_t -= delta
+	if _flicker_t > 0.0:
+		return
+	if _flicker_fixtures.is_empty():
+		for f in find_children("*", "MeshInstance3D", true, false):
+			if f.has_meta("flicker"):
+				_flicker_fixtures.append(f)
+		if _flicker_fixtures.is_empty():
+			return
+	_flicker_t = randf_range(1.2, 4.0)
+	var target = _flicker_fixtures[randi() % _flicker_fixtures.size()]
+	if not is_instance_valid(target):
+		return
+	var mat: StandardMaterial3D = target.material_override
+	var tw := create_tween()
+	tw.tween_callback(func(): mat.emission_energy_multiplier = 0.15)
+	tw.tween_interval(randf_range(0.04, 0.12))
+	tw.tween_callback(func(): mat.emission_energy_multiplier = 1.4)
+	tw.tween_interval(randf_range(0.03, 0.09))
+	tw.tween_callback(func(): mat.emission_energy_multiplier = 0.3)
+	tw.tween_interval(0.05)
+	tw.tween_callback(func(): mat.emission_energy_multiplier = 1.4)
+
+## Drop-ceiling grid: dark T-bar panels between light fixtures.
+func _build_ceiling_grid(floor_pos: Vector3, parent: Node3D) -> void:
+	var grid_mat = StandardMaterial3D.new()
+	grid_mat.albedo_color = Color(0.09, 0.09, 0.11)
+	grid_mat.roughness = 0.95
+	for x in [-20.0, -8.0, 8.0, 20.0]:
+		var bar_x = MeshInstance3D.new()
+		var bm_x = BoxMesh.new()
+		bm_x.size = Vector3(0.25, 0.08, 40)
+		bar_x.mesh = bm_x
+		bar_x.material_override = grid_mat
+		bar_x.position = floor_pos + Vector3(x, 2.97, 0)
+		parent.add_child(bar_x)
+	for z in [-20.0, -8.0, 8.0, 20.0]:
+		var bar_z = MeshInstance3D.new()
+		var bm_z = BoxMesh.new()
+		bm_z.size = Vector3(40, 0.08, 0.25)
+		bar_z.mesh = bm_z
+		bar_z.material_override = grid_mat
+		bar_z.position = floor_pos + Vector3(0, 2.97, z)
+		parent.add_child(bar_z)
 
 ## Phase 7C: track per-floor visual nodes for distance culling. StaticBody3D
 ## collision is NEVER hidden — hidden bodies keep colliding in Godot, but we

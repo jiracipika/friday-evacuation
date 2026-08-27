@@ -62,6 +62,14 @@ static func wall_albedo(floor_index: int) -> ImageTexture:
 				col = Color(col.r + band, col.g + band, col.b + band)
 			if stud and not baseboard:
 				col = col.darkened(0.22)
+			# Grunge: faint drip stains under the trim line and dark scuffs
+			# at wainscot level — office decay, structural enough for mips.
+			var u := float(x) / float(TEX_W)
+			var vg := float(y) / float(TEX_H)
+			if not baseboard and sin(u * TAU * 3.0 + float(key) * 2.0) > 0.86 and vg < 0.45:
+				col = col.darkened(0.18)
+			if not baseboard and vg > 0.80 and (x / 23) % 7 == 0:
+				col = col.darkened(0.22)
 			# Fine grain stays modest: noise mostly vanishes under mips.
 			var n := (rng.randf() - 0.5) * (0.16 if wainscot else 0.09)
 			col = Color(
