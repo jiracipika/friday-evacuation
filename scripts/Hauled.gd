@@ -473,9 +473,16 @@ func _build_static_level() -> void:
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(60, 0.2, 60)
 	mesh_inst.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.2, 0.15, 0.12)
-	mat.roughness = 0.9
+	# Warehouse dock concrete via SurfaceLibrary; flat fallback keeps
+	# standalone tests compiling.
+	var slib = load("res://scripts/SurfaceLibrary.gd")
+	var mat: StandardMaterial3D
+	if slib != null and slib.has_method("make_dock_floor"):
+		mat = slib.make_dock_floor()
+	else:
+		mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(0.2, 0.15, 0.12)
+		mat.roughness = 0.9
 	mesh_inst.material_override = mat
 	floor_node.add_child(mesh_inst)
 	# Perimeter walls (keep cargo on the map)

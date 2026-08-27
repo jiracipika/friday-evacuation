@@ -308,9 +308,15 @@ func _build_supermarket() -> void:
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(56, 0.2, 56)
 	mesh_inst.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.18, 0.18, 0.2)
-	mat.roughness = 0.9
+	# Retail lino via SurfaceLibrary; flat fallback keeps standalone tests ok.
+	var slib = load("res://scripts/SurfaceLibrary.gd")
+	var mat: StandardMaterial3D
+	if slib != null and slib.has_method("make_market_floor"):
+		mat = slib.make_market_floor()
+	else:
+		mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(0.18, 0.18, 0.2)
+		mat.roughness = 0.9
 	mesh_inst.material_override = mat
 	floor_node.add_child(mesh_inst)
 	# Perimeter walls

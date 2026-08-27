@@ -420,9 +420,15 @@ func _build_pizza() -> void:
 	mesh.bottom_radius = PIZZA_R - CRUST_W
 	mesh.height = 0.5
 	mi.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.92, 0.78, 0.35)
-	mat.roughness = 0.9
+	# Melted-cheese texture via SurfaceLibrary; flat fallback for tests.
+	var slib = load("res://scripts/SurfaceLibrary.gd")
+	var mat: StandardMaterial3D
+	if slib != null and slib.has_method("make_cheese_surface"):
+		mat = slib.make_cheese_surface()
+	else:
+		mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(0.92, 0.78, 0.35)
+		mat.roughness = 0.9
 	mi.material_override = mat
 	pizza.add_child(mi)
 	add_child(pizza)
