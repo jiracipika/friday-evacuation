@@ -19,3 +19,6 @@ Thumbs.db
 *.apk
 *.aab
 *.ipa
+
+# graphify output (regenerable, machine-local)
+graphify-out/
