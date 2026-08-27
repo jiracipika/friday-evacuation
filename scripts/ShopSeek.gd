@@ -5,7 +5,7 @@
 # exist on the mode for future seeker/hider replication.
 extends Node3D
 
-const ROUND_TIME := 60.0
+const ROUND_TIME := 90.0
 const DISGUISE_FREEZE := 2.0
 const DISGUISE_SPEED := 0.5
 const INTERACT_RANGE := 2.4
@@ -194,7 +194,13 @@ func _pick_shopper_list() -> void:
 	var pool: Array[String] = []
 	for k in DISGUISE_KINDS:
 		pool.append(k["label"])
-	pool.shuffle()
+	# Deterministic shuffle via our seeded rng (global shuffle made every
+	# session's list different -> unstable difficulty + unauditable runs).
+	for i in range(pool.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp: String = pool[i]
+		pool[i] = pool[j]
+		pool[j] = tmp
 	for i in range(list_target):
 		list_items.append(pool[i])
 
