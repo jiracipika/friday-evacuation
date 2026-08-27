@@ -783,6 +783,12 @@ func _build_floor_walls(pos: Vector3, color: Color, floor_index: int) -> void:
 	for i in range(4):
 		var wall = StaticBody3D.new()
 		wall.position = pos + Vector3([0, 20, 0, -20][i], 1.5, [20, 0, -20, 0][i])
+		# CRITICAL: the E/W walls must be rotated 90° — the BoxShape/Mesh are
+		# authored long-in-X (40x3x0.3); leaving E/W walls unrotated laid two
+		# phantom 40m slabs ACROSS each floor's interior at z~0 (players and
+		# the winnability probe wedged on them; found via collision dump).
+		if i == 1 or i == 3:
+			wall.rotation.y = PI / 2.0
 		add_child(wall)
 
 		var wall_col = CollisionShape3D.new()
