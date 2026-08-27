@@ -233,6 +233,88 @@ func _build_label() -> void:
 	label.no_depth_test = true
 	label.position = Vector3(0, 1.0, 0)
 	add_child(label)
+	_build_icon_sprite()
+
+## Icon billboard: a chunky procedural glyph above the pickup (cup/can/
+## stapler/droplet/printer/extinguisher silhouette on a rounded tile).
+## Reads at race distance where the small 3D bodies blur into glow.
+func _build_icon_sprite() -> void:
+	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	var accent: Color = KIND_COLORS[kind]
+	for y in 64:
+		for x in 64:
+			# Rounded dark tile background (radius corners + border ring).
+			var cx := absf(float(x) - 32.0)
+			var cy := absf(float(y) - 32.0)
+			var corner := maxf(cx - 24.0, cy - 24.0)
+			if corner > 6.0:
+				img.set_pixel(x, y, Color(0, 0, 0, 0))
+				continue
+			var col := Color(0.06, 0.07, 0.10, 0.88)
+			# Border ring in the kind's accent color.
+			if corner > 4.0:
+				col = Color(accent.r, accent.g, accent.b, 0.95)
+			# Central glyph mask per kind.
+			if _glyph_contains(kind, x, y):
+				col = Color(accent.r, accent.g, accent.b, 1.0)
+			img.set_pixel(x, y, col)
+	img.generate_mipmaps()
+	var tex := ImageTexture.create_from_image(img)
+	var sprite := Sprite3D.new()
+	sprite.texture = tex
+	sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	sprite.pixel_size = 0.02          # ~1.28m tall sign — readable far away
+	sprite.no_depth_test = true
+	sprite.render_priority = 10
+	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	sprite.position = Vector3(0, 1.55, 0)
+	add_child(sprite)
+
+## Silhouette masks for each pickup glyph (64x64 space).
+func _glyph_contains(k: int, x: int, y: int) -> bool:
+	match k:
+		Kind.COFFEE:
+			# Cup with handle: trapezoid body + arc.
+			if x >= 20 and x <= 44 and y >= 22 and y <= 46:
+				return true
+			if x >= 24 and x <= 30 and y >= 16 and y <= 22:
+				return true   # steam plume left
+			if x >= 34 and x <= 40 and y >= 16 and y <= 22:
+				return true   # steam plume right
+			return false
+		Kind.ENERGY_DRINK:
+			# Can with lightning bolt cutout is overkill at 64px; use can
+			# plus bolt notch.
+			if x >= 26 and x <= 38 and y >= 18 and y <= 48:
+				return not (x >= 31 and x <= 35 and y >= 26 and y <= 40 \
+					and absi((x - 33) + ((y - 26) / 3)) < 4)
+			return false
+		Kind.STAPLER:
+			# Open stapler V-shape.
+			return (y >= 36 and y <= 42 and x >= 16 and x <= 48) \
+				or (x >= int(16 + (y - 20) * 0.6) and x <= int(24 + (y - 20) * 0.6) \
+					and y >= 20 and y <= 36)
+		Kind.SPILL:
+			# Droplet.
+			var dx := float(x) - 32.0
+			var dy := float(y) - 34.0
+			return dy > 0.0 and (dx * dx) / 196.0 + (dy * dy) / 256.0 <= 1.0
+		Kind.PRINTER:
+			# Printer box with paper slot + sheet.
+			if y >= 38 and y <= 50 and x >= 14 and x <= 50:
+				return true
+			if y >= 26 and y <= 37 and x >= 20 and x <= 44:
+				return y <= 30 or x <= 24 or x >= 40   # sheet outline
+			return false
+		Kind.EXTINGUISHER:
+			# Tank + nozzle arm.
+			var edx := float(x) - 32.0
+			var edy := float(y) - 36.0
+			if (edx * edx) / 144.0 + (edy * edy) / 196.0 <= 1.0:
+				return true
+			return y >= 18 and y <= 24 and x >= 30 and x <= 52
+		_:
+			return false
 
 func _process(delta: float) -> void:
 	rotation.y += delta * 1.8

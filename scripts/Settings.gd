@@ -192,9 +192,14 @@ func _apply_graphics_quality(quality: int) -> void:
 		var env = environment.environment
 		env.fog_enabled = quality > 0
 		env.glow_enabled = quality > 0
+		env.vignette_enabled = quality > 0
 	var lights = root.find_children("*", "OmniLight3D", true, false)
 	for light in lights:
 		light.shadow_enabled = quality >= 2
+	# Dust motes: hide (not free) so re-raising quality restores them.
+	for motes in root.find_children("DustMotes*", "GPUParticles3D", true, false):
+		motes.emitting = quality > 0
+		motes.visible = quality > 0
 
 func _close() -> void:
 	closed.emit()

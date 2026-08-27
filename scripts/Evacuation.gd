@@ -806,6 +806,12 @@ func _build_floor_walls(pos: Vector3, color: Color, floor_index: int) -> void:
 		wall.add_child(wall_mesh)
 
 func _make_carpet_material(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
+	# Phase: textured carpet tiles (structural grid + per-tile wear) via
+	# FloorMaterials; falls back to old noise-carpet if helper unavailable
+	# (keeps standalone tests compiling).
+	var helper = load("res://scripts/FloorMaterials.gd")
+	if helper != null and helper.has_method("make"):
+		return helper.make(base_color, floor_index)
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = base_color
 	mat.roughness = 0.95
@@ -1022,6 +1028,56 @@ func _setup_environment() -> void:
 	# grade without any post-process pass cost.
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_white = 6.0
+	# Vignette: cheap post-process edge darkening that focuses the read on
+	# the arena center; gated by quality (LOW keeps it off for mobile GPUs).
+	var vignette := GradientTexture1D.new()
+	var grad := Gradient.new()
+	grad.set_color(0, Color(1, 1, 1, 1))
+	grad.set_color(1, Color(0.42, 0.44, 0.52, 1))
+	vignette.gradient = grad
+	env.vignette_enabled = _quality_allows_post()
+	if env.vignette_enabled:
+		env.vignette = vignette
+	_spawn_dust_motes()
+
+func _quality_allows_post() -> bool:
+	var cfg := ConfigFile.new()
+	var q := 1
+	if cfg.load("user://settings.cfg") == OK:
+		q = int(cfg.get_value("graphics", "quality", 1))
+	return q > 0
+
+## Ambient dust motes drifting through light pools — two cheap quads-per-
+## particle emitters per floor group area are skipped at LOW quality.
+func _spawn_dust_motes() -> void:
+	if not _quality_allows_post():
+		return
+	for floor_index in range(4):
+		var motes := GPUParticles3D.new()
+		motes.name = "DustMotes_F%d" % floor_index
+		var mat_res := ParticleProcessMaterial.new()
+		motes.amount = 40
+		motes.lifetime = 7.0
+		motes.preprocess = 6.0     # start already-spread, no visible burst-in
+		motes.position = Vector3(0, float(floor_index) * 6.0 + 2.2, 0)
+		motes.draw_pass_1 = QuadMesh.new()
+		var mesh_mat := StandardMaterial3D.new()
+		mesh_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mesh_mat.albedo_color = Color(1.0, 0.98, 0.9, 0.45)
+		mesh_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mesh_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		(motes.draw_pass_1 as QuadMesh).material = mesh_mat
+		mat_res.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+		mat_res.emission_box_extents = Vector3(17, 1.4, 17)
+		mat_res.direction = Vector3(0.15, -1, 0)
+		mat_res.spread = 30.0
+		mat_res.gravity = Vector3.ZERO
+		mat_res.initial_velocity_min = 0.05
+		mat_res.initial_velocity_max = 0.22
+		mat_res.scale_min = 0.02
+		mat_res.scale_max = 0.06
+		motes.process_material = mat_res
+		add_child(motes)
 
 func _build_elevator(from_pos: Vector3, to_pos: Vector3, target_floor: int) -> void:
 	# Visual platform at the entry point
