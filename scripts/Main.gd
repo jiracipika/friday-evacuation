@@ -5,7 +5,7 @@ const UI_THEME = preload("res://scripts/UITheme.gd")
 
 const MODE_INFO = [
 	{
-		"title": "FRIDAY 5PM: EVACUATION",
+		"title": "Friday 5PM: Evacuation",
 		"subtitle": "PRIMARY MODE",
 		"desc": "It's 4:59 PM. Race your office chair through the building to the parking lot. Coffee boosts, water traps, stapler sabotage. Last one buys beers.",
 		"mode": GameManager.GameMode.EVACUATION,
@@ -43,8 +43,7 @@ var lobby_overlay: Control
 var settings_button: Button
 var credits_button: Button
 var utility_row: HBoxContainer
-var modifier_row: HBoxContainer
-var modifier_toggles: Array[CheckButton] = []
+var modifier_menu: Control
 var character_row: HBoxContainer
 var character_select: OptionButton
 var character_detail: Label
@@ -68,28 +67,29 @@ func _ready() -> void:
 	_build_character_selector()
 	
 	play_button.pressed.connect(_on_play)
+	play_button.pressed.connect(_play_click_sound)
 	_build_modifier_row()
 	utility_row = HBoxContainer.new()
 	utility_row.add_theme_constant_override("separation", 8)
 	$VBox.add_child(utility_row)
 	settings_button = Button.new()
-	settings_button.text = "⚙ SETTINGS"
-	settings_button.custom_minimum_size = Vector2(0, 32)
+	settings_button.text = "SETTINGS"
+	settings_button.custom_minimum_size = Vector2(0, 28)
 	settings_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	settings_button.add_theme_font_size_override("font_size", 14)
+	settings_button.add_theme_font_size_override("font_size", 12)
 	utility_row.add_child(settings_button)
 	settings_button.pressed.connect(_open_settings)
 	credits_button = Button.new()
-	credits_button.text = "★ CREDITS"
-	credits_button.custom_minimum_size = Vector2(0, 32)
+	credits_button.text = "CREDITS"
+	credits_button.custom_minimum_size = Vector2(0, 28)
 	credits_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	credits_button.add_theme_font_size_override("font_size", 14)
+	credits_button.add_theme_font_size_override("font_size", 12)
 	utility_row.add_child(credits_button)
 	credits_button.pressed.connect(_open_credits)
 	stats_label = Label.new()
 	stats_label.text = ""
 	stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stats_label.add_theme_font_size_override("font_size", 13)
+	stats_label.add_theme_font_size_override("font_size", 12)
 	stats_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
 	$VBox.add_child(stats_label)
 	var stats = get_node_or_null("/root/StatsManager")
@@ -98,7 +98,7 @@ func _ready() -> void:
 		stats.stats_updated.connect(func(): stats_label.text = stats.get_summary_line())
 	_build_menu_theme()
 	host_button.visible = true
-	host_button.text = "MULTIPLAYER LOBBY"
+	host_button.text = "MULTIPLAYER"
 	host_button.pressed.connect(_open_lobby)
 	join_button.visible = false
 	back_button.visible = false
@@ -110,36 +110,26 @@ func _build_mode_buttons() -> void:
 		var card_script = load("res://scripts/ModeCard.gd")
 		btn.set_script(card_script)
 		btn.configure(info.title, info.subtitle, MODE_STATUS[i], info.color)
-		btn.custom_minimum_size = Vector2(0, 44)
+		btn.custom_minimum_size = Vector2(0, 40)
 		btn.pressed.connect(_select_mode.bind(i))
 		mode_list.add_child(btn)
 		buttons.append(btn)
 
 func _build_modifier_row() -> void:
-	# Race-modifier quick toggles — single-player Evacuation only.
+	# Race-modifier picker panel — single-player Evacuation only.
+	# Sits ABOVE the play button (rules are chosen before you launch, like a
+	# real game's pre-match options), not below it like a debug row.
 	var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
 	if not RaceModifiersScript:
 		return
 	RaceModifiersScript.load_from_cfg()
-	modifier_row = HBoxContainer.new()
-	modifier_row.add_theme_constant_override("separation", 6)
-	$VBox.add_child(modifier_row)
-	$VBox.move_child(modifier_row, play_button.get_index() + 1)
-	var idx := 0
-	for mod in RaceModifiersScript.ALL:
-		var toggle := CheckButton.new()
-		toggle.text = RaceModifiersScript.LABELS[mod].split(" — ")[0]
-		toggle.tooltip_text = RaceModifiersScript.LABELS[mod]
-		toggle.button_pressed = RaceModifiersScript.is_active(mod)
-		toggle.add_theme_font_size_override("font_size", 11)
-		toggle.toggled.connect(func(on: bool):
-			RaceModifiersScript.toggle(mod)
-			RaceModifiersScript.save_to_cfg()
-		)
-		modifier_row.add_child(toggle)
-		modifier_toggles.append(toggle)
-		idx += 1
-	modifier_row.visible = selected_index == 0
+	# load()-based mount (file convention): keeps Main.gd parse-safe even when
+	# the global class_name cache is stale (fresh checkout before --import).
+	var menu_script = load("res://scripts/ModifierMenu.gd")
+	if not menu_script:
+		return
+	modifier_menu = menu_script.mount($VBox, play_button)
+	modifier_menu.visible = selected_index == 0
 
 func _build_character_selector() -> void:
 	var roster = load("res://scripts/CharacterRoster.gd")
@@ -147,7 +137,7 @@ func _build_character_selector() -> void:
 		return
 	character_row = HBoxContainer.new()
 	character_row.name = "CharacterSelector"
-	character_row.custom_minimum_size = Vector2(0, 38)
+	character_row.custom_minimum_size = Vector2(0, 30)
 	character_row.add_theme_constant_override("separation", 10)
 	$VBox.add_child(character_row)
 	$VBox.move_child(character_row, play_button.get_index())
@@ -199,18 +189,24 @@ func _select_mode(idx: int) -> void:
 	subtitle_label.text = info.subtitle
 	subtitle_label.modulate = info.color
 	desc_label.text = info.desc
-	if modifier_row:
-		modifier_row.visible = idx == 0
-	
+	if modifier_menu:
+		modifier_menu.visible = idx == 0
+
 	for i in range(buttons.size()):
 		if buttons[i].has_method("set_selected"):
 			buttons[i].set_selected(i == idx)
-		else:
-			buttons[i].disabled = i == idx
-		if i == idx:
-			buttons[i].text = ">> %s\n%s  •  %s <<" % [MODE_INFO[i].title, MODE_INFO[i].subtitle, MODE_STATUS[i]]
-		else:
-			buttons[i].text = "%s\n%s  •  %s" % [MODE_INFO[i].title, MODE_INFO[i].subtitle, MODE_STATUS[i]]
+			# Card label: title + subtitle for secondary modes (honest status
+			# tags); the primary card is title-only — the page header above it
+			# already says what it is, so repeating it reads as duplication.
+			if i == 0:
+				buttons[i].text = MODE_INFO[i].title
+			else:
+				buttons[i].text = "%s\n%s  •  %s" % [MODE_INFO[i].title, MODE_INFO[i].subtitle, MODE_STATUS[i]]
+
+func _play_click_sound() -> void:
+	var audio = get_node_or_null("/root/AudioManager")
+	if audio:
+		audio.play_sfx("powerup", 0.9)
 
 func _on_play() -> void:
 	GameManager.select_mode(MODE_INFO[selected_index].mode)
@@ -233,10 +229,10 @@ func _process(delta: float) -> void:
 
 func _build_menu_theme() -> void:
 	title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
-	title_label.add_theme_font_size_override("font_size", 30)
+	title_label.add_theme_font_size_override("font_size", 24)
 	subtitle_label.add_theme_font_size_override("font_size", 13)
 	desc_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
-	desc_label.add_theme_font_size_override("font_size", 16)
+	desc_label.add_theme_font_size_override("font_size", 13)
 	UI_THEME.apply_primary(play_button)
 	UI_THEME.apply_secondary(host_button, UI_THEME.color(UI_THEME.CYAN))
 	UI_THEME.apply_secondary(join_button, UI_THEME.color(UI_THEME.LIME))

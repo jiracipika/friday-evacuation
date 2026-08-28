@@ -12,9 +12,10 @@ func configure(title: String, subtitle: String, status: String, color: Color) ->
 	mode_subtitle = subtitle
 	mode_status = status
 	accent = color
-	text = "%s\n%s  •  %s" % [mode_title, mode_subtitle, mode_status]
+	# Text is owned by Main._select_mode (it re-labels cards on every switch).
 	UI_THEME.apply_mode_card(self, accent)
 
 func set_selected(selected: bool) -> void:
-	disabled = selected
+	# Selected card keeps its strong style but stays hoverable/clickable
+	# (re-clicking the active mode is harmless and keeps controls alive).
 	UI_THEME.apply_mode_card(self, accent, selected)

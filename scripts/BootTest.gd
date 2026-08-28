@@ -30,6 +30,7 @@ func _init() -> void:
 		"res://scripts/Accessibility.gd",
 		"res://scripts/SubtitleOverlay.gd",
 		"res://scripts/RaceModifiers.gd",
+		"res://scripts/ModifierMenu.gd",
 		"res://scripts/GhostRacer.gd",
 		"res://scripts/StaplerBolt.gd",
 		"res://scripts/HUD.gd",
