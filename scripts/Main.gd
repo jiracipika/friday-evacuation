@@ -234,6 +234,9 @@ func _build_menu_theme() -> void:
 	desc_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	desc_label.add_theme_font_size_override("font_size", 13)
 	UI_THEME.apply_primary(play_button)
+	# Controller-friendly menu: focus PLAY so dpad/left-stick + A navigates
+	# the main menu out of the box (mouse still works as before).
+	play_button.grab_focus()
 	UI_THEME.apply_secondary(host_button, UI_THEME.color(UI_THEME.CYAN))
 	UI_THEME.apply_secondary(join_button, UI_THEME.color(UI_THEME.LIME))
 	UI_THEME.apply_secondary(back_button, UI_THEME.color(UI_THEME.CORAL))

@@ -14,6 +14,9 @@ var reduced_motion_toggle: CheckButton
 var high_contrast_toggle: CheckButton
 var subtitles_toggle: CheckButton
 var time_scale_option: OptionButton
+var keyboard_sens_slider: HSlider
+var camera_sens_slider: HSlider
+var _input_toggles: Dictionary = {}
 
 const TIME_SCALE_LABELS := ["0.75x (SLOWER)", "1.0x (NORMAL)", "1.25x (FASTER)"]
 
@@ -33,9 +36,9 @@ func _build_ui() -> void:
 	add_child(backdrop)
 
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(520, 500)
+	panel.custom_minimum_size = Vector2(520, 620)
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.position = Vector2(-260, -250)
+	panel.position = Vector2(-260, -310)
 	add_child(panel)
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color("1c1c2e")
@@ -48,15 +51,31 @@ func _build_ui() -> void:
 	style.content_margin_bottom = 24.0
 	panel.add_theme_stylebox_override("panel", style)
 
-	var box = VBoxContainer.new()
-	box.add_theme_constant_override("separation", 16)
-	panel.add_child(box)
+	# Outer column: title / scrollable body / pinned BACK. (PanelContainer
+	# stacks bare children on top of each other, so they must live in a
+	# VBox.)
+	var column = VBoxContainer.new()
+	column.add_theme_constant_override("separation", 12)
+	panel.add_child(column)
+
 	var title = Label.new()
 	title.text = "SETTINGS"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 32)
 	title.add_theme_color_override("font_color", Color("ff9a1a"))
-	box.add_child(title)
+	column.add_child(title)
+
+	# Scrollable body: the input section (sensitivity + mouse + controller
+	# prefs) grew the panel past 720p, so rows live in a ScrollContainer
+	# and BACK stays pinned below it.
+	var scroll = ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(scroll)
+	var box = VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 16)
+	scroll.add_child(box)
 
 	quality_option = OptionButton.new()
 	quality_option.add_item("LOW")
@@ -119,12 +138,63 @@ func _build_ui() -> void:
 	_add_setting(box, "GAME SPEED (SINGLE PLAYER ONLY)", time_scale_option)
 	time_scale_option.item_selected.connect(func(_index): _apply_settings())
 
+	# --- INPUT: sensitivity, mouse look, controller prefs -------------------
+	var kb_sens_label = Label.new()
+	kb_sens_label.text = "INPUT"
+	kb_sens_label.add_theme_font_size_override("font_size", 13)
+	kb_sens_label.add_theme_color_override("font_color", Color("ff9a1a"))
+	box.add_child(kb_sens_label)
+
+	keyboard_sens_slider = HSlider.new()
+	keyboard_sens_slider.min_value = 0.5
+	keyboard_sens_slider.max_value = 1.5
+	keyboard_sens_slider.step = 0.05
+	keyboard_sens_slider.custom_minimum_size = Vector2(0, 28)
+	keyboard_sens_slider.value = float(config.get_value("input", "keyboard_sensitivity", 0.7))
+	_add_setting(box, "KEYBOARD SENSITIVITY (LOW = GENTLER STEERING)", keyboard_sens_slider)
+
+	camera_sens_slider = HSlider.new()
+	camera_sens_slider.min_value = 0.25
+	camera_sens_slider.max_value = 2.0
+	camera_sens_slider.step = 0.05
+	camera_sens_slider.custom_minimum_size = Vector2(0, 28)
+	camera_sens_slider.value = float(config.get_value("input", "mouse_sensitivity", 1.0))
+	_add_setting(box, "CAMERA SENSITIVITY (MOUSE + RIGHT STICK)", camera_sens_slider)
+
+	var mouse_look_toggle = CheckButton.new()
+	mouse_look_toggle.text = "MOUSE CAMERA LOOK (MOVE MOUSE TO ORBIT)"
+	mouse_look_toggle.button_pressed = bool(config.get_value("input", "mouse_look_enabled", true))
+	box.add_child(mouse_look_toggle)
+	_input_toggles["mouse_look_enabled"] = mouse_look_toggle
+
+	var stick_look_toggle = CheckButton.new()
+	stick_look_toggle.text = "RIGHT-STICK CAMERA LOOK"
+	stick_look_toggle.button_pressed = bool(config.get_value("input", "stick_look_enabled", true))
+	box.add_child(stick_look_toggle)
+	_input_toggles["stick_look_enabled"] = stick_look_toggle
+
+	var vibration_toggle = CheckButton.new()
+	vibration_toggle.text = "CONTROLLER VIBRATION"
+	vibration_toggle.button_pressed = bool(config.get_value("input", "vibration_enabled", true))
+	box.add_child(vibration_toggle)
+	_input_toggles["vibration_enabled"] = vibration_toggle
+
+	var controller_hint = Label.new()
+	controller_hint.text = "CONTROLLER: LEFT STICK MOVE / A BOOST / X ACTION / B SABOTAGE / START PAUSE / RIGHT STICK CAMERA / R RECENTERS ON KEYBOARD"
+	controller_hint.add_theme_font_size_override("font_size", 10)
+	controller_hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
+	controller_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(controller_hint)
+
 	var back = Button.new()
 	back.text = "BACK"
 	back.custom_minimum_size = Vector2(0, 52)
 	back.add_theme_font_size_override("font_size", 20)
-	box.add_child(back)
+	column.add_child(back)
 	back.pressed.connect(_close)
+	# Controller navigation: initial focus on BACK; dpad/stick walks the
+	# settings rows (ui_up/ui_down), A presses the focused control.
+	back.call_deferred("grab_focus")
 
 func _add_setting(parent: VBoxContainer, label_text: String, control: Control) -> void:
 	var label = Label.new()
@@ -159,6 +229,16 @@ func _apply_settings() -> void:
 	config.set_value("accessibility", "subtitles", subtitles_toggle.button_pressed if subtitles_toggle else false)
 	if time_scale_option:
 		config.set_value("accessibility", "time_scale", _time_scale_value(time_scale_option.selected))
+	if keyboard_sens_slider and camera_sens_slider:
+		config.set_value("input", "keyboard_sensitivity", keyboard_sens_slider.value)
+		config.set_value("input", "mouse_sensitivity", camera_sens_slider.value)
+		for key in _input_toggles:
+			config.set_value("input", key, _input_toggles[key].button_pressed)
+		# Live-apply: refresh InputPrefs caches so pause-menu changes take
+		# effect the moment the player resumes (no restart needed).
+		var prefs = load("res://scripts/InputPrefs.gd")
+		if prefs and prefs.has_method("refresh_cache"):
+			prefs.refresh_cache()
 	config.save("user://settings.cfg")
 	var audio = get_node_or_null("/root/AudioManager")
 	if audio:

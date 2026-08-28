@@ -75,10 +75,13 @@ func _simulate():
 	var last_pos: Vector3 = player.global_position
 	var frame: int = 0
 
-	# Waypoints: elevator entry points, then exit
+	# Waypoints: elevator entry points, then exit. The floor-3 leg routes
+	# through the connector-strip center so the bot never cuts the corner
+	# over the Stairwell gaps.
 	var waypoints: Array[Vector3] = [
 		elevators[0]["from"],  # Elevator 1 entry (floor 1 → 2)
 		elevators[1]["from"],  # Elevator 2 entry (floor 2 → 3)
+		Vector3(0, 12.5, 14),  # Floor-3 connector center (gap-safe route)
 		elevators[2]["from"],  # Elevator 3 entry (floor 3 → 4)
 		EXIT_POS,              # Exit zone on floor 4
 	]
@@ -118,17 +121,34 @@ func _simulate():
 
 		player.move_and_slide()
 
-		# Check waypoint progression based on Y position
+		# Check waypoint progression based on Y position. Zero the stale
+		# horizontal momentum on every floor advance: the launch carries
+		# approach velocity, and drifting off the destination landing drops
+		# the bot through a Stairwell gap onto the floor below (observed:
+		# elevator 2 → overshoot → stuck circling below elevator 3 pad).
 		if current_wp == 0 and player.global_position.y > 4.5:
 			print("[PASS] Launched to Floor 2! Y=%.1f at %s" % [player.global_position.y, str(player.global_position.round())])
 			current_wp = 1
+			player.velocity.x = 0.0
+			player.velocity.z = 0.0
 		elif current_wp == 1 and player.global_position.y > 10.5:
 			print("[PASS] Launched to Floor 3! Y=%.1f at %s" % [player.global_position.y, str(player.global_position.round())])
 			current_wp = 2
-		elif current_wp == 2 and player.global_position.y > 16.5:
+			player.velocity.x = 0.0
+			player.velocity.z = 0.0
+		elif current_wp == 2:
+			# Connector center reached -> head for elevator 3.
+			if player.is_on_floor() and player.global_position.distance_to(waypoints[2]) < 1.6:
+				print("[PASS] Connector strip secured at %s" % str(player.global_position.round()))
+				current_wp = 3
+				player.velocity.x = 0.0
+				player.velocity.z = 0.0
+		elif current_wp == 3 and player.global_position.y > 16.5:
 			print("[PASS] Launched to Floor 4! Y=%.1f at %s" % [player.global_position.y, str(player.global_position.round())])
-			current_wp = 3
-		elif current_wp == 3:
+			current_wp = 4
+			player.velocity.x = 0.0
+			player.velocity.z = 0.0
+		elif current_wp == 4:
 			# On floor 4 — head to exit
 			if flat_dist < 5.0:
 				var dist = player.global_position.distance_to(EXIT_POS)

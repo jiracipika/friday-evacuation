@@ -25,6 +25,8 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_ui()
 	get_tree().paused = true
+	# Pausing frees the cursor for the menu; resume re-captures it.
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
@@ -77,9 +79,13 @@ func _build_ui() -> void:
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
 	box.add_child(hint)
 
-	box.add_child(_make_button("RESUME", _resume))
+	var resume_btn = _make_button("RESUME", _resume)
+	box.add_child(resume_btn)
 	box.add_child(_make_button("SETTINGS", _open_settings))
 	box.add_child(_make_button("QUIT TO MENU", _quit))
+	# Controller/keyboard focus: dpad + left stick drive ui_* actions, so
+	# grabbing focus on RESUME makes the whole pause menu pad-navigable.
+	resume_btn.grab_focus()
 
 func _make_button(text: String, handler: Callable) -> Button:
 	var button = Button.new()
@@ -94,12 +100,14 @@ func _resume() -> void:
 		return
 	_close_settings_if_any()
 	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	resumed.emit()
 	queue_free()
 
 func _quit() -> void:
 	_close_settings_if_any()
 	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if _quit_callable.is_valid():
 		_quit_callable.call()
 	else:

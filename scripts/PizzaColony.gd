@@ -66,6 +66,8 @@ var mode_hud: CanvasLayer
 var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
+	# Mouse-look: capture cursor for the match; PauseMenu re-shows it.
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	rng.seed = 630
 	_build_pizza()
 	_spawn_pepperonis()
@@ -394,6 +396,10 @@ func _update_hud() -> void:
 	mode_hud.update_state(remaining_time, _progress(), status, Color("ffcf55") if not cutter_active else Color("ff7070"))
 
 func _unhandled_input(event: InputEvent) -> void:
+	var FollowCameraScript = load("res://scripts/FollowCamera.gd")
+	if FollowCameraScript and FollowCameraScript.handle_mouse_input(event):
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("pause"):
 		var pause_menu = load("res://scripts/PauseMenu.gd")
 		pause_menu.create(self, Callable())

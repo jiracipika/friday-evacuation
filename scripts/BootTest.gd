@@ -28,6 +28,7 @@ func _init() -> void:
 		"res://scripts/LoadingScreen.gd",
 		"res://scripts/CreditsScreen.gd",
 		"res://scripts/Accessibility.gd",
+		"res://scripts/InputPrefs.gd",
 		"res://scripts/SubtitleOverlay.gd",
 		"res://scripts/RaceModifiers.gd",
 		"res://scripts/ModifierMenu.gd",

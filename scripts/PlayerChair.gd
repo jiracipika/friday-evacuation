@@ -482,11 +482,18 @@ func _handle_input(delta: float) -> void:
 	if input_dir.length() > 0.1:
 		# Target-velocity steering is responsive while retaining weaker control
 		# during a boost, so the chair still has readable momentum.
+		# InputPrefs.keyboard_scale (default 0.7) eases turn-in without
+		# touching top speed; sliders cover 0.5..1.5. Only ever reached for
+		# controllable chairs — remote chairs early-return via can_move.
+		var prefs = load("res://scripts/InputPrefs.gd")
+		var steer_accel := acceleration
+		if prefs:
+			steer_accel = acceleration * prefs.keyboard_scale
 		var effective_max := max_speed * carry_slowdown
 		var target := Vector2(input_dir.x, input_dir.z) * effective_max
 		var horizontal := Vector2(velocity.x, velocity.z)
 		var control := boost_steering if is_boosting else 1.0
-		horizontal = horizontal.move_toward(target, acceleration * control * delta)
+		horizontal = horizontal.move_toward(target, steer_accel * control * delta)
 		velocity.x = horizontal.x
 		velocity.z = horizontal.y
 		smooth_facing = atan2(-input_dir.x, -input_dir.z)
@@ -503,6 +510,7 @@ func _handle_input(delta: float) -> void:
 			velocity.y = jump_force
 			target_squash = 1.18
 			_play_sfx("jump")
+			_rumble(0.25)
 
 	# Held item (stapler/spill charges) — Q uses the item first; without an
 	# item Q falls back to dropping a sabotage trap (existing behavior).
@@ -554,6 +562,7 @@ func _start_boost(force_mult: float = 1.0, duration_mult: float = 1.0) -> void:
 	target_squash = 1.08
 	shake_requested.emit(0.04)
 	_play_sfx("boost")
+	_rumble(0.7)
 	var a11y = load("res://scripts/Accessibility.gd")
 	if a11y:
 		a11y.caption("BOOST!", 1.0)
@@ -637,9 +646,18 @@ func stun(duration: float) -> void:
 	stunned.emit()
 	# Platform-safe no-op on desktop; tactile feedback on Android/iOS.
 	Input.vibrate_handheld(60)
+	_rumble(1.0)
 	var a11y = load("res://scripts/Accessibility.gd")
 	if a11y:
 		a11y.caption("STUNNED — TRAP HIT", 1.2)
+
+## Controller rumble through InputPrefs (respects the settings toggle,
+## no-ops without a pad). Kept as a one-liner helper so call sites stay
+## readable and the prefs script stays standalone-compilable.
+func _rumble(strength: float) -> void:
+	var prefs = load("res://scripts/InputPrefs.gd")
+	if prefs and prefs.has_method("rumble"):
+		prefs.rumble(strength)
 
 func _play_sfx(effect_name: String, intensity: float = 1.0) -> void:
 	var audio_manager = get_node_or_null("/root/AudioManager")

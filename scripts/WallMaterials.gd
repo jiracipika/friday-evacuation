@@ -13,8 +13,8 @@
 class_name WallMaterials
 extends RefCounted
 
-const TEX_W := 256
-const TEX_H := 128
+const TEX_W := 512
+const TEX_H := 256
 
 # Cache: key = floor_index -> {albedo: ImageTexture}
 static var _cache: Dictionary = {}
@@ -49,7 +49,7 @@ static func wall_albedo(floor_index: int) -> ImageTexture:
 		var trim_row := absf(v - 0.78) < 0.02
 		for x in TEX_W:
 			var col := paint
-			var stud := (x % 64) < 2          # panel joint every 1.25m
+			var stud := (x % 128) < 2         # panel joint every 1.25m
 			if baseboard:
 				col = paint.darkened(0.62)
 			elif trim_row:
@@ -68,7 +68,7 @@ static func wall_albedo(floor_index: int) -> ImageTexture:
 			var vg := float(y) / float(TEX_H)
 			if not baseboard and sin(u * TAU * 3.0 + float(key) * 2.0) > 0.86 and vg < 0.45:
 				col = col.darkened(0.18)
-			if not baseboard and vg > 0.80 and (x / 23) % 7 == 0:
+			if not baseboard and vg > 0.80 and (x / 45) % 7 == 0:
 				col = col.darkened(0.22)
 			# Fine grain stays modest: noise mostly vanishes under mips.
 			var n := (rng.randf() - 0.5) * (0.16 if wainscot else 0.09)
@@ -90,6 +90,9 @@ static func wall_albedo(floor_index: int) -> ImageTexture:
 static func make(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_texture = wall_albedo(floor_index)
+	# Anisotropic filtering keeps the panel joints crisp at grazing angles
+	# down long 40m walls (where mip selection would otherwise smear them).
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	# A BoxMesh face spans the FULL 40m wall with 0..1 UVs, so scale U by 8
 	# => one tile per 5m; vertical stays 1x so wainscot lines sit at real
 	# heights. NOTE: there is NO BaseMaterial3D.texture_repeat property/
@@ -136,6 +139,7 @@ static func make_partition(variant: int = 0) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_texture = fabric_albedo(variant)
 	mat.uv1_scale = Vector3(2, 1, 1)
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	mat.roughness = 0.95
 	mat.metallic = 0.0
 	return mat

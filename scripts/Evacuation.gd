@@ -34,6 +34,10 @@ var camera_shake: float = 0.0
 var camera_shake_time: float = 0.0
 var camera_initialized := false
 var camera_tracked_player_y := 0.0
+# Shared-material caches (perf: one noise build / one leaf material set
+# per scene instance instead of one per desk blob / plant blob).
+var _wood_mat: StandardMaterial3D = null
+var _leaf_mats: Dictionary = {}
 const CAMERA_DISTANCE := 7.5
 const CAMERA_HEIGHT := 4.2
 const CAMERA_LOOK_HEIGHT := 1.0
@@ -57,6 +61,13 @@ const CULL_LIGHT_DISTANCE_FLOORS := 1
 
 func _ready() -> void:
 	_setup_arena()
+	# Mouse-look: capture the cursor for the whole match (released in
+	# _end_race/_on_back_to_menu/_exit_tree). Visible while paused so the
+	# pause menu stays mouse-usable.
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	var input_prefs = load("res://scripts/InputPrefs.gd")
+	if input_prefs:
+		input_prefs.refresh_cache()
 	_spawn_player()
 	_apply_player_modifiers()
 	_maybe_spawn_ghost()
@@ -164,6 +175,13 @@ func _update_camera(delta: float) -> void:
 	if not camera:
 		return
 
+	# Right-stick camera orbit + keyboard nudge (camera_left/right).
+	# Scaled by delta so the orbit rate is framerate-independent.
+	var stick_strength := Input.get_action_strength("camera_right") - Input.get_action_strength("camera_left")
+	if absf(stick_strength) > 0.01:
+		var input_prefs = load("res://scripts/InputPrefs.gd")
+		if input_prefs:
+			input_prefs.apply_stick(stick_strength, delta)
 	var player_pos: Vector3 = local_player.global_position
 	var player_vel: Vector3 = local_player.velocity
 	var move_dir := Vector3(player_vel.x, 0.0, player_vel.z)
@@ -176,10 +194,17 @@ func _update_camera(delta: float) -> void:
 	# itself. The lower height also stays safely below the next floor (the old
 	# +6 offset placed the camera directly inside the floor slab, blacking out
 	# the entire gameplay view).
-	var target_cam_pos := player_pos - fwd * CAMERA_DISTANCE + Vector3.UP * CAMERA_HEIGHT
+	var yaw_offset := 0.0
+	var input_prefs = load("res://scripts/InputPrefs.gd")
+	if input_prefs:
+		yaw_offset = input_prefs.wrapped_yaw()
+	var cam_dir := fwd.rotated(Vector3.UP, yaw_offset)
+	var target_cam_pos := player_pos - cam_dir * CAMERA_DISTANCE + Vector3.UP * CAMERA_HEIGHT
 	var speed := move_dir.length()
 	var look_ahead := move_dir.normalized() * minf(speed * 0.22, 2.0) if speed > 0.1 else Vector3.ZERO
 	var target_look := player_pos + Vector3.UP * CAMERA_LOOK_HEIGHT + look_ahead
+	if absf(yaw_offset) > 0.0001:
+		target_look = player_pos + (target_look - player_pos).rotated(Vector3.UP, yaw_offset)
 	target_cam_pos = _resolve_camera_occlusion(target_look, target_cam_pos)
 
 	# Elevator teleports cross a floor slab. Snap camera state to the new floor
@@ -444,10 +469,17 @@ func _make_plant() -> StaticBody3D:
 		sphere.height = 0.84 + 0.16 * i
 		blob.mesh = sphere
 		blob.position = Vector3((i - 1) * 0.18, 0.95 + i * 0.22, (1 - i) * 0.12)
-		var leaf_mat := StandardMaterial3D.new()
-		leaf_mat.albedo_color = Color(0.16, 0.38, 0.2).lightened(0.05 * i)
-		leaf_mat.roughness = 0.95
-		blob.material_override = leaf_mat
+		# Shared leaf material per lightness step (was one new material per
+		# blob per plant — pure batching loss, zero visual difference).
+		var leaf_key := i
+		if _leaf_mats.has(leaf_key):
+			blob.material_override = _leaf_mats[leaf_key]
+		else:
+			var leaf_mat := StandardMaterial3D.new()
+			leaf_mat.albedo_color = Color(0.16, 0.38, 0.2).lightened(0.05 * i)
+			leaf_mat.roughness = 0.95
+			_leaf_mats[leaf_key] = leaf_mat
+			blob.material_override = leaf_mat
 		plant.add_child(blob)
 	return plant
 
@@ -943,7 +975,13 @@ func animate_exit_marker() -> void:
 	tween.tween_property(exit_marker, "scale", Vector3(1.2, 1.2, 1.2), 0.8)
 	tween.tween_property(exit_marker, "scale", Vector3(1.0, 1.0, 1.0), 0.8)
 
+## Wood desks/tables share ONE cached material: building the 128px noise
+## texture per desk cost ~25 noise generations per match and broke
+## draw-call batching (unique material per mesh). Instance-scoped cache,
+## so repeated scene instantiations never share freed textures.
 func _make_wood_material() -> StandardMaterial3D:
+	if _wood_mat and is_instance_valid(_wood_mat):
+		return _wood_mat
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = Color(0.35, 0.24, 0.14)
 	mat.roughness = 0.72
@@ -957,6 +995,7 @@ func _make_wood_material() -> StandardMaterial3D:
 	texture.seamless = true
 	texture.noise = noise
 	mat.albedo_texture = texture
+	_wood_mat = mat
 	return mat
 
 func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
@@ -1385,6 +1424,9 @@ func _update_countdown_display() -> void:
 func _start_race() -> void:
 	match_state = &"racing"
 	timer = 0.0
+	var input_prefs = load("res://scripts/InputPrefs.gd")
+	if input_prefs:
+		input_prefs.reset_yaw()
 	var a11y = load("res://scripts/Accessibility.gd")
 	if a11y:
 		a11y.caption("GO!", 1.0)
@@ -1494,6 +1536,7 @@ func _end_race() -> void:
 	if match_state == &"finished":
 		return
 	match_state = &"finished"
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if hazards and hazards.has_method("stop"):
 		hazards.stop()
 	if local_player:
@@ -1550,16 +1593,40 @@ func _on_rematch() -> void:
 
 func _on_back_to_menu() -> void:
 	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().change_scene_to_file("res://scenes/Main.tscn")
 
+func _exit_tree() -> void:
+	# Safety net: rematch reloads the scene without _on_back_to_menu.
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
 func _unhandled_input(event: InputEvent) -> void:
+	# Mouse-look camera motion (toggle+sensitivity inside InputPrefs).
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		var input_prefs = load("res://scripts/InputPrefs.gd")
+		if input_prefs:
+			input_prefs.apply_mouse_motion(event)
+			get_viewport().set_input_as_handled()
+			return
+	# R re-centers the camera behind the chair mid-race.
+	if event is InputEventKey and event.pressed and not event.echo \
+			and event.physical_keycode == KEY_R and match_state == &"racing":
+		var input_prefs = load("res://scripts/InputPrefs.gd")
+		if input_prefs:
+			input_prefs.reset_yaw()
+			get_viewport().set_input_as_handled()
+			return
 	if event.is_action_pressed("pause") and match_state != &"finished":
 		var network = get_node_or_null("/root/Network")
 		if network and network.peer:
 			return
 		var pause_menu = load("res://scripts/PauseMenu.gd")
-		pause_menu.create(self, _on_back_to_menu)
+		var pause_layer = pause_menu.create(self, _on_back_to_menu)
+		if pause_layer and pause_layer.has_signal("resumed"):
+			# Re-capture the cursor when the player resumes into the race.
+			pause_layer.resumed.connect(func(): Input.mouse_mode = Input.MOUSE_MODE_CAPTURED)
 		get_viewport().set_input_as_handled()
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _setup_hud() -> void:
 	hud = $UI

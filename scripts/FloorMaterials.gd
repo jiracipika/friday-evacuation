@@ -8,8 +8,8 @@
 class_name FloorMaterials
 extends RefCounted
 
-const TEX := 256
-const TILE_PX := 64          # office carpet tiles ~50cm -> tile every 64px
+const TEX := 512
+const TILE_PX := 128         # office carpet tiles ~50cm -> tile every 128px
 static var _cache: Dictionary = {}
 
 ## Themed base tints mirror the palette Evacuation passes in; keyed by floor.
@@ -69,12 +69,13 @@ static func floor_albedo(base_color: Color, floor_index: int) -> ImageTexture:
 	return tex
 
 ## Full floor material: textured carpet tiles, matte finish.
-## One tile spans ~2m (uv scale 8 over 40m => 5m... narrowed to 8 repeats
-## of a 4x4-tile texture: 32 tiles across 40m ≈ 1.25m/tile).
+## uv 4 over the 40m slab = 4 texture repeats; the texture carries a 4x4
+## tile grid, so 16 grout crossings per edge ≈ 2.5m per carpet tile.
 static func make(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_texture = floor_albedo(base_color, floor_index)
 	mat.uv1_scale = Vector3(4, 4, 1)
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	mat.albedo_color = Color(1, 1, 1)
 	mat.roughness = 0.96
 	mat.metallic = 0.0

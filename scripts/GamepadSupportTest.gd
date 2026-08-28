@@ -77,6 +77,32 @@ func _run() -> void:
 	check(_has_joypad_button("sabotage", 1), "sabotage = joypad button 1 (B/Circle)")
 	check(_has_joypad_button("pause", 6), "pause = joypad button 6 (Start)")
 
+	# 7. Camera orbit actions: right stick + shoulders + dpad, with mouse
+	#    left-click mapped to boost (any-controller defaults).
+	var cam_left := _joypad_motion_axis("camera_left")
+	check(cam_left.size() > 0 and cam_left[0][0] == 2 and cam_left[0][1] < 0.0,
+		"camera_left = right stick left (axis 2, negative)")
+	var cam_right := _joypad_motion_axis("camera_right")
+	check(cam_right.size() > 0 and cam_right[0][0] == 2 and cam_right[0][1] > 0.0,
+		"camera_right = right stick right (axis 2, positive)")
+	check(_has_joypad_button("camera_left", 9), "camera_left = left shoulder")
+	check(_has_joypad_button("camera_right", 10), "camera_right = right shoulder")
+	check(_has_joypad_button("camera_left", 13), "camera_left = dpad left")
+	check(_has_joypad_button("camera_right", 14), "camera_right = dpad right")
+	var mouse_boost := false
+	for ev in InputMap.action_get_events("boost"):
+		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
+			mouse_boost = true
+	check(mouse_boost, "boost = mouse left click")
+	# Low deadzones so varied third-party sticks register reliably.
+	# (float32 round-trip: 0.2 reads back as 0.20000000298…, so compare
+	# against a small epsilon above the target, never exact.)
+	var move_deadzones_ok := true
+	for a in ["move_forward", "move_back", "move_left", "move_right", "camera_left", "camera_right"]:
+		if InputMap.action_get_deadzone(a) > 0.2 + 0.001:
+			move_deadzones_ok = false
+	check(move_deadzones_ok, "movement + camera deadzones <= 0.2 (any-controller friendly)")
+
 	# 6. Synthesized gamepad input drives the real chair
 	var test_root := Node3D.new()
 	root.add_child(test_root)
@@ -104,9 +130,11 @@ func _run() -> void:
 	motion.axis = 1
 	motion.axis_value = -1.0  # stick up -> move_forward
 	Input.parse_input_event(motion)
-	await physics_frame
-	await physics_frame
-	await physics_frame
+	# 3 physics frames was enough at the legacy accel (34); the lower
+	# default sensitivity (0.7 -> accel ~24) needs a few more frames to
+	# cover the same 1.0 speed threshold.
+	for i in 6:
+		await physics_frame
 	var horizontal := Vector3(chair.velocity.x, 0, chair.velocity.z)
 	var cam_fwd := -cam.global_transform.basis.z
 	cam_fwd.y = 0.0
