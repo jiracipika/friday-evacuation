@@ -17,6 +17,7 @@ var time_scale_option: OptionButton
 var keyboard_sens_slider: HSlider
 var camera_sens_slider: HSlider
 var scheme_option: OptionButton
+var curve_option: OptionButton
 var invert_toggle: CheckButton
 var remap_grid: GridContainer
 var _input_toggles: Dictionary = {}
@@ -203,6 +204,25 @@ func _build_ui() -> void:
 	box.add_child(vibration_toggle)
 	_input_toggles["vibration_enabled"] = vibration_toggle
 
+	# PHASE 3: stick response curve selector.
+	var curve_row := HBoxContainer.new()
+	var curve_label := Label.new()
+	curve_label.text = "STICK RESPONSE"
+	curve_label.add_theme_font_size_override("font_size", 12)
+	curve_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	curve_label.custom_minimum_size = Vector2(190, 0)
+	curve_row.add_child(curve_label)
+	var curve_option := OptionButton.new()
+	curve_option.add_item("LINEAR", 0)
+	curve_option.add_item("EXPO (RACING)", 1)
+	curve_option.add_item("PRECISION", 2)
+	var saved_curve := str(config.get_value("input", "stick_response_curve", "expo"))
+	curve_option.select({"linear": 0, "expo": 1, "precision": 2}.get(saved_curve, 1))
+	curve_option.custom_minimum_size = Vector2(190, 0)
+	curve_row.add_child(curve_option)
+	box.add_child(curve_row)
+	self.curve_option = curve_option
+
 	# --- controller button remapping (easy, live-applied) ----------------
 	var remap_title = Label.new()
 	remap_title.text = "CONTROLLER BUTTONS — TAP A ROW, THEN PRESS A PAD BUTTON"
@@ -364,6 +384,11 @@ func _apply_settings() -> void:
 		config.set_value("input", "stick_sensitivity", camera_sens_slider.value)
 		for key in _input_toggles:
 			config.set_value("input", key, _input_toggles[key].button_pressed)
+		# Stick response curve (Phase 3).
+		if curve_option:
+			var curve_names := ["linear", "expo", "precision"]
+			config.set_value("input", "stick_response_curve",
+				curve_names[clampi(curve_option.selected, 0, 2)])
 		# Live-apply: refresh InputPrefs caches so pause-menu changes take
 		# effect the moment the player resumes (no restart needed).
 		var prefs = load("res://scripts/InputPrefs.gd")

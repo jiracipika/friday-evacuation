@@ -708,9 +708,15 @@ func _make_round_table() -> StaticBody3D:
 	top_mesh.height = 0.08
 	top.mesh = top_mesh
 	top.position = Vector3(0, 0.75, 0)
-	var tmat := StandardMaterial3D.new()
-	tmat.albedo_color = Color(0.55, 0.57, 0.6)
-	tmat.roughness = 0.4
+	# Phase 2: brushed-metal break-room table (shared prop material).
+	var prop_mats = load("res://scripts/PropMaterials.gd")
+	var tmat: StandardMaterial3D = null
+	if prop_mats and prop_mats.has_method("brushed_metal"):
+		tmat = prop_mats.brushed_metal()
+	if tmat == null:
+		tmat = StandardMaterial3D.new()
+		tmat.albedo_color = Color(0.55, 0.57, 0.6)
+		tmat.roughness = 0.4
 	top.material_override = tmat
 	table.add_child(top)
 	var leg := MeshInstance3D.new()
@@ -1416,7 +1422,14 @@ func _make_desk() -> StaticBody3D:
 	var mesh = BoxMesh.new()
 	mesh.size = Vector3(2, 1.2, 1)
 	mesh_inst.mesh = mesh
-	var mat = _make_wood_material()
+	# Phase 2: plank-seamed desk wood with derived normals (falls back to
+	# the old noise wood if the helper is missing).
+	var prop_mats = load("res://scripts/PropMaterials.gd")
+	var mat: StandardMaterial3D = null
+	if prop_mats and prop_mats.has_method("wood_planks"):
+		mat = prop_mats.wood_planks()
+	if mat == null:
+		mat = _make_wood_material()
 	mesh_inst.material_override = mat
 	desk.add_child(mesh_inst)
 

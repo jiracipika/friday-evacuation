@@ -250,6 +250,35 @@ func _run() -> void:
 	check(bool(cfg11.get_value("input", P.KEY_MIGRATED, false)) == true,
 		"migration flag set after first run")
 
+	# --- 12. Stick response curves (Phase 3) ------------------------------
+	check(P.stick_curve() == P.CURVE_EXPO, "default stick curve is expo")
+	check(absf(P.apply_stick_curve(1.0) - 1.0) < 0.001, "curve(1.0) == 1.0 (full throw)")
+	check(absf(P.apply_stick_curve(0.0)) < 0.001, "curve(0.0) == 0.0")
+	check(P.apply_stick_curve(0.5) < 0.5,
+		"expo curve pulls center down (0.5 -> %.2f)" % P.apply_stick_curve(0.5))
+	P.set_stick_curve(P.CURVE_PRECISION)
+	check(P.apply_stick_curve(0.5) > 0.5,
+		"precision curve pushes center up (0.5 -> %.2f)" % P.apply_stick_curve(0.5))
+	P.set_stick_curve(P.CURVE_LINEAR)
+	check(absf(P.apply_stick_curve(0.5) - 0.5) < 0.001, "linear curve passes through")
+	P.set_stick_curve("bogus")  # invalid -> silently keeps linear
+	check(P.stick_curve() == P.CURVE_LINEAR, "invalid curve rejected")
+	P.set_stick_curve(P.CURVE_EXPO)
+	check(P.stick_curve() == P.CURVE_EXPO, "curve persisted after set")
+
+	# --- 13. Rumble vocabulary entry points exist + envelope gate ---------
+	# (No pad headless: _vibrate no-ops after pad check — just verify the
+	# API surface and that clear_cache resets the gate state.)
+	P.rumble_hum(0.5)
+	P.rumble_thump(0.8)
+	P.rumble_sputter()
+	P.rumble_chirp()
+	P.rumble(0.7)  # legacy -> thump
+	check(true, "rumble vocabulary callable headless (no pad no-op)")
+	P.clear_cache()
+	check(P._rumble_until_ms == 0 and P._rumble_peak == 0.0,
+		"clear_cache resets rumble envelope state")
+
 	# Cleanup + restore
 	var cleanup := ConfigFile.new()
 	cleanup.save(TEST_CFG)

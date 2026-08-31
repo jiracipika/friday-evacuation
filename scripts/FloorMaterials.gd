@@ -40,6 +40,12 @@ static func floor_albedo(base_color: Color, floor_index: int) -> ImageTexture:
 		for x in TEX:
 			var tx := x / TILE_PX
 			var col := paint
+			# PHASE 2 per-floor identity: traffic-lane wear — a soft
+			# horizontal band across the middle of each tile row where
+			# feet actually travel. Darkened + slight sheen loss. Wide
+			# gaussian-ish falloff so it reads as wear, not a stripe.
+			var lane := absf(float(x) - float(TEX) * 0.5) / float(TEX)
+			var lane_wear := exp(-pow(lane * 5.5, 2.0)) * 0.14
 			# Structural tile grid: dark grout line on each tile edge —
 			# this is what survives mips and kills the "flat slab" look.
 			var edge_x := x % TILE_PX
@@ -58,6 +64,11 @@ static func floor_albedo(base_color: Color, floor_index: int) -> ImageTexture:
 				# Directional nap: faint diagonal brush streaks inside tiles.
 				var nap := sin(float(x + y) * PI / 11.0) * 0.05
 				col = Color(col.r + nap, col.g + nap, col.b + nap)
+			# Apply traffic wear last (after grid), darkening the lane.
+			col = Color(
+				clampf(col.r - lane_wear, 0.0, 1.0),
+				clampf(col.g - lane_wear, 0.0, 1.0),
+				clampf(col.b - lane_wear, 0.0, 1.0))
 			var n := (rng.randf() - 0.5) * 0.09
 			img.set_pixel(x, y, Color(
 				clampf(col.r + n, 0.0, 1.0),

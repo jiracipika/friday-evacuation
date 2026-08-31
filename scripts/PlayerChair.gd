@@ -39,6 +39,8 @@ var is_boosting: bool = false
 var can_move: bool = true
 var is_stunned: float = 0.0  # seconds remaining
 var boost_held_sustain := false  # hold-boost: timer refills while held, cooldown grows
+var _trigger_boost_engaged := false  # RT/R2 pressure-boost arming latch
+var _hum_timer := 0.0  # boost hum re-arm timer (rumble vocabulary)
 const BOOST_SUSTAIN_CAP := 1.4   # max seconds hold-boost can stretch to
 const BOOST_SUSTAIN_CD := 1.5    # extra cooldown seconds per held second
 var stun_mash_bonus := 0.0       # mash-to-recover: input presses reduce stun
@@ -426,6 +428,14 @@ func _physics_process(delta: float) -> void:
 			boost_cd_timer += BOOST_SUSTAIN_CD * delta
 		if Input.is_action_pressed("boost") == false:
 			boost_held_sustain = false
+		# Rumble vocabulary: boost = continuous low HUM (re-armed each
+		# second; the envelope gate lets a thump interrupt it).
+		_hum_timer -= delta
+		if _hum_timer <= 0.0:
+			_hum_timer = 1.0
+			var prefs_hum = load("res://scripts/InputPrefs.gd")
+			if prefs_hum and prefs_hum.has_method("rumble_hum"):
+				prefs_hum.rumble_hum(0.9)
 		if boost_timer <= 0:
 			is_boosting = false
 			if boost_particles:
@@ -464,6 +474,11 @@ func _apply_visual_feedback(delta: float) -> void:
 		target_squash = max(target_squash, 0.82)
 		_play_sfx("land", impact)
 		shake_requested.emit(clampf(impact * 0.018, 0.07, 0.16))
+		# Rumble vocabulary: hard landings = low SPUTTER (scrape/grumble).
+		if impact > 4.0:
+			var prefs_land = load("res://scripts/InputPrefs.gd")
+			if prefs_land and prefs_land.has_method("rumble_sputter"):
+				prefs_land.rumble_sputter()
 
 	if not is_on_floor():
 		landing_velocity = min(landing_velocity, velocity.y)
@@ -487,6 +502,17 @@ func _handle_input(delta: float) -> void:
 	if mobile_input.length() > 0.1:
 		raw_input += mobile_input
 	raw_input = raw_input.limit_length(1.0)
+	# PHASE 3: stick response curve (expo default). Reshapes the analog
+	# magnitude — gentle center for precision lines, full throw at the
+	# edge for racing. Keyboard input is already digital so the curve
+	# only meaningfully affects pads; applying it to both is harmless
+	# (|digital| is 1.0 -> curve(1.0) == 1.0 for all three modes).
+	var stick_mag := raw_input.length()
+	if stick_mag > 0.01:
+		var prefs_curve = load("res://scripts/InputPrefs.gd")
+		if prefs_curve and prefs_curve.has_method("apply_stick_curve"):
+			var reshaped: float = prefs_curve.apply_stick_curve(stick_mag)
+			raw_input = raw_input.normalized() * reshaped
 	var input_dir := Vector3.ZERO
 
 	# Godot's input vector uses negative Y for forward. Project that onto the
@@ -570,6 +596,20 @@ func _handle_input(delta: float) -> void:
 
 	if Input.is_action_just_pressed("boost") and boost_cd_timer <= 0 and not boost_locked:
 		_start_boost()
+	# PHASE 3: ANALOG TRIGGER BOOST — RT/R2 (joy axis 5, TRIGGER_RIGHT).
+	# Pressure scales boost force: light press = gentle burst, full pull
+	# = full boost. Digital A/Cross stays as the always-available fallback
+	# (full strength). Only local, un-stunned chairs; one trigger tick
+	# per press (crossed 0.3 threshold this frame).
+	_trigger_boost_engaged = _trigger_boost_engaged \
+		or (boost_cd_timer <= 0 and not boost_locked and Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT) > 0.3)
+	if _trigger_boost_engaged and boost_cd_timer <= 0 and not boost_locked:
+		var trigger := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT)
+		if trigger > 0.3:
+			_start_boost(0.6 + 0.4 * trigger)  # pressure-scaled force
+			_trigger_boost_engaged = false
+		elif Input.is_action_pressed("boost") == false:
+			_trigger_boost_engaged = false  # released without committing
 
 	if Input.is_action_just_pressed("action"):
 		if suppress_action_jump:

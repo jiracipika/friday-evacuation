@@ -193,6 +193,96 @@ static func is_controller_active() -> bool:
 static func active_keyboard_scale() -> float:
 	return 1.0 if is_controller_active() else keyboard_scale
 
+# --- stick response curves (Phase 3) -----------------------------------------
+
+## Keys/consts for the three curve shapes. LINEAR = raw; EXPO = gentle
+## center for precision, strong edge for full-speed racing (racing
+## default); PRECISION = strong center dial-in, softer edges.
+const CURVE_LINEAR := "linear"
+const CURVE_EXPO := "expo"
+const CURVE_PRECISION := "precision"
+const KEY_STICK_CURVE := "stick_response_curve"
+
+## Reshape an analog magnitude [0..1]. vector must already have deadzone
+## applied (Input.get_vector does this).
+static func apply_stick_curve(strength: float) -> float:
+	var s := clampf(strength, 0.0, 1.0)
+	match _stick_curve_mode():
+		CURVE_EXPO:
+			# v = s^2 blended 55% with linear: gentle center, full edge.
+			return s * 0.45 + s * s * 0.55
+		CURVE_PRECISION:
+			# inverse-expo: fast response near center, softer top end.
+			return s * 0.30 + sqrt(s) * 0.70
+		_:
+			return s
+
+static func _stick_curve_mode() -> String:
+	var raw: Variant = get_setting(KEY_STICK_CURVE, CURVE_EXPO)
+	var mode := str(raw)
+	if mode != CURVE_LINEAR and mode != CURVE_EXPO and mode != CURVE_PRECISION:
+		return CURVE_EXPO
+	return mode
+
+static func stick_curve() -> String:
+	return _stick_curve_mode()
+
+static func set_stick_curve(mode: String) -> void:
+	if mode != CURVE_LINEAR and mode != CURVE_EXPO and mode != CURVE_PRECISION:
+		return
+	set_setting(KEY_STICK_CURVE, mode)
+
+# --- rumble vocabulary (Phase 3) ---------------------------------------------
+# Distinct feel per event family instead of one generic thump:
+#   hum     — boost burn: low long motor, soft
+#   thump   — impacts/stun: both motors, sharp
+#   sputter — trap scrapes/landing: low motor, stuttery short pulses
+#   chirp   — UI/pickup: high motor, very short and light
+
+static func rumble_hum(duration := 0.45) -> void:
+	_vibrate(clampf(duration, 0.1, 1.2), 0.35, 0.0)
+
+static func rumble_thump(strength := 1.0) -> void:
+	_vibrate(0.22, clampf(strength, 0.2, 1.0), clampf(strength, 0.2, 1.0) * 0.8)
+
+static func rumble_sputter() -> void:
+	# Two quick low pulses — reads as a scrape/grumble.
+	_vibrate(0.06, 0.45, 0.0)
+	_vibrate(0.09, 0.45, 0.0, 90)
+
+static func rumble_chirp() -> void:
+	_vibrate(0.05, 0.0, 0.4)
+
+## Envelope gate: a stronger rumble pre-empts a weaker one, so a thump
+## during a boost hum is felt. (Replaces the old first-wins gate.)
+static func _vibrate(duration_s: float, low: float, high: float, delay_ms := 0) -> void:
+	if not vibration_enabled():
+		return
+	if OS.has_feature("web"):
+		return
+	var pads := Input.get_connected_joypads()
+	if pads.is_empty():
+		return
+	var now := Time.get_ticks_msec()
+	var start_ms := now + delay_ms
+	if start_ms < _rumble_until_ms:
+		# Active envelope: only a HIGHER peak may interrupt.
+		if maxf(low, high) <= _rumble_peak:
+			return
+	Input.stop_joy_vibration(pads[0])
+	Input.start_joy_vibration(pads[0], low, high, duration_s)
+	_rumble_until_ms = start_ms + int(duration_s * 1000.0)
+	_rumble_peak = maxf(low, high)
+
+static func rumble(strength: float = 0.6) -> void:
+	# Legacy entry point kept for existing call sites: maps to the
+	# vocabulary (medium thump).
+	rumble_thump(strength)
+
+static func clear_cache() -> void:
+	_rumble_until_ms = 0
+	_rumble_peak = 0.0  # parity with FloorMaterials.clear_cache() test hooks
+
 # --- camera helpers ----------------------------------------------------------
 
 static func invert_camera_x() -> bool:
@@ -269,6 +359,7 @@ static func apply_pad_map_to_input_map() -> void:
 
 const _RUMBLE_MS := 250
 static var _rumble_until_ms := 0
+static var _rumble_peak := 0.0
 
 
 static func _cfg() -> ConfigFile:
@@ -349,23 +440,6 @@ static func handle_mouse_motion(event: InputEvent) -> void:
 		apply_mouse_motion(event)
 
 # --- controller rumble -------------------------------------------------------
-
-## Constant rumble envelope on the first connected joypad. No-ops when
-## disabled, unsupported (web), or no pad. Godot 4.7 web export has no
-## Input.start_joy_vibration — guard with feature tags.
-static func rumble(strength: float = 0.6) -> void:
-	if not vibration_enabled():
-		return
-	if OS.has_feature("web"):
-		return
-	var pads := Input.get_connected_joypads()
-	if pads.is_empty():
-		return
-	var until := Time.get_ticks_msec()
-	if until < _rumble_until_ms:
-		return  # an envelope is already active — don't reset it mid-hum
-	_rumble_until_ms = until + _RUMBLE_MS
-	Input.start_joy_vibration(pads[0], clampf(strength, 0.1, 1.0), 0.0, _RUMBLE_MS / 1000.0)
-
-static func clear_cache() -> void:
-	pass  # parity with FloorMaterials.clear_cache() test hooks
+# (Vocabulary lives ABOVE with the stick-curve section; legacy rumble()
+# there maps to rumble_thump so every existing call site keeps working.)
+# clear_cache() in that section resets the rumble envelope state.
