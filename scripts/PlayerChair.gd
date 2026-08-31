@@ -38,6 +38,10 @@ var boost_cd_timer: float = 0.0
 var is_boosting: bool = false
 var can_move: bool = true
 var is_stunned: float = 0.0  # seconds remaining
+var boost_held_sustain := false  # hold-boost: timer refills while held, cooldown grows
+const BOOST_SUSTAIN_CAP := 1.4   # max seconds hold-boost can stretch to
+const BOOST_SUSTAIN_CD := 1.5    # extra cooldown seconds per held second
+var stun_mash_bonus := 0.0       # mash-to-recover: input presses reduce stun
 var smooth_facing: float = 0.0  # smoothed Y rotation for model
 var chair_wheels: Array[MeshInstance3D] = []
 var chair_seat: MeshInstance3D
@@ -375,6 +379,20 @@ func _physics_process(delta: float) -> void:
 	# Stun timer
 	if is_stunned > 0:
 		is_stunned -= delta
+		# MASH-TO-RECOVER: any gameplay input press shortens the stun.
+		# Wiggling out of a trap is player agency, and the faster wheel
+		# spin below is the visible tell that mashing works.
+		var mashed := Input.is_action_just_pressed("move_forward") \
+			or Input.is_action_just_pressed("move_back") \
+			or Input.is_action_just_pressed("move_left") \
+			or Input.is_action_just_pressed("move_right") \
+			or Input.is_action_just_pressed("boost")
+		if mashed:
+			is_stunned = maxf(is_stunned - 0.15, 0.0)
+			if model_parent and not chair_wheels.is_empty():
+				for wheel in chair_wheels:
+					if is_instance_valid(wheel):
+						wheel.rotation.x += 0.6  # frantic wheel spin tell
 		if model_parent:
 			model_parent.rotation.z = sin(Time.get_ticks_msec() * 0.03) * 0.15
 			model_parent.rotation.y += delta * 12.0
@@ -400,6 +418,14 @@ func _physics_process(delta: float) -> void:
 	if is_boosting:
 		boost_timer -= delta
 		boost_visual_timer = boost_timer
+		# HOLD-BOOST: while the button stays held, keep the burn alive up
+		# to the sustain cap; every held second adds cooldown debt.
+		if boost_held_sustain and Input.is_action_pressed("boost") \
+				and boost_timer < BOOST_SUSTAIN_CAP:
+			boost_timer = minf(boost_timer + delta, BOOST_SUSTAIN_CAP)
+			boost_cd_timer += BOOST_SUSTAIN_CD * delta
+		if Input.is_action_pressed("boost") == false:
+			boost_held_sustain = false
 		if boost_timer <= 0:
 			is_boosting = false
 			if boost_particles:
@@ -553,6 +579,14 @@ func _handle_input(delta: float) -> void:
 			target_squash = 1.18
 			_play_sfx("jump")
 			_rumble(0.25)
+			# BOOST-CANCEL: jumping during the first 0.2s of a boost ends
+			# the boost early but clears HALF its remaining cooldown —
+			# a tech for skilled players (boost into a jump-ledge line).
+			if is_boosting and (boost_duration - boost_visual_timer) < 0.2:
+				is_boosting = false
+				if boost_particles:
+					boost_particles.emitting = false
+				boost_cd_timer *= 0.5
 
 	# Held item (stapler/spill charges) — Q uses the item first; without an
 	# item Q falls back to dropping a sabotage trap (existing behavior).
@@ -592,6 +626,12 @@ func _start_boost(force_mult: float = 1.0, duration_mult: float = 1.0) -> void:
 	is_boosting = true
 	boost_timer = boost_duration * duration_mult
 	boost_cd_timer = boost_cooldown
+	# HOLD-BOOST: as long as boost stays held, the timer refills (capped)
+	# but the cooldown grows — burn now, pay later.
+	if Input.is_action_pressed("boost"):
+		boost_held_sustain = true
+	else:
+		boost_held_sustain = false
 	var dir = Vector2(velocity.x, velocity.z).normalized()
 	if dir.length() < 0.1:
 		# The body root does not rotate; ModelParent does. Use controller facing.

@@ -32,6 +32,7 @@ var cam_look_target: Vector3 = Vector3.ZERO
 var camera_base_fov: float = 70.0
 var camera_shake: float = 0.0
 var camera_shake_time: float = 0.0
+var camera_roll: float = 0.0  # corner-roll feel (radians, small)
 var camera_initialized := false
 var camera_tracked_player_y := 0.0
 # Shared-material caches (perf: one noise build / one leaf material set
@@ -226,6 +227,21 @@ func _update_camera(delta: float) -> void:
 	camera.global_position = cam_follow_pos
 	if not cam_follow_pos.is_equal_approx(cam_look_target):
 		camera.look_at(cam_look_target)
+	# CAMERA FEEL: roll into corners + height drop at speed. The drift
+	# angle (facing vs velocity divergence) tilts the camera a couple of
+	# degrees toward the inside of the turn — sells the slide. Everything
+	# is small and reduced-motion aware.
+	var a11y_check = load("res://scripts/Accessibility.gd")
+	var motion_ok: bool = a11y_check == null or not a11y_check.reduced_motion_enabled()
+	if motion_ok and local_player.has_method("get_facing_direction"):
+		var vel_flat := Vector3(player_vel.x, 0.0, player_vel.z)
+		if vel_flat.length() > 4.0 and fwd.length() > 0.1:
+			var cross_y := fwd.cross(vel_flat.normalized()).y
+			var roll_target := clampf(cross_y * 0.06, -0.035, 0.035)  # ±2 degrees
+			camera_roll = lerpf(camera_roll, roll_target, 1.0 - exp(-5.0 * delta))
+		else:
+			camera_roll = lerpf(camera_roll, 0.0, 1.0 - exp(-5.0 * delta))
+		camera.rotate_object_local(Vector3.BACK, camera_roll)
 	camera_shake = maxf(camera_shake - delta * 0.9, 0.0)
 	camera_shake_time += delta * 34.0
 	var speed_ratio = clampf(speed / 12.0, 0.0, 1.0)
@@ -1279,6 +1295,12 @@ func _build_elevator(from_pos: Vector3, to_pos: Vector3, target_floor: int) -> v
 			return
 		var dy = to_pos.y - body.global_position.y
 		if dy > 1.0:
+			# PERFECT-LANDING BONUS: enter the pad within 1m of its center
+			# and you keep your momentum with a 15% speed kick for 1s —
+			# rewards skilled elevator approaches. Wide entries just go up.
+			var lateral := Vector2(
+				body.global_position.x - from_pos.x,
+				body.global_position.z - from_pos.z).length()
 			# Teleport to destination
 			body.global_position = to_pos + Vector3(0, 1.0, 0)
 			body.velocity = Vector3.ZERO
@@ -1298,6 +1320,13 @@ func _build_elevator(from_pos: Vector3, to_pos: Vector3, target_floor: int) -> v
 			var impact_fx = load("res://scripts/ImpactFX.gd")
 			if impact_fx and impact_fx.has_method("boost_burst"):
 				impact_fx.boost_burst(body.global_position)
+			# Landing bonus (after teleport so the launch carries it)
+			if lateral <= 1.0 and body.has_method("_start_boost"):
+				body._start_boost(0.55, 1.25)  # gentle 1s kick, not a full boost
+				if a11y:
+					a11y.caption("PERFECT LANDING — SPEED BOOST!", 1.2)
+				if impact_fx and impact_fx.has_method("confetti"):
+					impact_fx.confetti(self, body.global_position)
 	)
 
 func _build_ramp(from_pos: Vector3, to_pos: Vector3) -> void:

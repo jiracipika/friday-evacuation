@@ -184,6 +184,49 @@ func _run() -> void:
 		"air control changes lateral velocity mid-flight (dv %.2f, was %.2f)" % [dvx, vel_before])
 	world3["root"].free()
 
+	# --- 5. Hold-boost: sustained burn, cooldown debt ---------------------
+	var world4 := _make_world()
+	var chair4 = world4["chair"]
+	await process_frame
+	await process_frame
+	chair4.set_can_move(true)
+	Input.action_press("move_forward")
+	for i in 30:
+		await physics_frame
+	Input.action_press("boost")
+	await physics_frame
+	await physics_frame
+	check(chair4.is_boosting, "hold-boost: boost started")
+	# Keep holding 1.2s — boost should still be alive past its 0.8s base.
+	var peak_cd := 0.0
+	for i in 72:
+		await physics_frame
+		peak_cd = maxf(peak_cd, chair4.boost_cd_timer)
+	check(chair4.is_boosting, "hold-boost: still burning at 1.2s (base 0.8s)")
+	check(peak_cd > chair4.boost_cooldown + 0.5,
+		"hold-boost: cooldown debt accrued (peak %.2f vs base %.2f)" % [peak_cd, chair4.boost_cooldown])
+	Input.action_release("boost")
+	world4["root"].free()
+
+	# --- 6. Stun mash-to-recover ------------------------------------------
+	var world5 := _make_world()
+	var chair5 = world5["chair"]
+	await process_frame
+	await process_frame
+	chair5.set_can_move(true)
+	chair5.stun(3.0)
+	check(chair5.is_stunned > 2.5, "stun applied (3s)")
+	# Mash: 5 presses spaced 8 frames apart = ~0.75s of stuns reduced 1.5s.
+	for m in 5:
+		Input.action_press("move_forward")
+		await physics_frame
+		Input.action_release("move_forward")
+		for w in 8:
+			await physics_frame
+	check(chair5.is_stunned < 3.0 - 0.6,
+		"mash-to-recover shortens stun (remaining %.2f vs ~2.25 unmashed)" % chair5.is_stunned)
+	world5["root"].free()
+
 	# Cleanup
 	var cleanup := ConfigFile.new()
 	cleanup.save(P.CFG_PATH)
