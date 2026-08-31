@@ -86,6 +86,10 @@ func _start_round(index: int) -> void:
 	var ckeys := CARGO_TYPES.keys()
 	cargo_type_key = ckeys[rng.randi_range(0, ckeys.size() - 1)]
 	var terrain_kind: String = TERRAIN_KINDS[rng.randi_range(0, TERRAIN_KINDS.size() - 1)]
+	# Controls recap at the start of EVERY round.
+	var controls_overlay = load("res://scripts/ControlsOverlay.gd").mount(self)
+	if controls_overlay:
+		controls_overlay.show_for(7.0)
 	_clear_round_nodes()
 	_build_terrain(terrain_kind)
 	_spawn_cargo(cargo_type_key)
@@ -357,6 +361,13 @@ func _destroy_cargo() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	var FollowCameraScript = load("res://scripts/FollowCamera.gd")
 	if FollowCameraScript and FollowCameraScript.handle_mouse_input(event):
+		get_viewport().set_input_as_handled()
+		return
+	# Y/Triangle (or R) re-centers the chase camera.
+	if event.is_action_pressed("recenter_camera"):
+		var input_prefs = load("res://scripts/InputPrefs.gd")
+		if input_prefs:
+			input_prefs.reset_yaw()
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("pause"):

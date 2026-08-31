@@ -74,6 +74,10 @@ func _ready() -> void:
 	_spawn_player()
 	_spawn_chef()
 	mode_hud = _make_mode_hud("PIZZA COLONY", "CLAIM PEPPERONI  •  BUILD FORTS  •  SURVIVE THE CHEF", ROUND_TIME)
+	# Controls recap at round start.
+	var controls_overlay = load("res://scripts/ControlsOverlay.gd").mount(self)
+	if controls_overlay:
+		controls_overlay.show_for(7.0)
 	_caption("STAND ON PEPPERONI TO CLAIM — E BUILDS A FORT")
 
 func _process(delta: float) -> void:
@@ -400,7 +404,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if FollowCameraScript and FollowCameraScript.handle_mouse_input(event):
 		get_viewport().set_input_as_handled()
 		return
-	if event.is_action_pressed("pause"):
+	# Y/Triangle (or R) re-centers the chase camera.
+	if event.is_action_pressed("recenter_camera"):
+		var input_prefs = load("res://scripts/InputPrefs.gd")
+		if input_prefs:
+			input_prefs.reset_yaw()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("pause"):
 		var pause_menu = load("res://scripts/PauseMenu.gd")
 		pause_menu.create(self, Callable())
 		get_viewport().set_input_as_handled()

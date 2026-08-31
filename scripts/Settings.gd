@@ -16,13 +16,20 @@ var subtitles_toggle: CheckButton
 var time_scale_option: OptionButton
 var keyboard_sens_slider: HSlider
 var camera_sens_slider: HSlider
+var scheme_option: OptionButton
+var invert_toggle: CheckButton
+var remap_grid: GridContainer
 var _input_toggles: Dictionary = {}
+var _remap_buttons: Dictionary = {}  # action -> Button
+var _remap_action := ""  # non-empty while listening for a pad button
+var _restoring := false  # blocks reentrant _apply_settings during value restore
 
 const TIME_SCALE_LABELS := ["0.75x (SLOWER)", "1.0x (NORMAL)", "1.25x (FASTER)"]
 
 func _ready() -> void:
 	_load_settings()
 	_build_ui()
+	_restore_persisted_values()
 	_apply_settings()
 
 func _load_settings() -> void:
@@ -138,19 +145,30 @@ func _build_ui() -> void:
 	_add_setting(box, "GAME SPEED (SINGLE PLAYER ONLY)", time_scale_option)
 	time_scale_option.item_selected.connect(func(_index): _apply_settings())
 
-	# --- INPUT: sensitivity, mouse look, controller prefs -------------------
+	# --- INPUT: scheme, sensitivity, mouse look, controller prefs --------
 	var kb_sens_label = Label.new()
 	kb_sens_label.text = "INPUT"
 	kb_sens_label.add_theme_font_size_override("font_size", 13)
 	kb_sens_label.add_theme_color_override("font_color", Color("ff9a1a"))
 	box.add_child(kb_sens_label)
 
+	# Control scheme: AUTO follows whichever device was touched last
+	# (persisted); manual entries pin one scheme. This is the "easy switch".
+	scheme_option = OptionButton.new()
+	scheme_option.add_item("AUTO (FOLLOWS LAST DEVICE USED)")
+	scheme_option.add_item("KEYBOARD & MOUSE")
+	scheme_option.add_item("CONTROLLER")
+	var saved_scheme: String = String(config.get_value("input", "control_scheme", "auto"))
+	scheme_option.selected = 0 if saved_scheme == "auto" else (1 if saved_scheme == "keyboard_mouse" else 2)
+	_add_setting(box, "CONTROL SCHEME", scheme_option)
+	scheme_option.item_selected.connect(func(_index): _apply_settings())
+
 	keyboard_sens_slider = HSlider.new()
-	keyboard_sens_slider.min_value = 0.5
+	keyboard_sens_slider.min_value = 0.35
 	keyboard_sens_slider.max_value = 1.5
 	keyboard_sens_slider.step = 0.05
 	keyboard_sens_slider.custom_minimum_size = Vector2(0, 28)
-	keyboard_sens_slider.value = float(config.get_value("input", "keyboard_sensitivity", 0.7))
+	keyboard_sens_slider.value = float(config.get_value("input", "keyboard_sensitivity", 0.55))
 	_add_setting(box, "KEYBOARD SENSITIVITY (LOW = GENTLER STEERING)", keyboard_sens_slider)
 
 	camera_sens_slider = HSlider.new()
@@ -158,8 +176,14 @@ func _build_ui() -> void:
 	camera_sens_slider.max_value = 2.0
 	camera_sens_slider.step = 0.05
 	camera_sens_slider.custom_minimum_size = Vector2(0, 28)
-	camera_sens_slider.value = float(config.get_value("input", "mouse_sensitivity", 1.0))
+	camera_sens_slider.value = float(config.get_value("input", "mouse_sensitivity", 0.8))
 	_add_setting(box, "CAMERA SENSITIVITY (MOUSE + RIGHT STICK)", camera_sens_slider)
+
+	invert_toggle = CheckButton.new()
+	invert_toggle.text = "INVERT CAMERA PAN"
+	invert_toggle.button_pressed = bool(config.get_value("input", "invert_camera_x", false))
+	box.add_child(invert_toggle)
+	invert_toggle.toggled.connect(func(_value): _apply_settings())
 
 	var mouse_look_toggle = CheckButton.new()
 	mouse_look_toggle.text = "MOUSE CAMERA LOOK (MOVE MOUSE TO ORBIT)"
@@ -179,8 +203,28 @@ func _build_ui() -> void:
 	box.add_child(vibration_toggle)
 	_input_toggles["vibration_enabled"] = vibration_toggle
 
+	# --- controller button remapping (easy, live-applied) ----------------
+	var remap_title = Label.new()
+	remap_title.text = "CONTROLLER BUTTONS — TAP A ROW, THEN PRESS A PAD BUTTON"
+	remap_title.add_theme_font_size_override("font_size", 13)
+	remap_title.add_theme_color_override("font_color", Color("ff9a1a"))
+	box.add_child(remap_title)
+
+	remap_grid = GridContainer.new()
+	remap_grid.columns = 2
+	remap_grid.add_theme_constant_override("h_separation", 10)
+	remap_grid.add_theme_constant_override("v_separation", 6)
+	box.add_child(remap_grid)
+	_build_remap_rows()
+
+	var reset_remap = Button.new()
+	reset_remap.text = "RESET CONTROLLER BUTTONS TO DEFAULT"
+	reset_remap.add_theme_font_size_override("font_size", 13)
+	box.add_child(reset_remap)
+	reset_remap.pressed.connect(_reset_remap)
+
 	var controller_hint = Label.new()
-	controller_hint.text = "CONTROLLER: LEFT STICK MOVE / A BOOST / X ACTION / B SABOTAGE / START PAUSE / RIGHT STICK CAMERA / R RECENTERS ON KEYBOARD"
+	controller_hint.text = "STICKS MOVE/CAMERA  •  DEDICATED RECENTER: Y / TRIANGLE (PAD) OR R (KEYBOARD)  •  SCHEME AUTO-SWITCHES WHEN YOU GRAB THE OTHER DEVICE — OR PIN IT ABOVE"
 	controller_hint.add_theme_font_size_override("font_size", 10)
 	controller_hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
 	controller_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -204,6 +248,85 @@ func _add_setting(parent: VBoxContainer, label_text: String, control: Control) -
 	parent.add_child(label)
 	parent.add_child(control)
 
+# --- controller remap helpers ------------------------------------------------
+
+const REMAP_ACTIONS := ["boost", "action", "sabotage", "pause", "recenter_camera"]
+const REMAP_LABELS := {
+	"boost": "BOOST",
+	"action": "ACTION / INTERACT",
+	"sabotage": "SABOTAGE",
+	"pause": "PAUSE",
+	"recenter_camera": "RECENTER CAMERA",
+}
+
+func _build_remap_rows() -> void:
+	var prefs = load("res://scripts/InputPrefs.gd")
+	if remap_grid == null:
+		return
+	for child in remap_grid.get_children():
+		child.queue_free()
+	_remap_buttons.clear()
+	for action in REMAP_ACTIONS:
+		var label = Label.new()
+		label.text = REMAP_LABELS[action]
+		label.add_theme_font_size_override("font_size", 13)
+		label.add_theme_color_override("font_color", Color(1, 1, 1, 0.65))
+		remap_grid.add_child(label)
+		var btn = Button.new()
+		btn.text = "…" if prefs == null else prefs.pad_button_name(action)
+		btn.custom_minimum_size = Vector2(0, 34)
+		btn.add_theme_font_size_override("font_size", 13)
+		var bound_action: String = action
+		btn.pressed.connect(func(): _remap_listen(bound_action, btn))
+		remap_grid.add_child(btn)
+		_remap_buttons[action] = btn
+
+## Arm one row to capture the next pad button press. The button caption
+## flips to "PRESS A PAD BUTTON…"; the next InputEventJoypadButton wins.
+func _remap_listen(action: String, btn: Button) -> void:
+	_remap_action = action
+	btn.text = "PRESS A PAD BUTTON…"
+	btn.grab_focus()
+
+func _reset_remap() -> void:
+	var prefs = load("res://scripts/InputPrefs.gd")
+	if prefs == null:
+		return
+	for action in REMAP_ACTIONS:
+		prefs.set_pad_button(action, prefs.DEFAULT_PAD_MAP[action])
+	config.set_value("input", "pad_button_map", prefs.pad_button_map())
+	_refresh_remap_labels()
+
+func _refresh_remap_labels() -> void:
+	var prefs = load("res://scripts/InputPrefs.gd")
+	if prefs == null:
+		return
+	for action in _remap_buttons:
+		if action == _remap_action:
+			continue
+		var b: Button = _remap_buttons[action]
+		b.text = prefs.pad_button_name(action)
+
+## Capture the pressed pad button for the armed action.
+func _input(event: InputEvent) -> void:
+	if _remap_action == "":
+		return
+	if event is InputEventJoypadButton and event.pressed:
+		var prefs = load("res://scripts/InputPrefs.gd")
+		if prefs:
+			prefs.set_pad_button(_remap_action, event.button_index)
+			# Keep the local snapshot in sync so the next _apply_settings
+			# save doesn't clobber the remap on disk.
+			config.set_value("input", "pad_button_map", prefs.pad_button_map())
+		_remap_action = ""
+		_refresh_remap_labels()
+		get_viewport().set_input_as_handled()
+	elif event is InputEventKey and event.pressed:
+		# Any key press cancels listening (escape hatch without a pad).
+		_remap_action = ""
+		_refresh_remap_labels()
+		get_viewport().set_input_as_handled()
+
 func _make_slider() -> HSlider:
 	var slider = HSlider.new()
 	slider.min_value = 0.0
@@ -213,6 +336,12 @@ func _make_slider() -> HSlider:
 	return slider
 
 func _apply_settings() -> void:
+	# Reentrancy guard: setting a slider value inside _restore_persisted_values
+	# fires value_changed -> this function, which would save the NOT-YET-
+	# restored sliders (music/sfx read 0) over the live cfg. That race is
+	# exactly how opening Settings used to zero the audio settings.
+	if _restoring:
+		return
 	if not quality_option:
 		return
 	var quality = quality_option.selected
@@ -232,6 +361,7 @@ func _apply_settings() -> void:
 	if keyboard_sens_slider and camera_sens_slider:
 		config.set_value("input", "keyboard_sensitivity", keyboard_sens_slider.value)
 		config.set_value("input", "mouse_sensitivity", camera_sens_slider.value)
+		config.set_value("input", "stick_sensitivity", camera_sens_slider.value)
 		for key in _input_toggles:
 			config.set_value("input", key, _input_toggles[key].button_pressed)
 		# Live-apply: refresh InputPrefs caches so pause-menu changes take
@@ -239,6 +369,21 @@ func _apply_settings() -> void:
 		var prefs = load("res://scripts/InputPrefs.gd")
 		if prefs and prefs.has_method("refresh_cache"):
 			prefs.refresh_cache()
+	if scheme_option:
+		var scheme := "auto"
+		if scheme_option.selected == 1:
+			scheme = "keyboard_mouse"
+		elif scheme_option.selected == 2:
+			scheme = "controller"
+		config.set_value("input", "control_scheme", scheme)
+		var prefs2 = load("res://scripts/InputPrefs.gd")
+		if prefs2:
+			prefs2.set_scheme_mode(StringName(scheme))
+	if invert_toggle:
+		config.set_value("input", "invert_camera_x", invert_toggle.button_pressed)
+		var prefs3 = load("res://scripts/InputPrefs.gd")
+		if prefs3:
+			prefs3.set_invert_camera_x(invert_toggle.button_pressed)
 	config.save("user://settings.cfg")
 	var audio = get_node_or_null("/root/AudioManager")
 	if audio:
@@ -285,10 +430,19 @@ func _close() -> void:
 	closed.emit()
 	queue_free()
 
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_READY and quality_option:
-		quality_option.select(int(config.get_value("graphics", "quality", 1)))
-		master_slider.value = float(config.get_value("audio", "master", 1.0)) * 100.0
-		music_slider.value = float(config.get_value("audio", "music", 0.5)) * 100.0
-		sfx_slider.value = float(config.get_value("audio", "sfx", 0.8)) * 100.0
-		shake_toggle.button_pressed = bool(config.get_value("accessibility", "screen_shake", true))
+## Restore every control's value from the persisted cfg BEFORE the first
+## _apply_settings() save. (The old _notification(READY) hook was dead:
+## NOTIFICATION_READY fires before _ready() builds the controls, so its
+## quality_option guard was always false — and the first _apply_settings
+## then persisted quality=0 + audio 0.0, silently zeroing the player's
+## graphics/audio settings on every Settings open.)
+func _restore_persisted_values() -> void:
+	if quality_option == null:
+		return
+	_restoring = true
+	quality_option.select(int(config.get_value("graphics", "quality", 1)))
+	master_slider.value = float(config.get_value("audio", "master", 1.0)) * 100.0
+	music_slider.value = float(config.get_value("audio", "music", 0.5)) * 100.0
+	sfx_slider.value = float(config.get_value("audio", "sfx", 0.8)) * 100.0
+	shake_toggle.button_pressed = bool(config.get_value("accessibility", "screen_shake", true))
+	_restoring = false

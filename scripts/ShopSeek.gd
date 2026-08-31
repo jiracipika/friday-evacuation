@@ -82,6 +82,10 @@ func _ready() -> void:
 	_pick_shopper_list()
 	_spawn_guard()
 	mode_hud = _make_mode_hud("SHOP & SEEK", "SHOPPER ROUND — GRAB YOUR LIST  •  E: DISGUISE", ROUND_TIME)
+	# Controls recap at round start.
+	var controls_overlay = load("res://scripts/ControlsOverlay.gd").mount(self)
+	if controls_overlay:
+		controls_overlay.show_for(7.0)
 	_caption("GRAB %d ITEMS — GUARD ON PATROL" % list_target)
 
 func _process(delta: float) -> void:
@@ -115,6 +119,13 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	var FollowCameraScript = load("res://scripts/FollowCamera.gd")
 	if FollowCameraScript and FollowCameraScript.handle_mouse_input(event):
+		get_viewport().set_input_as_handled()
+		return
+	# Y/Triangle (or R) re-centers the chase camera.
+	if event.is_action_pressed("recenter_camera"):
+		var input_prefs = load("res://scripts/InputPrefs.gd")
+		if input_prefs:
+			input_prefs.reset_yaw()
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("pause"):

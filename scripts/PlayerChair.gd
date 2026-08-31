@@ -479,23 +479,65 @@ func _handle_input(delta: float) -> void:
 
 	input_dir = input_dir.normalized()
 
+	# --- Phase 1: reverse + brake + drift ------------------------------
+	# "Back" is one coherent mode: brake hard while rolling forward, then
+	# become a slow reverse foot-shove once (nearly) stopped. Never flaps
+	# between the two — the branch depends only on the velocity sign
+	# relative to input, not on speed thresholds.
+	var horiz_now := Vector2(velocity.x, velocity.z)
+	var fwd_speed: float = 0.0
+	if input_dir.length() > 0.1:
+		fwd_speed = horiz_now.dot(Vector2(input_dir.x, input_dir.z))
+
 	if input_dir.length() > 0.1:
 		# Target-velocity steering is responsive while retaining weaker control
 		# during a boost, so the chair still has readable momentum.
-		# InputPrefs.keyboard_scale (default 0.7) eases turn-in without
-		# touching top speed; sliders cover 0.5..1.5. Only ever reached for
-		# controllable chairs — remote chairs early-return via can_move.
+		# InputPrefs.active_keyboard_scale() eases turn-in for keyboard play
+		# (default 0.55) without touching top speed; controller play runs
+		# FULL acceleration — the analog stick is the finesse control.
+		# Only ever reached for controllable chairs — remote chairs
+		# early-return via can_move.
 		var prefs = load("res://scripts/InputPrefs.gd")
 		var steer_accel := acceleration
 		if prefs:
-			steer_accel = acceleration * prefs.keyboard_scale
+			steer_accel = acceleration * prefs.active_keyboard_scale()
 		var effective_max := max_speed * carry_slowdown
 		var target := Vector2(input_dir.x, input_dir.z) * effective_max
-		var horizontal := Vector2(velocity.x, velocity.z)
 		var control := boost_steering if is_boosting else 1.0
-		horizontal = horizontal.move_toward(target, steer_accel * control * delta)
-		velocity.x = horizontal.x
-		velocity.z = horizontal.y
+		if raw_input.y > 0.5:
+			if fwd_speed > 1.0:
+				# BRAKE: back input while rolling forward stops the chair
+				# much faster than coasting (2.5x accel toward zero).
+				# Threshold 1.0 sits safely above the reverse step size
+				# (accel*0.9*dt ≈ 0.28/tick at default sens) so a
+				# reversing chair can never tip into the brake branch —
+				# that flapped brake/reverse every 3 ticks at 0.5.
+				horiz_now = horiz_now.move_toward(Vector2.ZERO, steer_accel * 2.5 * delta)
+				velocity.x = horiz_now.x
+				velocity.z = horiz_now.y
+			else:
+				# REVERSE: slow foot-shove backwards once stopped. Accel
+				# 0.9x so it reaches the 25% cap cleanly (0.5x left a
+				# visible 5-tick speed moiré — the shove kept restarting).
+				var rev_target := Vector2(input_dir.x, input_dir.z) * max_speed * 0.25
+				horiz_now = horiz_now.move_toward(rev_target, steer_accel * 0.9 * delta)
+				velocity.x = horiz_now.x
+				velocity.z = horiz_now.y
+		else:
+			# DRIFT-STEER: above 8 m/s, steering authority falls off (down
+			# to 45% at top speed). The chair cannot fully redirect its
+			# velocity in one tick, so travel direction lags behind facing
+			# — the shopping-cart slide. Facing still snaps to input, so
+			# the nose points into the corner while momentum carries out.
+			var speed_now := horiz_now.length()
+			var steer_auth := 1.0
+			if speed_now > 8.0:
+				steer_auth = 1.0 - clampf((speed_now - 8.0) / 4.0, 0.0, 1.0) * 0.55
+			horiz_now = horiz_now.move_toward(target, steer_accel * steer_auth * control * delta)
+			velocity.x = horiz_now.x
+			velocity.z = horiz_now.y
+		# Facing: pure input direction (the visual slide comes from the
+		# steering-authority falloff, not from blending facing).
 		smooth_facing = atan2(-input_dir.x, -input_dir.z)
 	else:
 		_apply_friction(delta)

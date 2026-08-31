@@ -1410,6 +1410,11 @@ func _start_countdown() -> void:
 	timer = countdown_seconds
 	if local_player:
 		local_player.set_can_move(false)
+	# Controls recap at the start of EVERY round (fresh match, rematch,
+	# or late-join). Mirrored to captions via Accessibility.
+	var controls_overlay = _controls_overlay()
+	if controls_overlay:
+		controls_overlay.show_for(7.0)
 	if countdown_label:
 		countdown_label.text = str(int(countdown_seconds))
 		countdown_label.visible = true
@@ -1436,6 +1441,13 @@ func _start_race() -> void:
 	_spawn_traps()
 	if hazards and hazards.has_method("start_race"):
 		hazards.start_race()
+
+## Lazily mount the controls overlay (deduped, session-lifetime).
+func _controls_overlay() -> Node:
+	var script = load("res://scripts/ControlsOverlay.gd")
+	if script:
+		return script.mount(self)
+	return null
 
 ## Lazily mount the race announcer (a11y caption hype).
 func _announcer() -> Node:
@@ -1608,14 +1620,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			input_prefs.apply_mouse_motion(event)
 			get_viewport().set_input_as_handled()
 			return
-	# R re-centers the camera behind the chair mid-race.
-	if event is InputEventKey and event.pressed and not event.echo \
-			and event.physical_keycode == KEY_R and match_state == &"racing":
+	# Re-center the camera behind the chair mid-race (R on keyboard,
+	# Y/Triangle on pad — the recenter_camera action, remappable).
+	if event.is_action_pressed("recenter_camera") and match_state == &"racing":
 		var input_prefs = load("res://scripts/InputPrefs.gd")
 		if input_prefs:
 			input_prefs.reset_yaw()
-			get_viewport().set_input_as_handled()
-			return
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("pause") and match_state != &"finished":
 		var network = get_node_or_null("/root/Network")
 		if network and network.peer:

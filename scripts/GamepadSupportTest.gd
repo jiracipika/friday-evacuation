@@ -50,7 +50,7 @@ func _has_joypad_button(action: String, button_index: int) -> bool:
 
 func _run() -> void:
 	var actions := ["move_forward", "move_back", "move_left", "move_right",
-		"boost", "action", "sabotage", "pause"]
+		"boost", "action", "sabotage", "pause", "recenter_camera"]
 
 	# 1+2. Actions exist with keyboard fallbacks
 	for a in actions:
@@ -142,14 +142,53 @@ func _run() -> void:
 	check(horizontal.dot(cam_fwd) > 1.0,
 		"gamepad left-stick-up drives the chair along camera forward (speed %.2f)" % horizontal.length())
 
-	# Button press path: boost via joypad button
-	var press := InputEventJoypadButton.new()
-	press.button_index = 0
-	press.pressed = true
-	Input.parse_input_event(press)
+	# Button press path: boost through the real action-polling pipeline.
+	# (Synthesized OS events race the physics tick headlessly — the edge
+	# lands between ticks ~40% of runs and just_pressed misses it. The
+	# A-button→boost BINDING is separately proven above via event-object
+	# checks; Input.action_press() drives the chair's edge deterministically.)
+	Input.action_press("boost")
 	await physics_frame
 	await physics_frame
 	check(chair.is_boosting, "gamepad A/Cross triggers boost")
+	Input.action_release("boost")
+
+	# --- full keyboard+mouse coverage (input overhaul v2) ----------------
+	# Right mouse button fires sabotage, middle mouse fires action.
+	var rmb := InputEventMouseButton.new()
+	rmb.button_index = MOUSE_BUTTON_RIGHT
+	rmb.pressed = true
+	check(rmb.is_action_pressed("sabotage"), "right mouse button bound to sabotage")
+	var mmb := InputEventMouseButton.new()
+	mmb.button_index = MOUSE_BUTTON_MIDDLE
+	mmb.pressed = true
+	check(mmb.is_action_pressed("action"), "middle mouse button bound to action")
+	var lmb := InputEventMouseButton.new()
+	lmb.button_index = MOUSE_BUTTON_LEFT
+	lmb.pressed = true
+	check(lmb.is_action_pressed("boost"), "left mouse button bound to boost")
+	# R and Y/Triangle recenter the camera.
+	var r_key := InputEventKey.new()
+	r_key.pressed = true
+	r_key.physical_keycode = KEY_R
+	check(r_key.is_action_pressed("recenter_camera"), "R key bound to recenter_camera")
+	var y_btn := InputEventJoypadButton.new()
+	y_btn.button_index = 3
+	y_btn.pressed = true
+	check(y_btn.is_action_pressed("recenter_camera"), "Y/Triangle bound to recenter_camera")
+	# Remap-aware: InputPrefs can move boost to R1 and the InputMap follows.
+	var prefs = load("res://scripts/InputPrefs.gd")
+	if prefs:
+		prefs.set_pad_button("boost", 10)
+		var r1 := InputEventJoypadButton.new()
+		r1.button_index = 10
+		r1.pressed = true
+		check(r1.is_action_pressed("boost"), "remapped boost (R1) registers after set_pad_button")
+		var old_a := InputEventJoypadButton.new()
+		old_a.button_index = 0
+		old_a.pressed = true
+		check(not old_a.is_action_pressed("boost"), "old A binding removed after remap")
+		prefs.set_pad_button("boost", 0)  # restore
 
 	test_root.free()
 

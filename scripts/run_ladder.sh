@@ -2,7 +2,7 @@
 # run_ladder.sh — full serial verification ladder for friday-evacuation.
 cd /Volumes/HARD/projects/friday-evacuation || exit 1
 git diff --check || { echo "diff-check FAILED"; exit 1; }
-TESTS="BootTest PlayerChairSmokeTest CharacterRosterSmokeTest HauledSmokeTest ShopSeekSmokeTest PizzaColonySmokeTest TouchControlsSmokeTest ModeSmokeTest NetworkSmokeTest NetworkTwoPeerTest AnnouncerSmokeTest PanicCamSmokeTest LevelClearTest HazardsSmokeTest ThemedFloorsSmokeTest PowerUpSmokeTest PauseMenuSmokeTest AccessibilitySmokeTest RaceModifiersSmokeTest ModifierMenuSmokeTest GhostRacerSmokeTest StatsRoundTripTest VisualDesignSmokeTest WallMaterialsSmokeTest FaceSmokeTest InputPrefsSmokeTest GamepadSupportTest"
+TESTS="BootTest PlayerChairSmokeTest CharacterRosterSmokeTest HauledSmokeTest ShopSeekSmokeTest PizzaColonySmokeTest TouchControlsSmokeTest ModeSmokeTest NetworkSmokeTest NetworkTwoPeerTest AnnouncerSmokeTest PanicCamSmokeTest LevelClearTest HazardsSmokeTest ThemedFloorsSmokeTest PowerUpSmokeTest PauseMenuSmokeTest AccessibilitySmokeTest RaceModifiersSmokeTest ModifierMenuSmokeTest GhostRacerSmokeTest StatsRoundTripTest VisualDesignSmokeTest WallMaterialsSmokeTest FaceSmokeTest InputPrefsSmokeTest ControlsOverlaySmokeTest SettingsRoundTripTest GamepadSupportTest"
 overall=0
 for t in $TESTS; do
   if [ ! -f "scripts/$t.gd" ]; then

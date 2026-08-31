@@ -1,5 +1,48 @@
 # FRIDAY 5PM: EVACUATION — Development Roadmap
 
+## Input Overhaul v2 (commit pending, Aug 29 2026) — COMPLETE
+User asked: lower sens further, full keyboard+mouse support, remember device
+selection with easy switching, easy controller configuration, controls recap
+at the start of every round.
+- **Sens defaults lowered again**: keyboard 0.7 → **0.55** (range now
+  0.35–1.5), mouse/stick 1.0 → **0.8**. One-time cfg migration
+  (`sens_migration_v2` flag) moves ONLY values still on old defaults;
+  personalized settings untouched.
+- **Full KB+M**: RMB = sabotage, MMB = action/jump (LMB boost + mouse orbit
+  already existed). New `recenter_camera` action (R + Y/Triangle) wired in
+  all 4 modes.
+- **Scheme memory**: `control_scheme` = auto | keyboard_mouse | controller
+  persisted in cfg. AUTO tracks whichever device was actually touched last
+  (`last_device`, written deferred to avoid cfg IO in input handlers);
+  stick-drift (<0.25) filtered. Controller scheme runs FULL chair accel
+  (stick = finesse); keyboard scheme applies the gentler scale.
+- **Easy controller config**: Settings → CONTROLLER BUTTONS section with
+  per-action remap chips (tap row, press pad button; any key cancels) +
+  RESET TO DEFAULT. `InputPrefs.set_pad_button()` rewrites the InputMap
+  live; overlay/HUD labels are remap-aware via `pad_button_name()`.
+  INVERT CAMERA PAN toggle added too.
+- **ControlsOverlay.gd** (CanvasLayer 30): two-column CONTROLS recap
+  (KEYBOARD & MOUSE vs CONTROLLER) shown at EVERY round start in all 4
+  modes (7s, fades; reduced-motion = instant hide). Active scheme column
+  highlighted; re-highlights LIVE if the player flips device mid-display.
+  Doubles as the scheme-detection feed (`_input` → `note_device`) for the
+  whole mode session.
+- Tests: InputPrefsSmokeTest 56 checks (scheme/remap/invert/migration),
+  ControlsOverlaySmokeTest 24 (mount dedupe, columns, live flip,
+  auto-hide, all 4 modes trigger at round start), GamepadSupportTest 43
+  (RMB/MMB/LMB/R/Y bindings + remap-aware live rewrite). Settings.gd
+  added to BootTest compile list (was missing — let a parse error slip).
+- GOTCHAs learned this slice:
+  - `is_action_just_pressed` edge vs physics tick race: a synthesized
+    `Input.parse_input_event` can land between physics ticks headlessly
+    and the edge disappears (flake ~40%). Drive edges with
+    `Input.action_press()` in tests; also `physics_frame` awaits fire
+    BEFORE node `_physics_process` of that tick — await TWO frames.
+  - Settings._apply_settings saves its whole local ConfigFile snapshot —
+    after a remap, sync `config.set_value("input","pad_button_map",…)`
+    or the next unrelated settings save wipes the remap from disk.
+
+
 > **FOR IMPLEMENTATION AGENTS (GPT-5.6 Luna / others):**
 > Read this entire file before writing any code. Each task below has exact file paths,
 > function names, API calls, and acceptance criteria. Do not skip the "VERIFY" steps.

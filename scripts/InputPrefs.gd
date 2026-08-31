@@ -12,10 +12,11 @@
 # Sensitivity model:
 #   The chair is a target-velocity controller (move_toward at
 #   `acceleration`). Steering response scales LINEARLY with
-#   keyboard_sensitivity over [0.5 .. 1.5]; 1.0 = the shipped default
-#   feel. The user asked for a LOWER default, so KEYBOARD_DEFAULT is
-#   0.7 — that maps to acceleration ~24 (34 * 0.7), a noticeably
-#   gentler turn-in than before without changing top speed.
+#   keyboard_sensitivity over [0.35 .. 1.5]; 1.0 = the original shipped
+#   feel. The user asked for a LOWER default TWICE, so KEYBOARD_DEFAULT
+#   is 0.55 — acceleration ~19 (34 * 0.55), gentle turn-in without
+#   touching top speed. Controller play runs at full acceleration:
+#   the analog stick IS the finesse control there.
 class_name InputPrefs
 extends RefCounted
 
@@ -25,27 +26,50 @@ static var CFG_PATH := "user://settings.cfg"
 const SECTION := "input"
 
 # --- persisted keys -------------------------------------------------------
-const KEY_KB_SENS := "keyboard_sensitivity"      # 0.5 .. 1.5 (1.0 = old feel)
+const KEY_KB_SENS := "keyboard_sensitivity"      # 0.35 .. 1.5 (1.0 = old feel)
 const KEY_MOUSE_LOOK := "mouse_look_enabled"     # bool
-const KEY_MOUSE_SENS := "mouse_sensitivity"      # 0.25 .. 2.0 (1.0 default)
+const KEY_MOUSE_SENS := "mouse_sensitivity"      # 0.25 .. 2.0 (0.8 default)
 const KEY_STICK_LOOK := "stick_look_enabled"     # right-stick camera orbit
-const KEY_STICK_SENS := "stick_sensitivity"      # 0.25 .. 2.0
+const KEY_STICK_SENS := "stick_sensitivity"      # 0.25 .. 2.0 (0.8 default)
 const KEY_VIBRATION := "vibration_enabled"       # controller rumble
+const KEY_SCHEME := "control_scheme"             # auto|keyboard_mouse|controller
+const KEY_PAD_MAP := "pad_button_map"            # action -> joypad button index
+const KEY_INVERT := "invert_camera_x"            # mirrored camera pan
 
 # --- defaults ---------------------------------------------------------------
 # Keyboard deliberately LOWER than 1.0: the pre-settings feel (accel 34)
-# read twitchy to new players. 0.7 -> accel ~24 keeps full top speed but
-# smooths turn-in. Mouse/stick look ship ON because the game is 3D and
-# every "any controller" peer expects right-stick camera.
-const KEYBOARD_DEFAULT := 0.7
-const KEYBOARD_MIN := 0.5
+# read twitchy to new players. 0.55 -> accel ~19 keeps full top speed
+# but smooths turn-in (user asked to lower it a second time — was 0.7).
+# Mouse/stick look default 0.8: same "a notch gentler" reasoning, and the
+# range still reaches the old 1.0 feel if a player wants it back.
+const KEYBOARD_DEFAULT := 0.55
+const KEYBOARD_MIN := 0.35
 const KEYBOARD_MAX := 1.5
-const MOUSE_DEFAULT := 1.0
+const MOUSE_DEFAULT := 0.8
 const MOUSE_MIN := 0.25
 const MOUSE_MAX := 2.0
-const STICK_DEFAULT := 1.0
+const STICK_DEFAULT := 0.8
 const STICK_MIN := 0.25
 const STICK_MAX := 2.0
+
+# --- control scheme ---------------------------------------------------------
+# "auto" switches whichscheme() reports whenever the player actually
+# touches the other device — whatever they grab last round is what they
+# get this round, remembered in the cfg. Manual modes pin one scheme.
+const SCHEME_AUTO := &"auto"
+const SCHEME_KEYBOARD := &"keyboard_mouse"
+const SCHEME_CONTROLLER := &"controller"
+
+## Default joypad button per action (Godot joy button indices: 0=A/Cross,
+## 1=B/Circle, 2=X/Square, 3=Y/Triangle, 6=Start, 7=Options.. 9/10=L/R
+## shoulder, 13/14=L/R dpad). Mirrors the project.godot InputMap defaults.
+const DEFAULT_PAD_MAP := {
+	"boost": 0,
+	"action": 2,
+	"sabotage": 1,
+	"pause": 6,
+	"recenter_camera": 3,
+}
 
 ## Camera yaw state lives HERE (not in the chair) because the camera
 ## follows chair facing — the offset must be applied by the mode scene's
@@ -63,17 +87,185 @@ static var _mouse_look_on := true
 static var _mouse_sens := MOUSE_DEFAULT
 static var _stick_look_on := true
 static var _stick_sens := STICK_DEFAULT
+static var _invert_x := false
+
+## Control-scheme memory. _scheme_mode is the persisted player choice
+## (AUTO by default); _last_device tracks whichever device was touched
+## last so AUTO follows the player's hands. Both survive restarts —
+## _last_device is persisted whenever it flips (see note_device).
+static var _scheme_mode: StringName = SCHEME_AUTO
+static var _last_device: StringName = SCHEME_KEYBOARD
+static var _last_device_dirty := false  # cfg write pending (avoid IO in input handlers)
 
 
 ## Sync the per-event caches from the cfg. Cheap; call on mode _ready
 ## and whenever the Settings screen applies (pause-menu changes then
 ## take effect immediately on resume).
 static func refresh_cache() -> void:
+	migrate_defaults()
 	_mouse_look_on = mouse_look_enabled()
 	_mouse_sens = mouse_sensitivity()
 	_stick_look_on = stick_look_enabled()
 	_stick_sens = stick_sensitivity()
+	_invert_x = invert_camera_x()
 	keyboard_scale = keyboard_sensitivity()
+	var raw_scheme: Variant = get_setting(KEY_SCHEME, SCHEME_AUTO)
+	_scheme_mode = raw_scheme if raw_scheme is StringName or raw_scheme is String else SCHEME_AUTO
+	if _scheme_mode != SCHEME_AUTO and _scheme_mode != SCHEME_KEYBOARD and _scheme_mode != SCHEME_CONTROLLER:
+		_scheme_mode = SCHEME_AUTO
+	var raw_device: Variant = get_setting(KEY_LAST_DEVICE, SCHEME_KEYBOARD)
+	_last_device = raw_device if raw_device is StringName or raw_device is String else SCHEME_KEYBOARD
+	apply_pad_map_to_input_map()
+
+## One-time migration to the second, lower sensitivity defaults. Only
+## values still sitting EXACTLY on an old default move — anything the
+## player personalized is left alone.
+const KEY_MIGRATED := "sens_migration_v2"
+const KEY_LAST_DEVICE := "last_device"
+
+static func migrate_defaults() -> void:
+	var config := _cfg()
+	if _as_bool(config.get_value(SECTION, KEY_MIGRATED, false), false):
+		return
+	if is_equal_approx(float(config.get_value(SECTION, KEY_KB_SENS, 0.7)), 0.7):
+		config.set_value(SECTION, KEY_KB_SENS, KEYBOARD_DEFAULT)
+	if is_equal_approx(float(config.get_value(SECTION, KEY_MOUSE_SENS, 1.0)), 1.0):
+		config.set_value(SECTION, KEY_MOUSE_SENS, MOUSE_DEFAULT)
+	if is_equal_approx(float(config.get_value(SECTION, KEY_STICK_SENS, 1.0)), 1.0):
+		config.set_value(SECTION, KEY_STICK_SENS, STICK_DEFAULT)
+	config.set_value(SECTION, KEY_MIGRATED, true)
+	config.save(CFG_PATH)
+
+# --- control scheme ---------------------------------------------------------
+
+## The persisted player choice: AUTO (follow last device), or a pinned
+## KEYBOARD / CONTROLLER scheme.
+static func scheme_mode() -> StringName:
+	return _scheme_mode
+
+static func set_scheme_mode(mode: StringName) -> void:
+	_scheme_mode = mode
+	set_setting(KEY_SCHEME, String(mode))
+
+## Feed every input event you see through here (mode _unhandled_input,
+## first line). AUTO then always reports whichever device the player is
+## actually holding; manual pins ignore it. Stick drift and sub-pixel
+## mouse jitter are filtered so a resting pad never flips the scheme.
+static func note_device(event: InputEvent) -> void:
+	if event is InputEventJoypadMotion:
+		if absf(event.axis_value) >= 0.25:
+			_set_last_device(SCHEME_CONTROLLER)
+	elif event is InputEventJoypadButton:
+		if event.pressed:
+			_set_last_device(SCHEME_CONTROLLER)
+	elif event is InputEventKey:
+		if event.pressed:
+			_set_last_device(SCHEME_KEYBOARD)
+	elif event is InputEventMouseButton:
+		_set_last_device(SCHEME_KEYBOARD)
+
+static func _set_last_device(device: StringName) -> void:
+	if _last_device == device:
+		return
+	_last_device = device
+	_last_device_dirty = true
+	call_deferred_flush_device()
+
+## Persist the device flip outside the input event (cfg IO in an input
+## handler would stutter the frame). Static-safe: no node needed.
+static func call_deferred_flush_device() -> void:
+	if not _last_device_dirty:
+		return
+	_last_device_dirty = false
+	set_setting(KEY_LAST_DEVICE, String(_last_device))
+
+## What the game should assume RIGHT NOW: the pinned scheme, or under
+## AUTO whatever device was used last (persisted across sessions).
+static func which_scheme() -> StringName:
+	return _scheme_mode if _scheme_mode != SCHEME_AUTO else _last_device
+
+static func is_controller_active() -> bool:
+	return which_scheme() == SCHEME_CONTROLLER
+
+## Acceleration scale for PlayerChair. Keyboard play gets the gentler
+## tuned scale; controller play runs FULL acceleration because the
+## analog stick is already the finesse control.
+static func active_keyboard_scale() -> float:
+	return 1.0 if is_controller_active() else keyboard_scale
+
+# --- camera helpers ----------------------------------------------------------
+
+static func invert_camera_x() -> bool:
+	return _as_bool(get_setting(KEY_INVERT, false), false)
+
+static func set_invert_camera_x(value: bool) -> void:
+	set_setting(KEY_INVERT, value)
+	_invert_x = value
+
+## Camera panning sign: -1 when inverted so apply_* can multiply once.
+static func camera_x_sign() -> float:
+	return -1.0 if _invert_x else 1.0
+
+# --- controller button remapping --------------------------------------------
+
+## Common joypad buttons offered in the remap UI. Dpad left/right are
+## excluded (bound to camera pan); stick clicks are reserved.
+const PAD_BUTTON_NAMES := {
+	0: "A / CROSS",
+	1: "B / CIRCLE",
+	2: "X / SQUARE",
+	3: "Y / TRIANGLE",
+	4: "SELECT / SHARE",
+	5: "HOME / GUIDE",
+	6: "START / OPTIONS",
+	9: "L SHOULDER (L1)",
+	10: "R SHOULDER (R1)",
+}
+
+static func pad_button_map() -> Dictionary:
+	var raw: Variant = get_setting(KEY_PAD_MAP, {})
+	var map := {}
+	if raw is Dictionary:
+		for action in DEFAULT_PAD_MAP:
+			map[action] = clampi(int(raw.get(action, DEFAULT_PAD_MAP[action])), 0, 30)
+	else:
+		map = DEFAULT_PAD_MAP.duplicate()
+	return map
+
+static func pad_button_for(action: String) -> int:
+	return pad_button_map().get(action, DEFAULT_PAD_MAP.get(action, -1))
+
+## Friendly label for HUD/overlay text ("BOOST: A / CROSS").
+static func pad_button_name(action: String) -> String:
+	var index := pad_button_for(action)
+	return PAD_BUTTON_NAMES.get(index, "BUTTON %d" % index)
+
+static func set_pad_button(action: String, button_index: int) -> void:
+	var map := pad_button_map()
+	map[action] = button_index
+	set_setting(KEY_PAD_MAP, map)
+	apply_pad_map_to_input_map()
+
+## Rewrite the joypad BUTTON events of the pad actions so a remap (or a
+## saved map at boot) takes effect immediately. Movement axes and every
+## keyboard/mouse event are untouched.
+static func apply_pad_map_to_input_map() -> void:
+	var map := pad_button_map()
+	for action in map:
+		if not InputMap.has_action(action):
+			continue
+		var keep: Array[InputEvent] = []
+		for ev in InputMap.action_get_events(action):
+			if ev is InputEventJoypadButton:
+				continue
+			keep.append(ev)
+		InputMap.action_erase_events(action)
+		for ev in keep:
+			InputMap.action_add_event(action, ev)
+		var btn := InputEventJoypadButton.new()
+		btn.button_index = map[action]
+		InputMap.action_add_event(action, btn)
+
 
 const _RUMBLE_MS := 250
 static var _rumble_until_ms := 0
@@ -122,24 +314,25 @@ static func vibration_enabled() -> bool:
 # --- chair-facing helpers ---------------------------------------------------
 
 ## Acceleration multiplier for PlayerChair. 1.0 would be the old feel;
-## default cfg ships 0.7. Remote chairs never scale (host physics only
-## drives the local chair; remote chairs are interpolated).
+## default cfg ships 0.55 for keyboard play, 1.0 (full accel) when a
+## controller is the active scheme. Remote chairs never scale (host
+## physics only drives the local chair; remote chairs are interpolated).
 static func acceleration_multiplier() -> float:
-	return keyboard_scale
+	return active_keyboard_scale()
 
 ## Mouse-motion camera yaw. event.relative.x * sens * 0.003 rad/px is a
 ## comfortable third-person orbit speed at sens 1.0.
 static func apply_mouse_motion(event: InputEventMouseMotion) -> void:
 	if not _mouse_look_on:
 		return
-	camera_yaw_offset += event.relative.x * _mouse_sens * 0.003
+	camera_yaw_offset += event.relative.x * camera_x_sign() * _mouse_sens * 0.003
 
 ## Right-stick camera yaw. Mirror-x so pushing stick right orbits the
 ## camera right (matches every third-person console title).
 static func apply_stick(strength: float, delta: float) -> void:
 	if not _stick_look_on:
 		return
-	camera_yaw_offset += strength * _stick_sens * 2.2 * delta
+	camera_yaw_offset += strength * camera_x_sign() * _stick_sens * 2.2 * delta
 
 ## Wrap to [-PI, PI] so the float never degrades after long play.
 static func wrapped_yaw() -> float:
