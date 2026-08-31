@@ -86,6 +86,12 @@ func _ready() -> void:
 	var controls_overlay = load("res://scripts/ControlsOverlay.gd").mount(self)
 	if controls_overlay:
 		controls_overlay.show_for(7.0)
+	# Blocking pre-game briefing (tree paused until agreement).
+	load("res://scripts/PreMatchModal.gd").mount(self, "SHOP & SEEK", [
+		"Grab every item on your shopping list.",
+		"The guard patrols. Stand still near shelves to disguise.",
+		"Caught too often and the round is over.",
+	])
 	_caption("GRAB %d ITEMS — GUARD ON PATROL" % list_target)
 
 func _process(delta: float) -> void:

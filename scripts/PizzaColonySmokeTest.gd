@@ -28,6 +28,8 @@ func _run() -> void:
 	if packed == null:
 		_report()
 		return
+	# PreMatchModal pauses the tree on mount — suppressed per instantiation.
+	load("res://scripts/PreMatchModal.gd").suppress_next()
 	var mode: Node3D = packed.instantiate()
 	root.add_child(mode)
 	await process_frame
@@ -114,6 +116,7 @@ func _run() -> void:
 
 	# --- olive bombs ---
 	# Fresh scene for the olive path (eliminated mode won't throw).
+	load("res://scripts/PreMatchModal.gd").suppress_next()
 	var mode2: Node3D = packed.instantiate()
 	root.add_child(mode2)
 	await process_frame
@@ -139,6 +142,7 @@ func _run() -> void:
 	check(mode2.eliminated, "falling off the pizza edge eliminates")
 
 	# --- win: survive the timer ---
+	load("res://scripts/PreMatchModal.gd").suppress_next()
 	var mode3: Node3D = packed.instantiate()
 	root.add_child(mode3)
 	await process_frame
@@ -154,6 +158,7 @@ func _run() -> void:
 	check(mode3.match_over and mode3.won, "surviving the full timer wins")
 
 	# --- win: claim all pepperoni ---
+	load("res://scripts/PreMatchModal.gd").suppress_next()
 	var mode4: Node3D = packed.instantiate()
 	root.add_child(mode4)
 	await process_frame

@@ -43,6 +43,8 @@ func _process(delta: float) -> void:
 	elif not discovery_is_host and discovery_timer <= 0.0:
 		discovery_timer = DISCOVERY_INTERVAL
 		_request_host_discovery()
+		if not hotspot_sweep_done:
+			_hotspot_sweep_tick()
 	_poll_discovery()
 
 func host_game(port: int = DEFAULT_PORT) -> bool:
@@ -196,6 +198,70 @@ static func local_ip() -> String:
 				or s.begins_with("172.31."):
 			return s
 	return ""
+
+# --- HOTSPOT MODE -------------------------------------------------------------
+# Phone-hotspot play: friends join the phone's hotspot, but many phones
+# isolate clients from each other (AP isolation), so UDP broadcasts never
+# arrive and the SCAN finds nothing. Fallback: unicast the discovery ping
+# to every plausible gateway address of the common hotspot subnets. The
+# host answers from its discovery listener exactly as it would to a
+# broadcast, so no host-side changes are needed.
+
+signal hotspot_probe_result(address: String, found: bool)
+
+## Common hotspot/phone-tether subnets. Each entry: [prefix, last-octet
+## candidates]. Kept small — unicast pings are cheap but not free.
+const HOTSPOT_PREFIXES := [
+	["192.168.43.", [1, 2, 100, 101, 102]],       # Android classic
+	["192.168.49.", [1, 2, 100, 101, 102]],       # Android newer
+	["172.20.10.", [1, 2, 3, 14]],                # iPhone personal hotspot
+	["192.168.137.", [1, 2]],                     # Windows mobile hotspot
+]
+
+var hotspot_sweep_done := true
+var _hotspot_queue: Array[String] = []
+var _hotspot_reply_socket := PacketPeerUDP.new()
+
+## Called from the discovery timer until the sweep completes (a few IPs
+## per tick so the lobby stays responsive).
+func _hotspot_sweep_tick() -> void:
+	if _hotspot_queue.is_empty():
+		_build_hotspot_queue()
+	var batch := 0
+	while not _hotspot_queue.is_empty() and batch < 12:
+		var ip: String = _hotspot_queue.pop_front()
+		if ip == local_ip():
+			continue  # don't ping ourselves
+		discovery_socket.set_dest_address(ip, DISCOVERY_PORT)
+		discovery_socket.put_packet("FRIDAY5PM_DISCOVER".to_utf8_buffer())
+		batch += 1
+	if _hotspot_queue.is_empty():
+		hotspot_sweep_done = true
+		print("[NET] hotspot sweep complete (no extra hosts found unless listed above)")
+
+func _build_hotspot_queue() -> void:
+	hotspot_sweep_done = false
+	_hotspot_queue.clear()
+	# Prefer the subnet we're actually ON first (its gateway + neighbors).
+	var own := local_ip()
+	if own != "":
+		var octets := own.split(".")
+		if octets.size() == 4:
+			var prefix := "%s.%s.%s." % [octets[0], octets[1], octets[2]]
+			for last in [1, 2, 100, 101, 102, 103, 14]:
+				_hotspot_queue.append(prefix + str(last))
+	for entry in HOTSPOT_PREFIXES:
+		var prefix: String = entry[0]
+		if own.begins_with(prefix):
+			continue  # already queued
+		for last in entry[1]:
+			_hotspot_queue.append(prefix + str(last))
+
+## Direct-connect helper for the "no Wi-Fi at all" case: the HOST player
+## turns on their phone hotspot; everyone joins that hotspot network; the
+## host reads this IP off their own screen and friends type it in.
+static func hotspot_host_hint() -> String:
+	return local_ip()
 
 func _advertise_host() -> void:
 	if not discovery_socket.is_bound():

@@ -119,6 +119,8 @@ func _run() -> void:
 		if packed == null:
 			check(false, "%s scene loads" % entry[1])
 			continue
+		# PreMatchModal pauses the tree on mount — suppressed per instance.
+		load("res://scripts/PreMatchModal.gd").suppress_next()
 		var instance = packed.instantiate()
 		root.add_child(instance)
 		for i in 8:

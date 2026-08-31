@@ -26,6 +26,8 @@ func _run() -> void:
 	if packed == null:
 		_report()
 		return
+	# PreMatchModal pauses the tree on mount — suppressed for this harness.
+	load("res://scripts/PreMatchModal.gd").suppress_next()
 	var mode: Node3D = packed.instantiate()
 	root.add_child(mode)
 	await process_frame

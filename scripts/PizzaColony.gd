@@ -78,6 +78,12 @@ func _ready() -> void:
 	var controls_overlay = load("res://scripts/ControlsOverlay.gd").mount(self)
 	if controls_overlay:
 		controls_overlay.show_for(7.0)
+	# Blocking pre-game briefing (tree paused until agreement).
+	load("res://scripts/PreMatchModal.gd").mount(self, "PIZZA COLONY", [
+		"Stand on pepperoni to claim it. Build forts with E.",
+		"The chef hunts the biggest scorers. Survive the shift.",
+		"Forts block the chef — and everyone else. Use that.",
+	])
 	_caption("STAND ON PEPPERONI TO CLAIM — E BUILDS A FORT")
 
 func _process(delta: float) -> void:

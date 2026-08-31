@@ -32,6 +32,8 @@ func _test_next() -> void:
 		printerr("Failed to load %s" % scenes[index])
 		quit(1)
 		return
+	# PreMatchModal pauses the tree on mount — suppressed per instantiation.
+	load("res://scripts/PreMatchModal.gd").suppress_next()
 	current = packed.instantiate()
 	root.add_child(current)
 	print("[PASS] instantiated %s" % scenes[index])

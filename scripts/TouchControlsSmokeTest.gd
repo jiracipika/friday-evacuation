@@ -38,6 +38,8 @@ func _run() -> void:
 	quit(failures)
 
 func _test_mount_and_joystick() -> void:
+	# PreMatchModal pauses the tree on mount — suppressed for this harness.
+	load("res://scripts/PreMatchModal.gd").suppress_next()
 	var mode_scene = load("res://scenes/Evacuation.tscn")
 	check(mode_scene != null, "Evacuation scene loads")
 	if mode_scene == null:
@@ -124,6 +126,8 @@ func _test_mount_and_joystick() -> void:
 
 func _test_secondary_modes_mount() -> void:
 	for scene_path in ["res://scenes/Hauled.tscn", "res://scenes/ShopSeek.tscn", "res://scenes/PizzaColony.tscn"]:
+		# suppress_next is single-shot; every instantiation needs its own.
+		load("res://scripts/PreMatchModal.gd").suppress_next()
 		var scene = load(scene_path)
 		if scene == null:
 			check(false, "%s loads" % scene_path)

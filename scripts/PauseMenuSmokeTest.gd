@@ -78,6 +78,8 @@ func _process(_delta: float) -> bool:
 func _test_next() -> void:
 	stage = 0
 	frames = 0
+	# PreMatchModal pauses the tree on mount — suppressed per instance.
+	load("res://scripts/PreMatchModal.gd").suppress_next()
 	current = load(MODE_SCENES[index]).instantiate()
 	root.add_child(current)
 	menu = load("res://scripts/PauseMenu.gd").create(current, Callable(self, "_noop_quit"))

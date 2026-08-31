@@ -78,6 +78,33 @@ func _ready() -> void:
 	address_edit.placeholder_text = "LAN address (default: 127.0.0.1)"
 	address_edit.text = "127.0.0.1"
 	box.add_child(address_edit)
+	# HOTSPOT MODE: play over a phone hotspot when no Wi-Fi exists. The
+	# host shows its address to read out; joiners get one-tap fills for
+	# the common hotspot gateway addresses.
+	var hotspot_row := HBoxContainer.new()
+	hotspot_row.add_theme_constant_override("separation", 6)
+	box.add_child(hotspot_row)
+	var hot_43 := Button.new()
+	hot_43.text = "192.168.43.1"
+	hot_43.tooltip_text = "Android hotspot gateway"
+	hot_43.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hot_43.focus_mode = Control.FOCUS_NONE
+	hot_43.pressed.connect(func(): address_edit.text = "192.168.43.1")
+	hotspot_row.add_child(hot_43)
+	var hot_49 := Button.new()
+	hot_49.text = "192.168.49.1"
+	hot_49.tooltip_text = "Android hotspot gateway (newer)"
+	hot_49.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hot_49.focus_mode = Control.FOCUS_NONE
+	hot_49.pressed.connect(func(): address_edit.text = "192.168.49.1")
+	hotspot_row.add_child(hot_49)
+	var hot_ios := Button.new()
+	hot_ios.text = "172.20.10.1"
+	hot_ios.tooltip_text = "iPhone personal hotspot gateway"
+	hot_ios.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hot_ios.focus_mode = Control.FOCUS_NONE
+	hot_ios.pressed.connect(func(): address_edit.text = "172.20.10.1")
+	hotspot_row.add_child(hot_ios)
 	var scan = Button.new()
 	scan.text = "SCAN LOCAL WI-FI"
 	scan.pressed.connect(_scan_lan)
@@ -156,7 +183,12 @@ func _host() -> void:
 		host_requested.emit()
 		ready_button.disabled = false
 		start_button.disabled = true
-		status_label.text = "HOSTING on UDP 5005 — waiting for players"
+		# HOTSPOT MODE: show the host's address prominently — this is the
+		# IP friends type when the SCAN can't find them (AP isolation).
+		var hint: String = network.hotspot_host_hint()
+		if hint == "":
+			hint = "?"
+		status_label.text = "HOSTING on UDP 5005 — your address: %s  (friends: JOIN -> type this)" % hint
 		network.set_ready(false)
 		_refresh_players()
 

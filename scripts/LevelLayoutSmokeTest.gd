@@ -68,9 +68,12 @@ func _run() -> void:
 		"CUBICLE_MAZE paces more pickups than EXECUTIVE")
 
 	# 4. In-scene per-layout build (real Evacuation instantiation).
+	# PreMatchModal pauses the tree on mount — suppressed for this harness.
+	var PM = load("res://scripts/PreMatchModal.gd")
 	var EvacScene = load("res://scenes/Evacuation.tscn")
 	var desk_counts := {}
 	for name_value in LL.LAYOUT_NAMES:
+		PM.suppress_next()
 		LL.set_current(name_value)
 		var evc = EvacScene.instantiate()
 		root.add_child(evc)

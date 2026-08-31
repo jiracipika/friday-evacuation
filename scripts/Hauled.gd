@@ -67,6 +67,12 @@ func _ready() -> void:
 	_spawn_player()
 	player = _find_player()
 	_make_mode_hud()
+	# Blocking pre-game briefing (tree paused until agreement).
+	load("res://scripts/PreMatchModal.gd").mount(self, "HAULED", [
+		"Haul cargo to the drop zone before the round timer dies.",
+		"Damage and drops cost you. Bumps bruise the boxes.",
+		"Deliver clean, deliver fast — that's the whole job.",
+	])
 	_start_round(0)
 
 func _exit_tree() -> void:

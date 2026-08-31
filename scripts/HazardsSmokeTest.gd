@@ -24,6 +24,8 @@ func _init() -> void:
 
 func _run() -> void:
 	var packed := load("res://scenes/Evacuation.tscn")
+	# PreMatchModal pauses the tree on mount — suppressed for this harness.
+	load("res://scripts/PreMatchModal.gd").suppress_next()
 	var evac = packed.instantiate()
 	root.add_child(evac)
 	await process_frame

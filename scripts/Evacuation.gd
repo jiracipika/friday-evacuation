@@ -81,6 +81,13 @@ func _ready() -> void:
 	_spawn_player()
 	_apply_player_modifiers()
 	_maybe_spawn_ghost()
+	# Blocking pre-game briefing: tree PAUSED until the player agrees.
+	# Countdown starts after dismissal (timer frozen while paused).
+	load("res://scripts/PreMatchModal.gd").mount(self, "EVACUATION", [
+		"It's 4:59 PM. Race your office chair to the parking lot.",
+		"Chug coffee for boosts. Dodge water traps and stapler sabotage.",
+		"Ride elevators up through the floors. First out buys nothing.",
+	])
 	_start_countdown()
 	_setup_hud()
 	camera_base_fov = camera.fov if camera else 70.0
