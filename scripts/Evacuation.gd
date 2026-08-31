@@ -884,6 +884,59 @@ func _build_floor_walls(pos: Vector3, color: Color, floor_index: int) -> void:
 		wall_mesh.material_override = wall_mat
 		wall.add_child(wall_mesh)
 
+		# PHASE 2: dusk-sky window band along N/S exterior walls (i=0 south
+		# z+20, i=2 north z-20). A thin emissive gradient quad on the wall
+		# face reads as floor-to-ceiling office windows at dusk. Cheap: one
+		# shared material, no extra light. E/W walls stay solid (they face
+		# the neighboring office towers).
+		if i == 0 or i == 2:
+			var glass = MeshInstance3D.new()
+			var glass_mesh = PlaneMesh.new()
+			glass_mesh.size = Vector2(36, 1.6)
+			glass.mesh = glass_mesh
+			glass.material_override = _dusk_window_material()
+			# PlaneMesh lies in XZ facing +Y; stand it upright against the
+			# wall. South wall (i=0, z+20): face -Z (into the room, rot.x
+			# = +90). North wall (i=2, z-20): face +Z (rot.x = -90).
+			glass.rotation.x = -PI / 2.0 if i == 2 else PI / 2.0
+			# Inner face of the wall (0.3 thick): offset toward the room,
+			# raised to window height (wall is 3m: band spans ~1.1..2.7m).
+			var inward_z := -0.17 if i == 0 else 0.17
+			glass.position = Vector3(0, 0.4, inward_z)
+			wall.add_child(glass)
+
+var _dusk_window_mat: StandardMaterial3D = null
+
+## Shared dusk-sky gradient material for the window bands (orange horizon
+## rising into deep blue — matches the game's accent palette).
+func _dusk_window_material() -> StandardMaterial3D:
+	if _dusk_window_mat:
+		return _dusk_window_mat
+	var img := Image.create(4, 64, false, Image.FORMAT_RGB8)
+	for y in 64:
+		var t := float(y) / 63.0
+		# Image y=0 is the TOP of the texture (UV v=0 samples row 0 in
+		# Godot's ImageTexture). Top = warm horizon glow, fading into deep
+		# dusk blue below — windows read as sunset at their brightest up
+		# high. Wide glow: pow curve keeps the orange band readable.
+		var col := Color(0.95, 0.45, 0.12).lerp(Color(0.09, 0.11, 0.22), pow(t, 1.4))
+		for x in 4:
+			img.set_pixel(x, y, col)
+	var grad_tex := ImageTexture.create_from_image(img)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = grad_tex
+	mat.albedo_color = Color(1, 1, 1)
+	mat.emission_enabled = true
+	mat.emission_texture = grad_tex
+	mat.emission = Color(1, 1, 1)
+	mat.emission_energy_multiplier = 0.55  # glows softly, not a light source
+	mat.roughness = 0.2
+	mat.metallic = 0.1
+	# Mullion stripes: vertical window-frame bars baked into transparency.
+	# (Kept opaque — a real transparency pass costs more on mobile.)
+	_dusk_window_mat = mat
+	return mat
+
 func _make_carpet_material(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
 	# Phase: textured carpet tiles (structural grid + per-tile wear) via
 	# FloorMaterials; falls back to old noise-carpet if helper unavailable

@@ -18,6 +18,7 @@ const TEX_H := 256
 
 # Cache: key = floor_index -> {albedo: ImageTexture}
 static var _cache: Dictionary = {}
+static var _normal_cache: Dictionary = {}
 
 ## Paint tint per floor: derived from the themed-floor palette already used
 ## for carpets, kept desaturated so walls read as "office", not candy.
@@ -86,10 +87,47 @@ static func wall_albedo(floor_index: int) -> ImageTexture:
 	_cache[key] = tex
 	return tex
 
+## Normal map mirroring the wall's structure: panel joints as grooves,
+## wainscot/trim/baseboard as horizontal ledges. Derived, not painted —
+## the Sobel reads the same coordinates the albedo generator uses.
+static func wall_normal(floor_index: int) -> ImageTexture:
+	var key := clampi(floor_index, 0, 3)
+	if _normal_cache.has(key):
+		return _normal_cache[key] as ImageTexture
+	var NormalGen: GDScript = load("res://scripts/NormalMapGen.gd")
+	var height: PackedFloat32Array = NormalGen.height_buffer(TEX_W, TEX_H, 0.5)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7701 + key * 13
+	for y in TEX_H:
+		var v := float(y) / float(TEX_H)
+		var baseboard := v > 0.96
+		var wainscot := (not baseboard) and v > 0.78
+		var trim_row := absf(v - 0.78) < 0.02
+		for x in TEX_W:
+			var stud := (x % 128) < 2
+			var h := 0.5
+			if baseboard:
+				h = 0.62       # skirting steps forward slightly
+			elif trim_row:
+				h = 0.40       # trim shadow line
+			elif wainscot:
+				h = 0.44
+			if stud and not baseboard:
+				h = 0.34       # panel joint groove
+			NormalGen.set_height(height, TEX_W, TEX_H, x, y, h)
+	# Fine plaster grain (subtle — walls are smooth).
+	NormalGen.noise(height, TEX_W, TEX_H, rng, 0.05)
+	var tex: ImageTexture = NormalGen.normal_texture(height, TEX_W, TEX_H, 1.1)
+	_normal_cache[key] = tex
+	return tex
+
 ## Full wall material: textured, satin paint finish.
 static func make(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_texture = wall_albedo(floor_index)
+	mat.normal_enabled = true
+	mat.normal_texture = wall_normal(floor_index)
+	mat.normal_scale = 0.7
 	# Anisotropic filtering keeps the panel joints crisp at grazing angles
 	# down long 40m walls (where mip selection would otherwise smear them).
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
@@ -138,6 +176,24 @@ static func fabric_albedo(variant: int) -> ImageTexture:
 static func make_partition(variant: int = 0) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_texture = fabric_albedo(variant)
+	# Fabric weave ribs as normal map — felt texture you can almost feel.
+	var NormalGen: GDScript = load("res://scripts/NormalMapGen.gd")
+	var key := 100 + clampi(variant, 0, 2)
+	if not _normal_cache.has(key):
+		var height: PackedFloat32Array = NormalGen.height_buffer(TEX_W, TEX_H, 0.5)
+		for y in TEX_H:
+			for x in TEX_W:
+				var h := 0.5
+				if (x % 4) < 2:
+					h = 0.58  # rib
+				if y % 6 == 0:
+					h = 0.46  # weave beat
+				NormalGen.set_height(height, TEX_W, TEX_H, x, y, h)
+		var ntex: ImageTexture = NormalGen.normal_texture(height, TEX_W, TEX_H, 1.4)
+		_normal_cache[key] = ntex
+	mat.normal_enabled = true
+	mat.normal_texture = _normal_cache[key]
+	mat.normal_scale = 1.0
 	mat.uv1_scale = Vector3(2, 1, 1)
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	mat.roughness = 0.95
@@ -146,3 +202,4 @@ static func make_partition(variant: int = 0) -> StandardMaterial3D:
 
 static func clear_cache() -> void:
 	_cache.clear()
+	_normal_cache.clear()

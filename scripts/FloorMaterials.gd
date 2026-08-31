@@ -11,6 +11,7 @@ extends RefCounted
 const TEX := 512
 const TILE_PX := 128         # office carpet tiles ~50cm -> tile every 128px
 static var _cache: Dictionary = {}
+static var _normal_cache: Dictionary = {}
 
 ## Themed base tints mirror the palette Evacuation passes in; keyed by floor.
 static func _base_for_floor(floor_index: int) -> Color:
@@ -74,6 +75,27 @@ static func floor_albedo(base_color: Color, floor_index: int) -> ImageTexture:
 static func make(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_texture = floor_albedo(base_color, floor_index)
+	# Carpet tile grout lines as grooves in a normal map — the single
+	# biggest "this floor has depth" win under the ceiling lights.
+	var NormalGen: GDScript = load("res://scripts/NormalMapGen.gd")
+	var key := clampi(floor_index, 0, 3)
+	if not _normal_cache.has(key):
+		var height: PackedFloat32Array = NormalGen.height_buffer(TEX, TEX, 0.5)
+		for y in TEX:
+			for x in TEX:
+				var edge_x := x % TILE_PX
+				var edge_y := y % TILE_PX
+				var h := 0.5
+				if edge_x < 3 or edge_y < 3:
+					h = 0.36  # grout recess
+				elif edge_x == 3 or edge_y == 3:
+					h = 0.44  # bevel shoulder
+				NormalGen.set_height(height, TEX, TEX, x, y, h)
+		var ntex: ImageTexture = NormalGen.normal_texture(height, TEX, TEX, 1.3)
+		_normal_cache[key] = ntex
+	mat.normal_enabled = true
+	mat.normal_texture = _normal_cache[key]
+	mat.normal_scale = 0.9
 	mat.uv1_scale = Vector3(4, 4, 1)
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	mat.albedo_color = Color(1, 1, 1)
@@ -83,3 +105,4 @@ static func make(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
 
 static func clear_cache() -> void:
 	_cache.clear()
+	_normal_cache.clear()
