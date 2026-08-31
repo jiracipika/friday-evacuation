@@ -62,6 +62,15 @@ const CULL_LIGHT_DISTANCE_FLOORS := 1
 
 func _ready() -> void:
 	_setup_arena()
+	# Debug virtual pad: direct-scene launches bypass Main.gd's mount, so
+	# ensure the node exists here too (deduped by name on the root).
+	if "virtual-pad" in OS.get_cmdline_user_args() or OS.get_environment("FE_VIRTUAL_PAD") == "1":
+		if not get_tree().root.has_node("VirtualPad"):
+			var vpad = load("res://scripts/VirtualPad.gd")
+			if vpad:
+				var vpad_node: Node = vpad.new()
+				vpad_node.name = "VirtualPad"
+				get_tree().root.add_child.call_deferred(vpad_node)
 	# Mouse-look: capture the cursor for the whole match (released in
 	# _end_race/_on_back_to_menu/_exit_tree). Visible while paused so the
 	# pause menu stays mouse-usable.

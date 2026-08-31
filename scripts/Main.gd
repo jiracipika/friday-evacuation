@@ -63,6 +63,15 @@ var menu_time: float = 0.0
 
 func _ready() -> void:
 	get_window().title = "Friday 5PM: Evacuation"
+	# Debug virtual gamepad (--virtual-pad or FE_VIRTUAL_PAD=1): pumps real
+	# joypad events for pad-play QA without hardware. Lives on the root so
+	# it survives scene changes into the race.
+	if "virtual-pad" in OS.get_cmdline_user_args() or OS.get_environment("FE_VIRTUAL_PAD") == "1":
+		var vpad = load("res://scripts/VirtualPad.gd")
+		if vpad:
+			var vpad_node: Node = vpad.new()
+			vpad_node.name = "VirtualPad"
+			get_tree().root.add_child.call_deferred(vpad_node)
 	_build_mode_buttons()
 	_select_mode(0)
 	_build_character_selector()
