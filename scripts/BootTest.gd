@@ -33,6 +33,8 @@ func _init() -> void:
 		"res://scripts/NormalMapSmokeTest.gd",
 		"res://scripts/PropMaterials.gd",
 		"res://scripts/PropMaterialsSmokeTest.gd",
+		"res://scripts/LevelLayouts.gd",
+		"res://scripts/LevelLayoutSmokeTest.gd",
 		"res://scripts/Accessibility.gd",
 		"res://scripts/InputPrefs.gd",
 		"res://scripts/ControlsOverlay.gd",

@@ -41,6 +41,7 @@ var buttons: Array[Button] = []
 var settings_overlay: Control
 var lobby_overlay: Control
 var settings_button: Button
+var layout_option: OptionButton
 var credits_button: Button
 var utility_row: HBoxContainer
 var modifier_menu: Control
@@ -86,6 +87,22 @@ func _ready() -> void:
 	credits_button.add_theme_font_size_override("font_size", 12)
 	utility_row.add_child(credits_button)
 	credits_button.pressed.connect(_open_credits)
+	# PHASE 4: map layout picker (single-player + host authority).
+	layout_option = OptionButton.new()
+	layout_option.add_item("MAP: OPEN PLAN", 0)
+	layout_option.add_item("MAP: CUBICLE MAZE", 1)
+	layout_option.add_item("MAP: EXECUTIVE", 2)
+	layout_option.custom_minimum_size = Vector2(0, 28)
+	layout_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layout_option.add_theme_font_size_override("font_size", 12)
+	utility_row.add_child(layout_option)
+	var saved_layout := str(_load_saved_layout())
+	layout_option.select({"open_plan": 0, "cubicle_maze": 1, "executive": 2}.get(saved_layout, 0))
+	layout_option.item_selected.connect(_on_layout_selected)
+	# Apply the persisted pick so a menu-skip (LAN auto-start) still gets it.
+	var LayoutsScript = load("res://scripts/LevelLayouts.gd")
+	if LayoutsScript:
+		LayoutsScript.set_current(saved_layout)
 	stats_label = Label.new()
 	stats_label.text = ""
 	stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -216,6 +233,29 @@ func _on_play() -> void:
 		loading.show_loading(scene_path)
 	else:
 		get_tree().change_scene_to_file(scene_path)
+
+## PHASE 4: layout selection — persisted to the game cfg, applied via
+## LevelLayouts.set_current so the next match builds the picked variant.
+const LAYOUT_CFG_PATH := "user://settings.cfg"
+
+func _load_saved_layout() -> String:
+	var cfg := ConfigFile.new()
+	cfg.load(LAYOUT_CFG_PATH)
+	return str(cfg.get_value("game", "map_layout", "open_plan"))
+
+func _on_layout_selected(index: int) -> void:
+	var names := ["open_plan", "cubicle_maze", "executive"]
+	var picked: String = names[clampi(index, 0, 2)]
+	var LevelLayouts = load("res://scripts/LevelLayouts.gd")
+	if LevelLayouts:
+		LevelLayouts.set_current(picked)
+	var cfg := ConfigFile.new()
+	cfg.load(LAYOUT_CFG_PATH)
+	cfg.set_value("game", "map_layout", picked)
+	cfg.save(LAYOUT_CFG_PATH)
+	var audio = get_node_or_null("/root/AudioManager")
+	if audio and audio.has_method("play_sfx"):
+		audio.play_sfx("ui_click", 1.0)
 
 func _open_credits() -> void:
 	var overlay = CanvasLayer.new()

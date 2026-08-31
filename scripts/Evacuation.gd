@@ -412,13 +412,19 @@ func _setup_arena() -> void:
 # --- PHASE 4A THEMED FLOORS ---
 
 ## Floor 1 — Cubicle Farm: partition grid with a central corridor, plants.
+## PHASE 4: CUBICLE_MAZE layout narrows the corridor (gap=1 skips one
+## extra column, making lanes tight); OPEN_PLAN keeps the shipped gap.
 func _theme_floor1_cubicles() -> void:
+	var LevelLayouts = load("res://scripts/LevelLayouts.gd")
+	var corridor_gap := 0
+	if LevelLayouts:
+		corridor_gap = int(LevelLayouts.current_layout()["f1_corridor_gap"])
 	var partition_mat := StandardMaterial3D.new()
 	partition_mat.albedo_color = Color(0.23, 0.29, 0.35)  # gray-blue #3a4a5a-ish
 	partition_mat.roughness = 0.9
 	for gx in range(-2, 3):
 		for gz in range(-2, 3):
-			if gx == 0 and gz >= -1 and gz <= 1:
+			if gx >= -corridor_gap and gx <= corridor_gap and gz >= -1 and gz <= 1:
 				continue  # main corridor down the center
 			if absf(gx * 8.0) > 15.0 or absf(gz * 8.0) > 15.0:
 				continue
@@ -503,8 +509,12 @@ func _make_plant() -> StaticBody3D:
 ## tile (fast) vs carpet (grippy) speed zones.
 func _theme_floor2_open_office() -> void:
 	var y := 6.0
-	# Two conference tables flanking the center
-	for tx in [-6.0, 6.0]:
+	# PHASE 4: layout decides table count/placement (CUBICLE_MAZE: none).
+	var LevelLayouts = load("res://scripts/LevelLayouts.gd")
+	var table_x: Array = [-6.0, 6.0]
+	if LevelLayouts:
+		table_x = LevelLayouts.current_layout()["f2_tables"]
+	for tx in table_x:
 		var table := _make_conference_table()
 		table.position = Vector3(tx, y, 0)
 		add_child(table)
@@ -649,8 +659,13 @@ func _make_crate() -> StaticBody3D:
 ## parked-car obstacles.
 func _theme_floor4_cafeteria_and_lot() -> void:
 	var y := 18.0
+	# PHASE 4: layout decides ice coverage (EXECUTIVE: nearly whole floor).
+	var LevelLayouts = load("res://scripts/LevelLayouts.gd")
+	var ice_size := 26.0
+	if LevelLayouts:
+		ice_size = float(LevelLayouts.current_layout()["f4_ice_size"])
 	# Ice-slick cafeteria floor (big slip zone)
-	var ice := _make_surface_zone(0.16, Vector3(26, 2.0, 26), Color(0.7, 0.9, 1.0, 0.08))
+	var ice := _make_surface_zone(0.16, Vector3(ice_size, 2.0, ice_size), Color(0.7, 0.9, 1.0, 0.08))
 	ice.position = Vector3(0, y + 0.15, 0)
 	add_child(ice)
 	# Round tables
@@ -1393,21 +1408,35 @@ func _build_ramp(from_pos: Vector3, to_pos: Vector3) -> void:
 	_build_elevator(from_pos, to_pos, 0)
 
 func _spawn_obstacles() -> void:
+	# PHASE 4: layout-driven obstacle placement. Desks never spawn on
+	# floor 3 (y=12.5) — the gapped stairwell would float them over holes.
+	var LevelLayouts = load("res://scripts/LevelLayouts.gd")
+	var layout: Dictionary = LevelLayouts.current_layout() if LevelLayouts \
+		else {"desk_counts": [5, 5, 5], "desk_range": 15.0, "obstacle_seed": 1337}
 	var rng = RandomNumberGenerator.new()
-	rng.seed = 1337  # Fixed seed for consistent layout
+	rng.seed = int(layout["obstacle_seed"])
 
-	# Floor 3 (y=12) is the gapped stairwell — desks would float over holes
-	var floor_choices := [0, 6, 18]
-	for i in range(15):
-		var desk = _make_desk()
-		var floor_y = floor_choices[rng.randi() % floor_choices.size()]
-		desk.position = Vector3(
-			rng.randf_range(-15, 15),
-			floor_y + 0.5,
-			rng.randf_range(-15, 15)
-		)
-		desk.rotation.y = rng.randf_range(0, TAU)
-		add_child(desk)
+	var floor_choices := [0.0, 6.0, 18.0]
+	var counts: Array = layout["desk_counts"]
+	var desk_range: float = layout["desk_range"]
+	var total := 0
+	for ci in range(counts.size()):
+		total += int(counts[ci])
+		for i in range(int(counts[ci])):
+			var desk = _make_desk()
+			var floor_y: float = floor_choices[ci]
+			desk.position = Vector3(
+				rng.randf_range(-desk_range, desk_range),
+				floor_y + 0.5,
+				rng.randf_range(-desk_range, desk_range)
+			)
+			desk.rotation.y = rng.randf_range(0, TAU)
+			add_child(desk)
+	# Layout-placed crates (floor 4 lot dressing).
+	for crate_pos in layout["f4_crates"]:
+		var crate = _make_crate()
+		crate.position = crate_pos
+		add_child(crate)
 
 func _make_desk() -> StaticBody3D:
 	var desk = StaticBody3D.new()
@@ -1443,7 +1472,12 @@ func _spawn_powerups() -> void:
 	rng.seed = 999
 	var PowerUp = load("res://scripts/PowerUpVisual.gd")
 
-	for i in range(8):
+	# PHASE 4: layout decides pickup pacing.
+	var LevelLayouts = load("res://scripts/LevelLayouts.gd")
+	var pu_count := 8
+	if LevelLayouts:
+		pu_count = int(LevelLayouts.current_layout()["powerup_count"])
+	for i in range(pu_count):
 		var pu = PowerUp.create(PowerUp.pick_weighted(rng))
 		pu.sync_name = "PU_%d" % i
 		var floor_y = [0.5, 6.5, 12.5, 18.5][rng.randi() % 4]
