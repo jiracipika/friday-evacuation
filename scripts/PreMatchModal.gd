@@ -81,14 +81,24 @@ func _ready() -> void:
 	title.add_theme_color_override("font_color", ACCENT)
 	box.add_child(title)
 
+	# 3-STEP QUICKSTART — the objective lines ARE the steps: how a whole
+	# match works, read top to bottom.
+	var steps_head := Label.new()
+	steps_head.text = "HOW IT WORKS — 3 STEPS"
+	steps_head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	steps_head.add_theme_font_size_override("font_size", 14)
+	steps_head.add_theme_color_override("font_color", ACCENT)
+	box.add_child(steps_head)
+	var counter := 1
 	for line in objective_lines:
-		var obj := Label.new()
-		obj.text = line
-		obj.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		obj.add_theme_font_size_override("font_size", 15)
-		obj.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		obj.custom_minimum_size = Vector2(600, 0)
-		box.add_child(obj)
+		var step := Label.new()
+		step.text = "%d.  %s" % [counter, line]
+		step.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		step.add_theme_font_size_override("font_size", 15)
+		step.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		step.custom_minimum_size = Vector2(600, 0)
+		box.add_child(step)
+		counter += 1
 
 	box.add_child(HSeparator.new())
 

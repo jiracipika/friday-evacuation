@@ -39,6 +39,9 @@ var is_boosting: bool = false
 var can_move: bool = true
 var is_stunned: float = 0.0  # seconds remaining
 var boost_held_sustain := false  # hold-boost: timer refills while held, cooldown grows
+var smoothed_input := Vector2.ZERO  # input ramp state (movement smoothing)
+const INPUT_RAMP_IN := 14.0   # press ramp rate (1/s) — ~80ms to ~full
+const INPUT_RAMP_OUT := 20.0  # release decay rate — ~120ms to zero, snappier
 var _trigger_boost_engaged := false  # RT/R2 pressure-boost arming latch
 var _hum_timer := 0.0  # boost hum re-arm timer (rumble vocabulary)
 const BOOST_SUSTAIN_CAP := 1.4   # max seconds hold-boost can stretch to
@@ -502,6 +505,19 @@ func _handle_input(delta: float) -> void:
 	if mobile_input.length() > 0.1:
 		raw_input += mobile_input
 	raw_input = raw_input.limit_length(1.0)
+	# SMOOTHING (input ramp): exponential approach from the previous
+	# frame's smoothed vector. Keyboard taps ramp in over ~80ms and ramp
+	# out over ~120ms (release decays faster than press — snappier stops),
+	# so digital keys feel analog. Analog sticks barely change (their raw
+	# input is already continuous; the ramp just low-passes jitter).
+	if raw_input.length() > 0.01 or smoothed_input.length() > 0.01:
+		var rate := INPUT_RAMP_IN if raw_input.length() > smoothed_input.length() \
+			else INPUT_RAMP_OUT
+		var w: float = 1.0 - exp(-rate * delta)
+		smoothed_input = smoothed_input.lerp(raw_input, w)
+		if smoothed_input.length() < 0.01 and raw_input.length() < 0.01:
+			smoothed_input = Vector2.ZERO
+	raw_input = smoothed_input
 	# PHASE 3: stick response curve (expo default). Reshapes the analog
 	# magnitude — gentle center for precision lines, full throw at the
 	# edge for racing. Keyboard input is already digital so the curve

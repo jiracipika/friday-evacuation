@@ -84,9 +84,9 @@ func _ready() -> void:
 	# Blocking pre-game briefing: tree PAUSED until the player agrees.
 	# Countdown starts after dismissal (timer frozen while paused).
 	load("res://scripts/PreMatchModal.gd").mount(self, "EVACUATION", [
-		"It's 4:59 PM. Race your office chair to the parking lot.",
-		"Chug coffee for boosts. Dodge water traps and stapler sabotage.",
-		"Ride elevators up through the floors. First out buys nothing.",
+		"DRIVE — stick/WASD steers the chair, coffee = BOOST.",
+		"CLIMB — ride the glowing blue elevators up every floor.",
+		"ESCAPE — reach the green FINISH beam in the parking lot.",
 	])
 	_start_countdown()
 	_setup_hud()
@@ -1071,6 +1071,61 @@ func _add_exit_marker() -> void:
 	arrow.material_override = mat
 	add_child(arrow)
 
+	# FINISH VISIBILITY: checkered finish columns + vertical light beam +
+	# strong green light so the exit reads from any corner of floor 4.
+	var beam = MeshInstance3D.new()
+	var beam_mesh = CylinderMesh.new()
+	beam_mesh.top_radius = 1.4
+	beam_mesh.bottom_radius = 2.6
+	beam_mesh.height = 9.0
+	beam.mesh = beam_mesh
+	beam.position = Vector3(0, 22.6, 15.0)
+	var beam_mat = StandardMaterial3D.new()
+	beam_mat.albedo_color = Color(0.1, 0.95, 0.3, 0.28)
+	beam_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	beam_mat.emission_enabled = true
+	beam_mat.emission = Color(0.1, 0.95, 0.3)
+	beam_mat.emission_energy_multiplier = 1.4
+	beam_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	beam_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	beam.material_override = beam_mat
+	add_child(beam)
+
+	var beacon = OmniLight3D.new()
+	beacon.position = Vector3(0, 21.5, 15.0)
+	beacon.light_color = Color(0.15, 1.0, 0.35)
+	beacon.light_energy = 3.0
+	beacon.omni_range = 16.0
+	beacon.shadow_enabled = false
+	add_child(beacon)
+
+	var checkers := StandardMaterial3D.new()
+	checkers.albedo_color = Color(1, 1, 1)
+	for cx in [-3.4, 3.4]:
+		var col := MeshInstance3D.new()
+		var col_mesh := BoxMesh.new()
+		col_mesh.size = Vector3(0.5, 5.0, 0.5)
+		col.mesh = col_mesh
+		col.position = Vector3(cx, 20.8, 15.0)
+		var col_mat := StandardMaterial3D.new()
+		col_mat.albedo_color = Color(1, 1, 1)
+		col_mat.emission_enabled = true
+		col_mat.emission = Color(0.9, 1.0, 0.9)
+		col_mat.emission_energy_multiplier = 1.1
+		col.material_override = col_mat
+		add_child(col)
+
+	var exit_label := Label3D.new()
+	exit_label.text = "FINISH — PARKING LOT"
+	exit_label.font_size = 96
+	exit_label.outline_size = 22
+	exit_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	exit_label.modulate = Color(0.2, 1.0, 0.4)
+	exit_label.outline_modulate = Color(0, 0, 0, 0.9)
+	exit_label.no_depth_test = true
+	exit_label.position = Vector3(0, 24.4, 15.0)
+	add_child(exit_label)
+
 	animate_exit_marker()
 
 func animate_exit_marker() -> void:
@@ -1368,6 +1423,33 @@ func _build_elevator(from_pos: Vector3, to_pos: Vector3, target_floor: int) -> v
 	trigger_col.shape = trigger_shape
 	trigger.add_child(trigger_col)
 	add_child(trigger)
+
+	# PORTAL VISIBILITY: floor label on the pad + destination ring so the
+	# teleport reads as "this goes UP to floor N" from across the room.
+	var pad_label = Label3D.new()
+	pad_label.text = "ELEVATOR → FLOOR %d" % (target_floor + 1)
+	pad_label.font_size = 64
+	pad_label.outline_size = 16
+	pad_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	pad_label.modulate = Color(0.45, 0.8, 1.0)
+	pad_label.outline_modulate = Color(0, 0, 0, 0.9)
+	pad_label.no_depth_test = true
+	pad_label.position = from_pos + Vector3(0, 3.1, 0)
+	add_child(pad_label)
+
+	var dest_ring = MeshInstance3D.new()
+	var ring_mesh = TorusMesh.new()
+	ring_mesh.inner_radius = 1.9
+	ring_mesh.outer_radius = 2.3
+	dest_ring.mesh = ring_mesh
+	dest_ring.position = to_pos + Vector3(0, 0.3, 0)
+	var ring_mat = StandardMaterial3D.new()
+	ring_mat.albedo_color = Color(0.2, 0.7, 1.0)
+	ring_mat.emission_enabled = true
+	ring_mat.emission = Color(0.1, 0.5, 1.0)
+	ring_mat.emission_energy_multiplier = 1.5
+	dest_ring.material_override = ring_mat
+	add_child(dest_ring)
 
 	# Destination marker (visual)
 	var dest_marker = MeshInstance3D.new()

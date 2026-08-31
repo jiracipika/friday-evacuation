@@ -152,6 +152,8 @@ func _run_tests() -> void:
 	check(overlays.size() == 1, "second mount call is a no-op")
 
 	# --- 7. Pickup effect: energy drink applies stronger boost ------------
+	# Pickups are now KEY-PRESS grabs (E / A / JUMP): enter range, then
+	# Input.action_press("action") to grab — the real player path.
 	var chair2 = ChairScene.instantiate()
 	test_root.add_child(chair2)
 	await physics_frame
@@ -161,6 +163,12 @@ func _run_tests() -> void:
 	pu_energy.global_position = chair2.global_position
 	await physics_frame
 	await physics_frame
+	check(pu_energy._body_in_range != null or pu_energy._prompt != null,
+		"proximity shows grab prompt instead of auto-collect")
+	Input.action_press("action")
+	await physics_frame
+	await physics_frame
+	Input.action_release("action")
 	var boosted: bool = chair2.is_boosting
 	check(boosted, "energy drink pickup triggers boost")
 	check(chair2.boost_timer > chair2.boost_duration * 1.5, "energy drink doubles boost duration (%.2f > %.2f)" % [chair2.boost_timer, chair2.boost_duration * 1.5])

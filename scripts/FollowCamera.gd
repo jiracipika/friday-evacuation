@@ -55,8 +55,19 @@ static func update(camera: Camera3D, target: Node3D, delta: float) -> void:
 		return
 	_last_target_pos[key] = pos
 
+	# AIM SMOOTHING: critically-damped-style distance easing — the camera
+	# trails the chair proportionally to speed so fast lines feel fluid
+	# while slow maneuvers stay tight. (Position lerp below is the
+	# time-constant half; this widens the effective boom at speed.)
+	var vel := Vector3.ZERO
+	if target is CharacterBody3D:
+		vel = (target as CharacterBody3D).velocity
+	var speed := Vector3(vel.x, 0, vel.z).length()
+	var trail := lerpf(DISTANCE, DISTANCE * 1.18, clampf(speed / 12.0, 0.0, 1.0))
+	var desired_trail := pos - cam_dir * trail + Vector3.UP * HEIGHT
+
 	var lerp_w := 1.0 - exp(-8.0 * delta)
-	camera.global_position = camera.global_position.lerp(desired, lerp_w)
+	camera.global_position = camera.global_position.lerp(desired_trail, lerp_w)
 	if not camera.global_position.is_equal_approx(look):
 		camera.look_at(look)
 

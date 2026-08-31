@@ -45,6 +45,11 @@ var base_y: float = 0.0
 var time_offset: float = 0.0
 var glow_radius: float = 0.0
 var glow_light: OmniLight3D
+# PICKUP PROMPT: when a player is inside the trigger, show a floating
+# "E — GRAB" key cap; collect on E (action) rather than touch. Touch
+# devices grab by driving over (no keyboard — auto-collect for them).
+var _prompt: Label3D
+var _body_in_range: Node3D = null
 
 static func pick_weighted(rng: RandomNumberGenerator) -> int:
 	var total := 0
@@ -81,6 +86,8 @@ func _ready() -> void:
 	_build_label()
 
 	body_entered.connect(_on_body_entered)
+	body_exited.connect(_exit_prompt_check)
+	tree_exiting.connect(_hide_prompt)
 
 ## Factory: create a pickup of the given kind, ready to position and add_child.
 static func create(kind_value: int) -> Area3D:
@@ -325,9 +332,58 @@ func _process(delta: float) -> void:
 		glow_light.omni_range = 3.0 + glow_radius
 		glow_light.light_energy = 0.7 + glow_radius * 0.4
 
+	# Key-press grab: while a player hovers, poll the action key. Uses the
+	# same "action" binding as jump/grab (E / MMB / A / Cross). The prompt
+	# already tells the player which key.
+	if _body_in_range != null and is_instance_valid(_body_in_range):
+		if Input.is_action_just_pressed("action"):
+			_collect(_body_in_range)
+
 func _on_body_entered(body: Node3D) -> void:
 	if not body.is_in_group("players"):
 		return
+	# PICKUP PROMPT: keyboard/mouse + controller players press the ACTION
+	# key to grab. Touch players have no spare key — auto-collect for them
+	# (their thumbs are busy steering).
+	var prefs = load("res://scripts/InputPrefs.gd")
+	var touch_player := false
+	if prefs and prefs.has_method("touch_enabled") and prefs.touch_enabled() \
+			and prefs.which_scheme() != prefs.SCHEME_CONTROLLER:
+		touch_player = true
+	if touch_player:
+		_collect(body)
+	else:
+		_body_in_range = body
+		_show_prompt()
+
+## E — GRAB (or A/Cross for pads, JUMP button on touch): floating key cap.
+func _show_prompt() -> void:
+	if _prompt:
+		return
+	_prompt = Label3D.new()
+	_prompt.text = "E — GRAB  (A / JUMP)"
+	_prompt.font_size = 52
+	_prompt.outline_size = 14
+	_prompt.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_prompt.modulate = Color(1, 1, 1, 0.95)
+	_prompt.outline_modulate = Color(0, 0, 0, 0.9)
+	_prompt.no_depth_test = true
+	_prompt.position = Vector3(0, 1.9, 0)
+	add_child(_prompt)
+
+func _hide_prompt() -> void:
+	if _prompt:
+		_prompt.queue_free()
+		_prompt = null
+
+func _exit_prompt_check(body: Node3D) -> void:
+	if body == _body_in_range:
+		_body_in_range = null
+		_hide_prompt()
+
+## Shared collect path (auto for touch, key-press for keyboard/pad).
+func _collect(body: Node3D) -> void:
+	_hide_prompt()
 	var audio = get_node_or_null("/root/AudioManager")
 	if audio:
 		audio.play_sfx("powerup", 1.2)
