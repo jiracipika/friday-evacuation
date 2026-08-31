@@ -35,6 +35,7 @@ const KEY_VIBRATION := "vibration_enabled"       # controller rumble
 const KEY_SCHEME := "control_scheme"             # auto|keyboard_mouse|controller
 const KEY_PAD_MAP := "pad_button_map"            # action -> joypad button index
 const KEY_INVERT := "invert_camera_x"            # mirrored camera pan
+const KEY_TOUCH := "touch_controls"              # auto|on|off (web/mobile UI)
 
 # --- defaults ---------------------------------------------------------------
 # Keyboard deliberately LOWER than 1.0: the pre-settings feel (accel 34)
@@ -241,6 +242,42 @@ static func set_stick_curve(mode: String) -> void:
 
 static func rumble_hum(duration := 0.45) -> void:
 	_vibrate(clampf(duration, 0.1, 1.2), 0.35, 0.0)
+
+# --- touch controls (web jump-right-in) ---------------------------------------
+
+const TOUCH_AUTO := "auto"
+const TOUCH_ON := "on"
+const TOUCH_OFF := "off"
+
+## Touch mode: auto resolves to ON on mobile/web-with-touchscreen, else
+## OFF. Manual "on"/"off" pins it (desktop preview, tablets with keyboards).
+static func touch_mode() -> String:
+	var raw: Variant = get_setting(KEY_TOUCH, TOUCH_AUTO)
+	var mode := str(raw)
+	if mode == TOUCH_ON or mode == TOUCH_OFF:
+		return mode
+	return TOUCH_AUTO
+
+static func set_touch_mode(mode: String) -> void:
+	if mode != TOUCH_AUTO and mode != TOUCH_ON and mode != TOUCH_OFF:
+		return
+	set_setting(KEY_TOUCH, mode)
+
+## The decision MobileControls consults. Web builds (and mobile) with a
+## touchscreen auto-enable; desktop stays off unless pinned on. FE_TOUCH=1
+## keeps overriding everything for headless tests.
+static func touch_enabled() -> bool:
+	if OS.get_environment("FE_TOUCH") == "1":
+		return true
+	var mode := touch_mode()
+	if mode == TOUCH_ON:
+		return true
+	if mode == TOUCH_OFF:
+		return false
+	# AUTO: touch devices self-select.
+	if OS.has_feature("web") or OS.get_name() in ["Android", "iOS"]:
+		return DisplayServer.is_touchscreen_available()
+	return false
 
 static func rumble_thump(strength := 1.0) -> void:
 	_vibrate(0.22, clampf(strength, 0.2, 1.0), clampf(strength, 0.2, 1.0) * 0.8)

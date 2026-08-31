@@ -29,8 +29,14 @@ signal action_pressed(action_name: StringName)
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if OS.get_name() in ["Android", "iOS"] or OS.get_environment("FE_TOUCH") == "1":
-		touch_enabled = true
+	# Web jump-right-in: auto-detect via InputPrefs (touchscreen on web /
+	# mobile), desktop still gated behind FE_TOUCH=1 preview.
+	var prefs = load("res://scripts/InputPrefs.gd")
+	if prefs and prefs.has_method("touch_enabled"):
+		touch_enabled = prefs.touch_enabled()
+	else:
+		touch_enabled = OS.get_name() in ["Android", "iOS"] or OS.get_environment("FE_TOUCH") == "1"
+	if touch_enabled:
 		queue_redraw()
 
 ## Called by the mode scene so the BOOST ring can mirror the local chair's
@@ -47,7 +53,15 @@ static func mount_for_mode(parent: Node, chair: Node) -> Control:
 		if chair and existing.has_method("bind_local_chair"):
 			existing.bind_local_chair(chair)
 		return existing
-	if OS.get_name() not in ["Android", "iOS"] and OS.get_environment("FE_TOUCH") != "1":
+	# Gate via the shared InputPrefs decision (web touchscreen, mobile,
+	# FE_TOUCH=1 override, or a pinned "on" from the main-screen button).
+	var prefs_gate = load("res://scripts/InputPrefs.gd")
+	var should_mount := false
+	if prefs_gate and prefs_gate.has_method("touch_enabled"):
+		should_mount = prefs_gate.touch_enabled()
+	else:
+		should_mount = OS.get_name() in ["Android", "iOS"] or OS.get_environment("FE_TOUCH") == "1"
+	if not should_mount:
 		return null
 	var script = load("res://scripts/MobileControls.gd")
 	if script == null:

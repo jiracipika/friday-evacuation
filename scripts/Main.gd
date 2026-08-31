@@ -42,6 +42,7 @@ var settings_overlay: Control
 var lobby_overlay: Control
 var settings_button: Button
 var layout_option: OptionButton
+var touch_button: Button
 var credits_button: Button
 var utility_row: HBoxContainer
 var modifier_menu: Control
@@ -112,6 +113,20 @@ func _ready() -> void:
 	var LayoutsScript = load("res://scripts/LevelLayouts.gd")
 	if LayoutsScript:
 		LayoutsScript.set_current(saved_layout)
+	# PHASE WEB: touch controls cycle button — AUTO (web+touchscreen
+	# auto-on) / ON / OFF. Persisted; lets desktop players preview and
+	# web players force the overlay regardless of detection.
+	touch_button = Button.new()
+	touch_button.custom_minimum_size = Vector2(0, 28)
+	touch_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	touch_button.add_theme_font_size_override("font_size", 12)
+	utility_row.add_child(touch_button)
+	var prefs_touch = load("res://scripts/InputPrefs.gd")
+	var touch_pref := "auto"
+	if prefs_touch and prefs_touch.has_method("touch_mode"):
+		touch_pref = prefs_touch.touch_mode()
+	touch_button.text = _touch_button_label(touch_pref)
+	touch_button.pressed.connect(_on_touch_button)
 	stats_label = Label.new()
 	stats_label.text = ""
 	stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -262,6 +277,34 @@ func _on_layout_selected(index: int) -> void:
 	cfg.load(LAYOUT_CFG_PATH)
 	cfg.set_value("game", "map_layout", picked)
 	cfg.save(LAYOUT_CFG_PATH)
+	var audio = get_node_or_null("/root/AudioManager")
+	if audio and audio.has_method("play_sfx"):
+		audio.play_sfx("ui_click", 1.0)
+
+## WEB TOUCH: label shows the resolved state so "AUTO" reads honestly —
+## e.g. "TOUCH: AUTO (ON)" on a phone, "TOUCH: AUTO (OFF)" on desktop.
+func _touch_button_label(mode: String) -> String:
+	var prefs = load("res://scripts/InputPrefs.gd")
+	match mode:
+		"on":
+			return "TOUCH: ON"
+		"off":
+			return "TOUCH: OFF"
+		_:
+			var resolved := false
+			if prefs and prefs.has_method("touch_enabled"):
+				resolved = prefs.touch_enabled()
+			return "TOUCH: AUTO (%s)" % ("ON" if resolved else "OFF")
+
+func _on_touch_button() -> void:
+	var prefs = load("res://scripts/InputPrefs.gd")
+	if prefs == null or not prefs.has_method("touch_mode"):
+		return
+	var order := ["auto", "on", "off"]
+	var current: String = prefs.touch_mode()
+	var next: String = order[(order.find(current) + 1) % order.size()]
+	prefs.set_touch_mode(next)
+	touch_button.text = _touch_button_label(next)
 	var audio = get_node_or_null("/root/AudioManager")
 	if audio and audio.has_method("play_sfx"):
 		audio.play_sfx("ui_click", 1.0)

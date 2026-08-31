@@ -53,6 +53,19 @@ func _test_mount_and_joystick() -> void:
 		await process_frame
 		return
 	check(mc.touch_enabled == true, "FE_TOUCH=1 enables touch controls")
+
+	# WEB TOUCH: preference modes persist and resolve sanely.
+	var P2 = load("res://scripts/InputPrefs.gd")
+	P2.set_touch_mode(P2.TOUCH_OFF)
+	check(P2.touch_mode() == P2.TOUCH_OFF, "touch mode OFF persists")
+	check(P2.touch_enabled() == true,
+		"FE_TOUCH=1 env overrides OFF (test env precedence)")
+	P2.set_touch_mode(P2.TOUCH_ON)
+	check(P2.touch_enabled() == true, "ON pins touch on")
+	P2.set_touch_mode(P2.TOUCH_AUTO)
+	check(P2.touch_mode() == P2.TOUCH_AUTO, "touch mode AUTO persists")
+	P2.set_touch_mode("bogus")
+	check(P2.touch_mode() == P2.TOUCH_AUTO, "invalid touch mode rejected")
 	var chair = mc.local_chair_ref
 	check(chair != null and is_instance_valid(chair), "local chair bound for boost cooldown reflection")
 
