@@ -95,6 +95,7 @@ func _ready() -> void:
 		local_player.shake_requested.connect(_request_camera_shake)
 	if local_player and local_player.has_signal("stunned"):
 		local_player.stunned.connect(func(): _announcer().say("trap", _const_lines("TRAP_HIT_LINES")))
+	_connect_race_triggers()
 	# Panic-cam: PiP of the rider's own face while boosting/stunned.
 	# Mounted onto the HUD CanvasLayer so it inherits HUD layering (above
 	# the 3D view) instead of fighting scene-space UI.
@@ -127,7 +128,14 @@ func _on_host_lost() -> void:
 		if is_inside_tree():
 			_on_back_to_menu())
 
-	var exit_zone = $Arena/ExitZone
+## Wire race-level triggers: ExitZone finish + results-panel buttons.
+## NOTE: this code lives AFTER _on_host_lost by necessity — in the shipped
+## code it was orphaned TOP-LEVEL statements after a blank line (never
+## executed), so the finish line never fired for real chairs in real races
+## and Rematch/Menu buttons stayed unwired. The checkpoint bot test caught
+## it: the only finish_order writers were the ghost and _end_race.
+func _connect_race_triggers() -> void:
+	var exit_zone = get_node_or_null("Arena/ExitZone")
 	if exit_zone:
 		exit_zone.body_entered.connect(_on_player_reached_exit)
 

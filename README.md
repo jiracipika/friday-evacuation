@@ -139,6 +139,7 @@ friday-evacuation/
 │   ├── MobileControls.gd # Touch controls
 │   └── ...
 ├── .github/workflows/      # CI: exports + Vercel deploy on push
+├── PLAYTEST.md            # Human QA checklist (feel, controller, touch, LAN)
 └── ROADMAP.md            # Detailed implementation roadmap
 ```
 
