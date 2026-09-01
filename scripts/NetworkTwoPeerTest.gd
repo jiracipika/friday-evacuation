@@ -21,11 +21,17 @@ var client_saw_roster := false
 var both_started := {"host": false, "client": false}
 var late_join_confirmed := false
 var discovery_ok := false
+var initial_saved_map := ""   # PHASE 5: cfg map_layout before any sync ran
 
 func _init() -> void:
 	call_deferred("_setup")
 
 func _setup() -> void:
+	# PHASE 5: snapshot the guest cfg BEFORE any sync — the invariant is
+	# that layout sync NEVER writes the local preference.
+	var snap := ConfigFile.new()
+	snap.load("user://settings.cfg")
+	initial_saved_map = str(snap.get_value("game", "map_layout", "open_plan"))
 	network = get_root().get_node_or_null("Network")
 	if network == null:
 		printerr("[FAIL] Network autoload missing")
@@ -99,8 +105,22 @@ func _process(delta: float) -> bool:
 		3:
 			if client_multiplayer:
 				client_multiplayer.poll()
+			# PHASE 5 layout sync: host picks a non-default layout right before
+			# start; begin_match (call_local) must capture + apply it here.
+			var layouts = load("res://scripts/LevelLayouts.gd")
+			layouts.set_current("executive")
 			if network.start_match():
 				print("[PASS] start_match accepted")
+				var got: String = String(network.match_layout)
+				if got == "executive":
+					print("[PASS] host captured layout in match payload (executive)")
+				else:
+					_fail("match_layout not captured, got='%s'" % got)
+				var applied: String = String(layouts.current)
+				if applied == "executive":
+					print("[PASS] begin_match call_local applied layout on host")
+				else:
+					_fail("host layout not applied, got='%s'" % applied)
 				step += 1
 		4:
 			if client_multiplayer:
@@ -113,16 +133,36 @@ func _process(delta: float) -> bool:
 				client_multiplayer.poll()
 			# Late-join verification without a third process: with the flag
 			# up, confirm_match_state (the late-join reply handler) must flip
-			# match_started listeners.
+			# match_started listeners. PHASE 5: it also carries the host's
+			# layout — simulate a cubicle_maze host reply and require apply.
 			late_join_confirmed = false
 			network.match_started.connect(func(): late_join_confirmed = true)
-			network.confirm_match_state()
+			network.confirm_match_state("cubicle_maze")
 			step += 1
 		6:
 			if client_multiplayer:
 				client_multiplayer.poll()
 			if not late_join_confirmed and total > 14.0:
 				_fail("late-join confirm did not emit match_started")
+			# PHASE 5: the simulated late-join reply must have applied the
+			# host's layout as process state AND left the saved cfg alone.
+			var layouts6 = load("res://scripts/LevelLayouts.gd")
+			var late_layout: String = String(layouts6.current)
+			if late_layout == "cubicle_maze":
+				print("[PASS] late-join layout applied (cubicle_maze)")
+			else:
+				_fail("late-join layout not applied, got='%s'" % late_layout)
+			if String(network.match_layout) == "cubicle_maze":
+				print("[PASS] late-join match_layout recorded")
+			else:
+				_fail("late-join match_layout got='%s'" % String(network.match_layout))
+			var probe_cfg := ConfigFile.new()
+			probe_cfg.load("user://settings.cfg")
+			var saved_map: String = str(probe_cfg.get_value("game", "map_layout", "open_plan"))
+			if saved_map == initial_saved_map:
+				print("[PASS] saved cfg map_layout untouched by sync (%s)" % saved_map)
+			else:
+				_fail("sync must not write the guest cfg ('%s' -> '%s')" % [initial_saved_map, saved_map])
 			discovery_check()
 			step += 1
 		7:

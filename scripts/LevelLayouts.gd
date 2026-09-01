@@ -93,3 +93,14 @@ static func set_current(name_value: String) -> void:
 
 static func current_layout() -> Dictionary:
 	return get_layout(current)
+
+## Pretty label for HUD/lobby display. Falls back to the raw key.
+static func display_name(name_value: String) -> String:
+	match name_value:
+		OPEN_PLAN:
+			return "Open Plan"
+		CUBICLE_MAZE:
+			return "Cubicle Maze"
+		EXECUTIVE:
+			return "Executive Suite"
+	return name_value.capitalize()

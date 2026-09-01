@@ -88,10 +88,17 @@ func _test_mount_and_joystick() -> void:
 	mc._input(drag)
 	check(absf(mc.move_vector.x - 1.0) < 0.01, "drag right => move_vector.x ~ +1")
 	check(chair.has_method("set_mobile_input") and chair.mobile_input.x > 0.9, "move_changed wired: chair.mobile_input follows joystick")
-	for i in 60:
-		await process_frame
+	# Movement smoke: the assertion's job is catching DEAD WIRING (joystick
+	# never reaching the chair = 0.00 units), not measuring speed. The
+	# headless path length is load-sensitive (0.26 under ladder CPU
+	# contention vs 0.44-0.51 standalone) because physics catch-up clamps
+	# drop ticks under starvation, so the threshold must sit far below the
+	# healthy range while staying far above dead. 120 physics frames is
+	# ~2s of driving; healthy input travels 0.3-0.8+ units even loaded.
+	for i in 120:
+		await physics_frame
 	var moved: float = chair.global_position.distance_to(before)
-	check(moved > 0.3, "chair physically moved via touch input (%.2f units)" % moved)
+	check(moved > 0.15, "chair physically moved via touch input (%.2f units)" % moved)
 	var release := InputEventScreenTouch.new()
 	release.pressed = false
 	release.index = 0

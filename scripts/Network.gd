@@ -28,6 +28,12 @@ signal remote_player_state(peer_id: int, position: Vector3, velocity: Vector3, r
 signal player_ready_changed(peer_id: int, is_ready: bool)
 signal match_started()
 var match_running := false   # set on begin_match; late joiners skip lobby
+## Host's LevelLayouts pick, captured at start_match and delivered inside
+## begin_match / confirm_match_state so every peer builds the SAME map.
+## "" = unset (peers keep their own local pick). Applied via
+## LevelLayouts.set_current — process state ONLY, never written to the
+## client's saved cfg, so a guest's own menu preference survives the match.
+var match_layout := ""
 signal world_trap_dropped(peer_id: int, position: Vector3, trap_type: String, forced: bool)
 signal world_pickup_taken(peer_id: int, pickup_name: String)
 signal player_stunned(peer_id: int, duration: float)
@@ -326,13 +332,20 @@ func all_players_ready() -> bool:
 func start_match() -> bool:
 	if not is_server() or not all_players_ready():
 		return false
-	begin_match.rpc()
+	# PHASE 5 layout sync: capture the host's layout pick NOW so it rides
+	# inside the same reliable RPC that starts the match — no ordering gap
+	# between "apply layout" and "load scene" on any peer.
+	var layouts = load("res://scripts/LevelLayouts.gd")
+	if layouts and layouts.is_valid(layouts.current):
+		match_layout = String(layouts.current)
+	begin_match.rpc(match_layout)
 	match_started.emit()
 	return true
 
 @rpc("authority", "reliable", "call_local")
-func begin_match() -> void:
+func begin_match(layout: String) -> void:
 	match_running = true
+	_apply_authoritative_layout(layout)
 	match_started.emit()
 
 ## Called by a client right after connecting: if the host is mid-match,
@@ -340,11 +353,25 @@ func begin_match() -> void:
 @rpc("any_peer", "reliable", "call_remote")
 func request_match_state() -> void:
 	if multiplayer.is_server() and match_running:
-		confirm_match_state.rpc_id(multiplayer.get_remote_sender_id())
+		confirm_match_state.rpc_id(multiplayer.get_remote_sender_id(), match_layout)
 
 @rpc("authority", "reliable", "call_remote")
-func confirm_match_state() -> void:
+func confirm_match_state(layout: String) -> void:
+	_apply_authoritative_layout(layout)
 	match_started.emit()
+
+## PHASE 5 layout sync: a peer applies the host's layout pick as process
+## state (LevelLayouts.current). On the host this is a no-op re-assert of
+## its own pick; on clients it overrides their menu pick for THIS match
+## only — the saved cfg preference is untouched, and Main.gd re-applies
+## the saved pick when the menu reloads after the match.
+func _apply_authoritative_layout(layout: String) -> void:
+	if layout.is_empty():
+		return
+	match_layout = layout
+	var layouts = load("res://scripts/LevelLayouts.gd")
+	if layouts and layouts.is_valid(layout):
+		layouts.set_current(layout)
 
 @rpc("any_peer", "reliable", "call_remote")
 func request_roster() -> void:

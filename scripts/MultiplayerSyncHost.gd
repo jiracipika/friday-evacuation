@@ -21,6 +21,7 @@ var trap_payload_ok := false
 var pickup_fired := false
 var pickup_name_ok := false
 var chat_ok := false
+var client_layout_report := ""   # PHASE 5: client's reported applied layout
 
 
 func _wait(seconds: float) -> void:
@@ -112,9 +113,17 @@ func _run() -> void:
 	net.chat_message.connect(func(pid: int, sender: String, text: String):
 		if pid == client_id and text == "hello from client":
 			chat_ok = true
+		if pid == client_id and text.begins_with("LAYOUT_APPLIED="):
+			client_layout_report = text.substr("LAYOUT_APPLIED=".length())
 	)
 
+	# PHASE 5 layout sync: host picks a NON-default layout right before
+	# start so begin_match carries something distinguishable.
+	var layout_script = load("res://scripts/LevelLayouts.gd")
+	layout_script.set_current("executive")
+
 	check(net.start_match(), "host starts match")
+	check(String(net.match_layout) == "executive", "host captured layout in payload (executive)")
 
 	await _wait_until(func(): return saw_state, 45.0)
 	check(saw_state, "host received client state")
@@ -130,6 +139,11 @@ func _run() -> void:
 	# Chat relay from client
 	await _wait_until(func(): return chat_ok, 45.0)
 	check(chat_ok, "chat relayed client->host")
+
+	# PHASE 5 layout sync: the client reports its applied layout via the
+	# chat channel after match_started fires on its side.
+	await _wait_until(func(): return client_layout_report != "", 10.0)
+	check(client_layout_report == "executive", "client applied host layout (reported '%s')" % client_layout_report)
 
 	net.close_connection()
 	print("")

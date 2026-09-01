@@ -188,7 +188,8 @@ func _host() -> void:
 		var hint: String = network.hotspot_host_hint()
 		if hint == "":
 			hint = "?"
-		status_label.text = "HOSTING on UDP 5005 — your address: %s  (friends: JOIN -> type this)" % hint
+		var map_note: String = _map_note()
+		status_label.text = "HOSTING on UDP 5005 — your address: %s  (friends: JOIN -> type this)%s" % [hint, map_note]
 		network.set_ready(false)
 		_refresh_players()
 
@@ -245,7 +246,7 @@ func _on_server_started(port: int) -> void:
 func _on_connected() -> void:
 	ready_button.disabled = false
 	start_button.disabled = true
-	status_label.text = "CONNECTED — ready when you are"
+	status_label.text = "CONNECTED — ready when you are%s" % _map_note()
 	_refresh_players()
 
 func _on_failed() -> void:
@@ -261,6 +262,18 @@ func _on_host_lost() -> void:
 	status_label.text = "HOST DISCONNECTED"
 	network.close_connection()
 	_refresh_players()
+
+## PHASE 5 layout sync UX: one honest line about whose map pick counts.
+## Host: your menu MAP pick is what everyone races. Joiner: you'll get the
+## host's map at START — your own pick stays saved for when YOU host.
+func _map_note() -> String:
+	var layouts = load("res://scripts/LevelLayouts.gd")
+	if layouts == null:
+		return ""
+	var label: String = layouts.display_name(String(layouts.current))
+	if network and network.is_server():
+		return "\nMAP: %s (yours — guests sync to this)" % label
+	return "\nMAP: %s (yours locally — host's map is used at START)" % label
 
 func _refresh_players() -> void:
 	if not player_list:

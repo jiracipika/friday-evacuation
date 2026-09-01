@@ -7,6 +7,8 @@ extends SceneTree
 
 var port := 15005
 var match_started := false
+var initial_saved_map := ""   # PHASE 5: cfg map_layout before any sync ran
+var layout_fail := false      # PHASE 5: hard-fail flag (driver checks rc)
 
 
 func _wait(seconds: float) -> void:
@@ -60,10 +62,39 @@ func _run() -> void:
 	# (lambdas capture locals by value — writes to locals are invisible).
 	net.match_started.connect(func(): match_started = true)
 
+	# PHASE 5 layout sync: pick a local layout that CONFLICTS with the
+	# host's (host picks executive) and snapshot the saved cfg. After
+	# match start the client must be on the HOST's layout while its cfg
+	# keeps its own pick.
+	var layout_script = load("res://scripts/LevelLayouts.gd")
+	layout_script.set_current("cubicle_maze")
+	var snap := ConfigFile.new()
+	snap.load("user://settings.cfg")
+	initial_saved_map = str(snap.get_value("game", "map_layout", "open_plan"))
+
 	net.set_ready(true)
 	print("CLIENT: readied")
 	await _wait_until(func(): return match_started, 45.0)
 	print("CLIENT: match started")
+
+	# PHASE 5: verify the authoritative layout landed on this CLIENT.
+	var applied: String = String(layout_script.current)
+	if applied == "executive":
+		print("CLIENT_LAYOUT_PASS: client on host's executive layout")
+	else:
+		printerr("CLIENT_LAYOUT_FAIL: expected executive, got '%s'" % applied)
+		layout_fail = true
+	var check_cfg := ConfigFile.new()
+	check_cfg.load("user://settings.cfg")
+	var saved_now: String = str(check_cfg.get_value("game", "map_layout", "open_plan"))
+	if saved_now == initial_saved_map:
+		print("CLIENT_CFG_PASS: saved map_layout untouched (%s)" % saved_now)
+	else:
+		printerr("CLIENT_CFG_FAIL: '%s' -> '%s'" % [initial_saved_map, saved_now])
+		layout_fail = true
+	# Report the applied layout to the host via the chat relay so the
+	# HOST-side process (which owns PASS/FAIL accounting) can assert it.
+	net.send_chat("LAYOUT_APPLIED=" + applied)
 
 	# State sync is UNRELIABLE — burst it so at least one packet lands.
 	for burst in range(6):
@@ -84,4 +115,4 @@ func _run() -> void:
 	await _wait(20.0)
 	print("CLIENT: done, closing")
 	net.close_connection()
-	quit(0)
+	quit(1 if layout_fail else 0)
