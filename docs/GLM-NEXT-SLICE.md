@@ -1,91 +1,54 @@
 # Next Development Slice — Friday 5PM: Evacuation
 
 Status: implementation-ready handoff
-Branch: `main`
+Branch: `main` at `fed08a0` (Phase 8A chair skins)
 Godot: `/usr/local/bin/godot` 4.7.1
 
 ## Current verified baseline
 
-Phases 1–4 are implemented, Phase 5 has a software-verified LAN baseline (real two-machine Wi-Fi QA still required), Phase 6A Hauled is playable, Phase 6B has a complete single-player shopper loop plus multiplayer-ready role/disguise/scan state, and Phase 7A touch controls are wired in all modes.
+Phases 1–7 complete in software. Phase 8A shipped this session:
 
-The latest GPT-5.6 Sol review fixed core playability defects rather than merely polishing scaffolding:
+- 6 chair skins (`scripts/ChairSkins.gd`) unlocked by career wins
+  (0/1/3/5/10/25), each with stat multipliers (jump/friction/boost)
+  applied once in `PlayerChair._ready()`.
+- Variant chassis builders in `PlayerChair._build_chair_model()`;
+  riders mount via the shared path with per-skin `seat_rise`.
+- The Throne boosts with the new procedural "flush" sfx (AudioManager).
+- Menu CHAIR dropdown with LOCKED rows, multiplier readout, next-unlock
+  progress; persisted `identity.cfg player/skin`.
+- `_end_race` announces fresh unlocks on the results panel.
+- `ChairSkinSmokeTest.gd` (132 checks) in the ladder → 35 suites green.
 
-- Corrected reversed camera-relative keyboard input: W now moves along camera forward.
-- Replaced additive drift steering with responsive target-velocity steering while retaining reduced boost steering.
-- Stationary boost, stapler bolts, traps, spill placement, and idle camera use the visible chair's facing instead of the unrotated CharacterBody3D root.
-- Normal traps now remain on the player's current floor instead of teleporting to floor 1.
-- Hauled and Shop & Seek share the PlayerChair interaction signal, so keyboard and touch action buttons run the same mode interaction.
-- Shop & Seek suppresses ordinary sabotage while Q/touch Trap is a seeker scan, preventing simultaneous scan + trap drops.
-- Results now preserve the real player display name instead of always recording `Unknown`.
-- Removed unsupported screen-space AA from the GL Compatibility renderer, eliminating the warning on every boot/test.
+## Remaining software slices
 
-## Phase 6B — Shop & Seek software baseline
+1. **Phase 8B colorblind support** — power-ups/traps need distinct
+   SHAPE cues, not just color. Touch points: `PowerUpVisual.gd`
+   (add per-kind silhouette toppers), `SabotageTrap.gd`,
+   `Accessibility.gd` (`colorblind_mode` setting + Settings toggle).
+2. **Phase 8B game speed** — `Accessibility.get_time_scale()` exists;
+   verify a Settings slider actually drives `Engine.time_scale` and
+   that race timers scale consistently (add a round-trip test).
+3. **CheckpointBot per-skin sanity (optional)** — one bot run per skin
+   id to prove no chassis breaks traversal (ball/beanbag change
+   friction/jump enough to matter).
 
-`scripts/ShopSeek.gd` now provides:
+## Hardware QA (unverified, needs real devices)
 
-- Seven deterministic shelf aisles plus checkout, produce, and frozen sections.
-- 24 labeled product props with unique variant IDs and eight primitive shape families.
-- Hider disguise entry/exit: two-second freeze, half-speed movement, product replacement visual, and wobble tell.
-- Seeker red vest and five-second Q/touch scan cooldown.
-- Single-player five-item shopping list, automatic/interactive collection, 60-second failure timer, and a patrolling security guard that stuns and costs time.
-- Player-ID role state as the seam for later authoritative replication.
-- Honest menu status: `SHOPPER PLAYABLE`, not a false multiplayer-complete claim.
-
-`ShopSeekSmokeTest.gd` verifies the real scene, layout, unique props, list, guard, disguise transitions, movement penalties, seeker vest, scan routing/cooldown, no accidental trap drop, and role state.
-
-## Character content
-
-The existing eight-character roster is now live gameplay content rather than dead metadata:
-
-- Main menu rider selector with persisted identity.
-- Eight procedural office-worker riders, character palettes, badges, and named accessories.
-- Character visuals mount on the shared chair in every mode.
-- Network/lobby player color remains authoritative for chair color; character art no longer overwrites remote color.
-- `CharacterRosterSmokeTest.gd` instantiates and verifies all eight unique riders/accessories.
-
-## Verification ladder
-
-Run serially:
-
-```bash
-git diff --check
-/usr/local/bin/godot --headless --path . --script scripts/BootTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/PlayerChairMechanicsSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/CharacterRosterSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/ShopSeekSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/HauledSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/TouchControlsSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/HazardsSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/ThemedFloorsSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/LevelClearTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/PowerUpSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/PauseMenuSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/ModeSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/NetworkSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/AccessibilitySmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/RaceModifiersSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/GhostRacerSmokeTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/StatsRoundTripTest.gd
-/usr/local/bin/godot --headless --path . --script scripts/VisualDesignSmokeTest.gd
-/usr/local/bin/godot --headless --path . --quit-after 3
-```
-
-## Next coherent slice
-
-Phase 6C — Pizza Colony:
-
-1. Implement real pepperoni ownership and three-/five-second capture/steal progress.
-2. Add cheese/topping resources and physics-safe crust-wall placement.
-3. Add chef edge patrol, rotating cutter telegraph/hit elimination, and olive bombs.
-4. Implement last-player/first-to-five win conditions plus single-player survival fallback.
-5. Add a real-scene `PizzaColonySmokeTest.gd` covering capture, economy, attacks, elimination, and win state.
-
-After 6C: Phase 7B exports/device QA, then real two-machine LAN role/authority testing for Shop & Seek and the race.
+- PLAYTEST.md session 1: now includes the chair-skins feel checklist
+  (per-skin drive feel, flush sfx, unlock celebration on a real win).
+- Session 2 controller QA, session 3 phone touch via Vercel build,
+  session 4 two-machine LAN + hotspot (layout sync ships in the
+  match payload — verify on real peers).
 
 ## Guardrails
 
-- `git pull --ff-only` before work; commit directly to `main` only after the full serial ladder passes.
+- `git pull --ff-only` before work; commit directly to `main` only
+  after the full serial ladder passes (`bash scripts/run_ladder.sh`).
 - Never run two implementation sessions against this working tree.
-- Keep `FLOOR3_LANDINGS` synchronized across Evacuation, LevelClearTest, and Hazards.
-- Do not label Shop & Seek multiplayer-complete until seeker assignment, catches/infection, authority, and scoring work on two real peers.
-- Preserve `MobileControls.mount_for_mode(parent, chair)` as the only direct mobile routing owner.
+- Keep `FLOOR3_LANDINGS` synchronized across Evacuation, LevelClearTest,
+  and Hazards.
+- Skins apply in `PlayerChair._ready()` — anything that spawns a chair
+  with `use_global_skin = true` inherits the local player's pick
+  (remote chairs currently use defaults; leave unless doing skin sync).
+- Ladder now 35 suites; `ChairSkinSmokeTest` must stay in
+  `scripts/run_ladder.sh` and BootTest.
