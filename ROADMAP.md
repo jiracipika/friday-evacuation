@@ -1019,21 +1019,33 @@ movement, cooldown lockout, all actions, and every mode mount.
 
 ## Phase 8: POLISH & SHIP
 
-### 8A: Meta Progression
+### 8A: Meta Progression — COMPLETE (software, this session)
 
-1. **Chair skins** (unlockable):
-   - Default: standard office chair
-   - Bean Bag: flat sphere, sinks when stationary
-   - Exercise Ball: bouncy, higher jump, harder to control
-   - Shopping Cart: metal grid visual, louder roll sound
-   - Toilet: white porcelain, flush sound on boost
-   - Racing Seat: sporty, lower friction
-   - Each skin modifies stats slightly (jump, friction, boost force)
+Implemented and verified (see `scripts/ChairSkins.gd`, `ChairSkinSmokeTest.gd`):
 
-2. **Unlock conditions**: Win 1/3/5/10/25/50 races
-
-3. **Stats tracking**: Save to user://save.cfg using ConfigFile:
-   - total_races, races_won, beers_owed, traps_landed, top_speed_ever
+1. **Chair skins** — all six from the original plan, as variant chassis in
+   `PlayerChair._build_chair_model()` (office/cart/racing share the office
+   base with bolt-on decor; ball/beanbag/toilet are bespoke builders):
+   - Office Standard (default, no stat mods)
+   - Bean Bag (1 win): +45% grip, -25% jump, -15% boost, rider sinks in
+   - Exercise Ball (3 wins): +45% jump, -30% grip (bouncy, slippy)
+   - Shopping Cart (5 wins): +15% boost, -15% grip, wire basket + handle
+   - The Throne (10 wins): +25% boost, porcelain toilet, FLUSH boost sfx
+     (AudioManager "flush" procedural effect)
+   - Racing Seat (25 wins): -25% grip, +10% boost, dark side bolsters
+   - Stats apply once in `PlayerChair._ready()` via jump/friction/boost
+     multipliers; riders mount through a shared path with per-skin
+     `seat_rise`.
+2. **Unlock conditions**: career wins via `StatsManager.races_won`;
+   thresholds 0/1/3/5/10/25. `newly_unlocked(before, after)` computes
+   what a race just unlocked; `_end_race` stores it on the results panel
+   ("NEW CHAIR UNLOCKED: ...") + caption + announcer + powerup sfx.
+3. **Stats tracking**: pre-existing (`StatsManager`, user://save.cfg) —
+   menu stats line, results, and unlock progress all read from it.
+4. **Menu UI**: CHAIR dropdown under RIDER; locked rows are disabled
+   entries "Name — LOCKED (win N)"; detail label shows tagline + exact
+   multipliers + next-unlock progress; persisted in identity.cfg
+   (`player/skin`) with invalid-id fallback to default.
 
 ### 8B: Accessibility
 

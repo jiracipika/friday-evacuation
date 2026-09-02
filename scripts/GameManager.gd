@@ -14,6 +14,7 @@ enum GameMode {
 var player_name: String = "Player1"
 var player_color: Color = Color(0.4, 0.8, 1.0)
 var selected_character_id: String = "deadline_dana"
+var selected_skin_id: String = "office_standard"
 var selected_mode: GameMode = GameMode.EVACUATION
 
 # Multiplayer
@@ -52,15 +53,20 @@ func _load_identity() -> void:
 		var color_hex: String = config.get_value("player", "color", player_color.to_html(false))
 		player_color = Color.from_string(color_hex, player_color)
 		selected_character_id = config.get_value("player", "character", selected_character_id)
+		selected_skin_id = config.get_value("player", "skin", selected_skin_id)
 		var roster = load("res://scripts/CharacterRoster.gd")
 		if roster and not roster.ids().has(selected_character_id):
 			selected_character_id = roster.DEFAULT_ID
+		var skins = load("res://scripts/ChairSkins.gd")
+		if skins and not skins.ids().has(selected_skin_id):
+			selected_skin_id = skins.DEFAULT_ID
 
 func save_identity() -> void:
 	var config := ConfigFile.new()
 	config.set_value("player", "name", player_name)
 	config.set_value("player", "color", player_color.to_html(false))
 	config.set_value("player", "character", selected_character_id)
+	config.set_value("player", "skin", selected_skin_id)
 	config.save("user://identity.cfg")
 
 func select_mode(mode: GameMode) -> void:

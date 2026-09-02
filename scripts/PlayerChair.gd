@@ -12,6 +12,9 @@ signal sabotage_requested
 @export var player_display_name: String = "Player"
 @export var character_id: String = "deadline_dana"
 @export var use_global_character := true
+@export var skin_id: String = "office_standard"
+@export var use_global_skin := true
+var skin: Dictionary = {}  # resolved ChairSkins entry (Phase 8A)
 
 # Movement tuning — lower accel = smoother starts/stops
 @export var acceleration: float = 34.0
@@ -53,6 +56,7 @@ var chair_seat: MeshInstance3D
 var chair_backrest: MeshInstance3D
 var dust_particles: GPUParticles3D
 var rider_root: Node3D
+var rider_y_offset: float = 0.0  # Phase 8A seat_rise (visual only)
 var squash_amount: float = 1.0
 var target_squash: float = 1.0
 var landing_velocity: float = 0.0
@@ -84,6 +88,17 @@ func _ready() -> void:
 	var gm := get_node_or_null("/root/GameManager")
 	if use_global_character and gm and "selected_character_id" in gm:
 		character_id = gm.selected_character_id
+	if use_global_skin and gm and "selected_skin_id" in gm:
+		skin_id = gm.selected_skin_id
+	# Phase 8A: resolve skin and apply stat personality BEFORE physics.
+	var skins_script: GDScript = load("res://scripts/ChairSkins.gd")
+	if skins_script:
+		skin = skins_script.get_skin(skin_id)
+		skin_id = String(skin["id"])
+		jump_force *= float(skin.get("jump_mult", 1.0))
+		friction *= float(skin.get("friction_mult", 1.0))
+		boost_force *= float(skin.get("boost_mult", 1.0))
+
 	_apply_character_palette()
 
 	# Floor snap so the chair sticks to slopes and handles ramp-to-floor steps
@@ -150,14 +165,37 @@ func _build_chair_model() -> void:
 	chair_root.name = "ProceduralChair"
 	model_parent.add_child(chair_root)
 
-	var chair_mat = StandardMaterial3D.new()
-	chair_mat.albedo_color = player_color
-	chair_mat.roughness = 0.55
-	chair_mat.metallic = 0.05
-	var dark_mat = StandardMaterial3D.new()
-	dark_mat.albedo_color = Color(0.035, 0.04, 0.055)
-	dark_mat.roughness = 0.4
-	dark_mat.metallic = 0.65
+	# Phase 8A: variant chassis per skin, shared rider on top.
+	var kind := String(skin.get("id", "office_standard"))
+	match kind:
+		"exercise_ball":
+			_build_ball_chair(chair_root)
+		"bean_bag":
+			_build_beanbag_chair(chair_root)
+		"toilet":
+			_build_toilet_chair(chair_root)
+		_:
+			_build_office_chair(chair_root)
+
+	_build_rider_model(chair_root)
+	# seat_rise lifts the rider relative to the chassis (bean bag sinks
+	# in, ball perches up, throne raises). Visual only.
+	rider_y_offset = float(skin.get("seat_rise", 0.0))
+	if rider_root and rider_y_offset != 0.0:
+		rider_root.position.y = rider_y_offset
+
+func _chair_material(color: Color, rough: float, metal: float) -> StandardMaterial3D:
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = rough
+	mat.metallic = metal
+	return mat
+
+## Default plus cart/racing variants — office base with bolt-on decor.
+func _build_office_chair(chair_root: Node3D) -> void:
+	var kind := String(skin.get("id", "office_standard"))
+	var chair_mat = _chair_material(player_color, 0.55, 0.05)
+	var dark_mat = _chair_material(Color(0.035, 0.04, 0.055), 0.4, 0.65)
 
 	chair_seat = MeshInstance3D.new()
 	chair_seat.name = "Seat"
@@ -210,7 +248,145 @@ func _build_chair_model() -> void:
 		chair_root.add_child(wheel)
 		chair_wheels.append(wheel)
 
-	_build_rider_model(chair_root)
+	# Shopping Cart: wire basket up front + push handle.
+	if kind == "shopping_cart":
+		var basket_mat = _chair_material(Color(0.55, 0.58, 0.62), 0.35, 0.85)
+		var basket = MeshInstance3D.new()
+		var basket_mesh = BoxMesh.new()
+		basket_mesh.size = Vector3(0.55, 0.3, 0.4)
+		basket.mesh = basket_mesh
+		basket.position = Vector3(0, 0.5, -0.6)
+		basket.material_override = basket_mat
+		chair_root.add_child(basket)
+		var handle = MeshInstance3D.new()
+		var handle_mesh = BoxMesh.new()
+		handle_mesh.size = Vector3(0.7, 0.06, 0.06)
+		handle.mesh = handle_mesh
+		handle.position = Vector3(0, 0.95, 0.5)
+		handle.material_override = basket_mat
+		chair_root.add_child(handle)
+
+	# Racing Seat: side bolsters + wider backrest wing.
+	if kind == "racing_seat":
+		var bolster_mat = _chair_material(player_color.darkened(0.45), 0.5, 0.1)
+		for side in [-1.0, 1.0]:
+			var bolster = MeshInstance3D.new()
+			var bolster_mesh = BoxMesh.new()
+			bolster_mesh.size = Vector3(0.14, 0.18, 0.72)
+			bolster.mesh = bolster_mesh
+			bolster.position = Vector3(side * 0.43, 0.42, 0.02)
+			bolster.material_override = bolster_mat
+			chair_root.add_child(bolster)
+
+## Exercise Ball — big squashed sphere, no wheels, perch cup on top.
+func _build_ball_chair(chair_root: Node3D) -> void:
+	var ball_mat = _chair_material(player_color.lightened(0.15), 0.35, 0.0)
+	var ball = MeshInstance3D.new()
+	ball.name = "Ball"
+	var ball_mesh = SphereMesh.new()
+	ball_mesh.radius = 0.55
+	ball_mesh.height = 1.0
+	ball.mesh = ball_mesh
+	ball.position = Vector3(0, 0.3, 0)
+	ball.scale = Vector3(1.0, 0.9, 1.0)
+	ball.material_override = ball_mat
+	chair_root.add_child(ball)
+	# Highlight patch so it reads as glossy, not flat.
+	var gloss = MeshInstance3D.new()
+	var gloss_mesh = SphereMesh.new()
+	gloss_mesh.radius = 0.1
+	gloss_mesh.height = 0.2
+	gloss.mesh = gloss_mesh
+	gloss.position = Vector3(-0.25, 0.72, -0.25)
+	var gloss_mat = _chair_material(Color(1, 1, 1, 0.5), 0.1, 0.0)
+	gloss.material_override = gloss_mat
+	chair_root.add_child(gloss)
+	# Perch cup so the rider has somewhere to sit.
+	var cup = MeshInstance3D.new()
+	var cup_mesh = CylinderMesh.new()
+	cup_mesh.top_radius = 0.3
+	cup_mesh.bottom_radius = 0.24
+	cup_mesh.height = 0.08
+	cup.mesh = cup_mesh
+	cup.position = Vector3(0, 0.78, 0)
+	cup.material_override = _chair_material(Color(0.1, 0.1, 0.12), 0.5, 0.3)
+	chair_root.add_child(cup)
+
+## Bean Bag — flattened blob + backrest lump, sits low.
+func _build_beanbag_chair(chair_root: Node3D) -> void:
+	var bag_mat = _chair_material(player_color.darkened(0.1), 0.9, 0.0)
+	var base = MeshInstance3D.new()
+	base.name = "BeanBase"
+	var base_mesh = SphereMesh.new()
+	base_mesh.radius = 0.6
+	base_mesh.height = 1.2
+	base.mesh = base_mesh
+	base.position = Vector3(0, 0.12, 0)
+	base.scale = Vector3(1.0, 0.45, 1.0)
+	base.material_override = bag_mat
+	chair_root.add_child(base)
+	var lump = MeshInstance3D.new()
+	lump.name = "BeanBack"
+	var lump_mesh = SphereMesh.new()
+	lump_mesh.radius = 0.42
+	lump_mesh.height = 0.84
+	lump.mesh = lump_mesh
+	lump.position = Vector3(0, 0.35, 0.42)
+	lump.scale = Vector3(1.0, 0.8, 0.55)
+	lump.material_override = bag_mat
+	chair_root.add_child(lump)
+
+## The Throne — porcelain toilet; boost sfx is a flush (AudioManager).
+func _build_toilet_chair(chair_root: Node3D) -> void:
+	var porcelain = _chair_material(Color(0.93, 0.94, 0.96), 0.12, 0.05)
+	var tank_mat = _chair_material(Color(0.88, 0.9, 0.93), 0.2, 0.05)
+	# Pedestal.
+	var pedestal = MeshInstance3D.new()
+	var pedestal_mesh = CylinderMesh.new()
+	pedestal_mesh.top_radius = 0.22
+	pedestal_mesh.bottom_radius = 0.3
+	pedestal_mesh.height = 0.32
+	pedestal.mesh = pedestal_mesh
+	pedestal.position = Vector3(0, 0.16, 0.05)
+	pedestal.material_override = porcelain
+	chair_root.add_child(pedestal)
+	# Bowl rim.
+	var bowl = MeshInstance3D.new()
+	var bowl_mesh = CylinderMesh.new()
+	bowl_mesh.top_radius = 0.4
+	bowl_mesh.bottom_radius = 0.3
+	bowl_mesh.height = 0.14
+	bowl.mesh = bowl_mesh
+	bowl.position = Vector3(0, 0.39, 0)
+	bowl.material_override = porcelain
+	chair_root.add_child(bowl)
+	# Seat ring (slightly warmer white).
+	var ring = MeshInstance3D.new()
+	var ring_mesh = TorusMesh.new()
+	ring_mesh.inner_radius = 0.28
+	ring_mesh.outer_radius = 0.42
+	ring.mesh = ring_mesh
+	ring.position = Vector3(0, 0.47, 0)
+	ring.material_override = _chair_material(Color(0.97, 0.97, 0.99), 0.3, 0.0)
+	chair_root.add_child(ring)
+	# Tank + flush button at the back.
+	var tank = MeshInstance3D.new()
+	var tank_mesh = BoxMesh.new()
+	tank_mesh.size = Vector3(0.55, 0.55, 0.22)
+	tank.mesh = tank_mesh
+	tank.position = Vector3(0, 0.62, 0.42)
+	tank.material_override = tank_mat
+	chair_root.add_child(tank)
+	var button = MeshInstance3D.new()
+	var button_mesh = CylinderMesh.new()
+	button_mesh.top_radius = 0.05
+	button_mesh.bottom_radius = 0.05
+	button_mesh.height = 0.03
+	button.mesh = button_mesh
+	button.position = Vector3(0, 0.92, 0.42)
+	button.material_override = _chair_material(Color(0.75, 0.78, 0.8), 0.25, 0.8)
+	chair_root.add_child(button)
+	chair_seat = ring
 
 func _apply_character_palette() -> void:
 	var roster = load("res://scripts/CharacterRoster.gd")
@@ -699,7 +875,11 @@ func _start_boost(force_mult: float = 1.0, duration_mult: float = 1.0) -> void:
 		boost_particles.emitting = true
 	target_squash = 1.08
 	shake_requested.emit(0.04)
-	_play_sfx("boost")
+	# Phase 8A: The Throne boosts with a flush instead of the whoosh.
+	if String(skin.get("sfx", "")) == "flush":
+		_play_sfx("flush")
+	else:
+		_play_sfx("boost")
 	_rumble(0.7)
 	var a11y = load("res://scripts/Accessibility.gd")
 	if a11y:

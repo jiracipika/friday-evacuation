@@ -9,6 +9,8 @@ func _init() -> void:
 	# Verify all .gd scripts compile (syntax-only)
 	var scripts = [
 		"res://scripts/PlayerChair.gd",
+		"res://scripts/ChairSkins.gd",
+		"res://scripts/ChairSkinSmokeTest.gd",
 		"res://scripts/CharacterRoster.gd",
 		"res://scripts/SabotageTrap.gd",
 		"res://scripts/PowerUpVisual.gd",

@@ -22,6 +22,7 @@ var traps_hit: int = 0
 var traps_placed: int = 0
 var sp_modifiers: bool = false
 var new_personal_best: bool = false
+var skin_unlock_names: Array[String] = []  # Phase 8A: unlocks earned this race
 var ghost_racer: Node3D
 var announcer: Node = null
 var hazards: Node3D  # Phase 4C Hazards controller
@@ -1796,8 +1797,13 @@ func _end_race() -> void:
 			won = finish_order[0].player_id == local_player.get_instance_id()
 		var prev_best: float = stats.top_speed_ever
 		var prev_races: int = stats.total_races
+		var prev_wins: int = stats.races_won
 		stats.record_race(won, top_speed, 0)
 		new_personal_best = top_speed > prev_best and prev_races > 0
+		# Phase 8A: celebrate skins that this win count just unlocked.
+		var skins = load("res://scripts/ChairSkins.gd")
+		if skins:
+			skin_unlock_names = skins.newly_unlocked(prev_wins, stats.races_won)
 
 	if results_panel:
 		results_panel.visible = true
@@ -1815,6 +1821,8 @@ func _end_race() -> void:
 				stats_label.text = "TOP SPEED: %d km/h\nTRAPS HIT: %d" % [int(top_speed), traps_hit]
 				if new_personal_best:
 					stats_label.text += "\n★ NEW TOP-SPEED RECORD ★"
+				if skin_unlock_names.size() > 0:
+					stats_label.text += "\n◆ NEW CHAIR UNLOCKED: %s — pick it in the menu" % ", ".join(skin_unlock_names)
 			# Show active modifiers on the results screen for clarity
 			if sp_modifiers:
 				var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
@@ -1834,6 +1842,20 @@ func _end_race() -> void:
 		var pb_a11y = load("res://scripts/Accessibility.gd")
 		if pb_a11y:
 			pb_a11y.caption("NEW TOP-SPEED RECORD!", 1.5)
+	if skin_unlock_names.size() > 0:
+		_announce_skin_unlocks(skin_unlock_names)
+
+## Phase 8A: caption + announcer hype for fresh chair unlocks.
+func _announce_skin_unlocks(names: Array[String]) -> void:
+	var a11y = load("res://scripts/Accessibility.gd")
+	if a11y:
+		a11y.caption("NEW CHAIR: %s" % ", ".join(names), 2.5)
+	var audio_u = get_node_or_null("/root/AudioManager")
+	if audio_u:
+		audio_u.play_sfx("powerup", 1.2)
+	var announce = load("res://scripts/Announcer.gd")
+	if announce and announcer and announcer.has_method("say"):
+		announcer.say("misc", ["NEW CHAIR UNLOCKED: %s" % " + ".join(names)], true)
 
 func _on_rematch() -> void:
 	get_tree().reload_current_scene()

@@ -49,6 +49,9 @@ var modifier_menu: Control
 var character_row: HBoxContainer
 var character_select: OptionButton
 var character_detail: Label
+var skin_row: HBoxContainer
+var skin_select: OptionButton
+var skin_detail: Label
 var stats_label: Label
 var menu_time: float = 0.0
 
@@ -76,6 +79,7 @@ func _ready() -> void:
 	_build_mode_buttons()
 	_select_mode(0)
 	_build_character_selector()
+	_build_skin_selector()
 	
 	play_button.pressed.connect(_on_play)
 	play_button.pressed.connect(_play_click_sound)
@@ -151,7 +155,7 @@ func _build_mode_buttons() -> void:
 		var card_script = load("res://scripts/ModeCard.gd")
 		btn.set_script(card_script)
 		btn.configure(info.title, info.subtitle, MODE_STATUS[i], info.color)
-		btn.custom_minimum_size = Vector2(0, 40)
+		btn.custom_minimum_size = Vector2(0, 34)
 		btn.pressed.connect(_select_mode.bind(i))
 		mode_list.add_child(btn)
 		buttons.append(btn)
@@ -222,6 +226,97 @@ func _on_character_selected(index: int) -> void:
 	if character_detail:
 		character_detail.text = character["tagline"]
 		character_detail.tooltip_text = "%s • %s" % [character["silhouette"], character["accessory"]]
+
+func _build_skin_selector() -> void:
+	var skins = load("res://scripts/ChairSkins.gd")
+	if not skins:
+		return
+	var stats = get_node_or_null("/root/StatsManager")
+	var wins: int = stats.races_won if stats else 0
+
+	skin_row = HBoxContainer.new()
+	skin_row.name = "SkinSelector"
+	skin_row.custom_minimum_size = Vector2(0, 28)
+	skin_row.add_theme_constant_override("separation", 10)
+	$VBox.add_child(skin_row)
+	# Park it right under the character row so the two pickers read as one
+	# identity block.
+	$VBox.move_child(skin_row, character_row.get_index() + 1)
+
+	var label := Label.new()
+	label.text = "CHAIR"
+	label.add_theme_font_size_override("font_size", 13)
+	label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
+	skin_row.add_child(label)
+
+	skin_select = OptionButton.new()
+	skin_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	skin_select.add_theme_font_size_override("font_size", 14)
+	skin_row.add_child(skin_select)
+
+	skin_detail = Label.new()
+	skin_detail.custom_minimum_size.x = 250
+	skin_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	skin_detail.add_theme_font_size_override("font_size", 11)
+	skin_detail.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
+	skin_row.add_child(skin_detail)
+
+	var all_skins: Array[Dictionary] = skins.all()
+	var selected := 0
+	var locked_count := 0
+	for i in range(all_skins.size()):
+		var skin: Dictionary = all_skins[i]
+		var id := String(skin["id"])
+		var unlocked: bool = skins.is_unlocked(id, wins)
+		if unlocked:
+			skin_select.add_item(String(skin["name"]))
+			skin_select.set_item_metadata(skin_select.item_count - 1, id)
+			if id == GameManager.selected_skin_id:
+				selected = skin_select.item_count - 1
+		else:
+			locked_count += 1
+			var need := int(skin["unlock_wins"])
+			skin_select.add_item("%s  —  LOCKED (win %d)" % [skin["name"], need])
+			skin_select.set_item_metadata(skin_select.item_count - 1, "")
+			skin_select.set_item_disabled(skin_select.item_count - 1, true)
+			if id == GameManager.selected_skin_id:
+				# Saved pick got locked?? Can't happen (unlocks never re-lock)
+				# but stay honest and fall back to default.
+				selected = 0
+	var _next = skins.next_unlock(wins)
+	if _next.is_empty():
+		skin_detail.text = "ALL CHAIRS UNLOCKED — flex accordingly."
+	else:
+		skin_detail.text = "%d/%d WINS → %s" % [_next["progress"], _next["unlock_wins"], _next["name"]]
+	if skin_select.item_count > 0:
+		skin_select.select(selected)
+	skin_select.item_selected.connect(_on_skin_selected)
+	_on_skin_selected(selected)
+
+func _on_skin_selected(index: int) -> void:
+	var skins = load("res://scripts/ChairSkins.gd")
+	if not skins or not skin_select:
+		return
+	var id := String(skin_select.get_item_metadata(index))
+	if id == "":
+		return  # locked placeholder row
+	var skin: Dictionary = skins.get_skin(id)
+	GameManager.selected_skin_id = id
+	GameManager.save_identity()
+	if skin_detail:
+		var stats = get_node_or_null("/root/StatsManager")
+		var wins: int = stats.races_won if stats else 0
+		var mods := "JUMP x%.2f  GRIP x%.2f  BOOST x%.2f" % [
+			float(skin["jump_mult"]), float(skin["friction_mult"]), float(skin["boost_mult"])
+		]
+		skin_detail.text = "%s — %s" % [skin["tagline"], mods]
+		var _next = skins.next_unlock(wins)
+		if not _next.is_empty():
+			skin_detail.tooltip_text = "next unlock: %s at %d wins (you have %d)" % [
+				_next["name"], _next["unlock_wins"], wins
+			]
+		else:
+			skin_detail.tooltip_text = "everything unlocked"
 
 func _select_mode(idx: int) -> void:
 	selected_index = idx
@@ -321,7 +416,7 @@ func _process(delta: float) -> void:
 
 func _build_menu_theme() -> void:
 	title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
-	title_label.add_theme_font_size_override("font_size", 24)
+	title_label.add_theme_font_size_override("font_size", 22)
 	subtitle_label.add_theme_font_size_override("font_size", 13)
 	desc_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	desc_label.add_theme_font_size_override("font_size", 13)

@@ -43,6 +43,13 @@ want to compare. Run the real game: `open -a Godot` → open `project.godot` →
 - [ ] 60 fps on this Mac during floor-1 crowding (enable fps overlay: Godot debug menu or `--verbose`… or eyeball smoothness)
 - [ ] No frame hitches when Hazards fire (roombas, fire drill strobes, debris)
 
+### Chair skins & unlocks (Phase 8A)
+- [ ] CHAIR dropdown on the main menu (under RIDER): only Office Standard unlocked on a fresh save; locked ones read "LOCKED (win N)"
+- [ ] Detail label shows the chair's tagline + JUMP/GRIP/BOOST multipliers, and next-unlock progress ("0/1 WINS → Bean Bag")
+- [ ] Unlock one win (solo race vs. ghost counts): results screen says "NEW CHAIR UNLOCKED: Bean Bag", menu dropdown now offers it
+- [ ] Drive each unlocked skin at least once — Bean Bag should feel heavy/grippy, Exercise Ball jumpy/ slippery, The Throne boost plays a FLUSH sound
+- [ ] Skin choice persists across app restarts and is the chair you spawn with
+
 ## Session 2 — Controller pass (real pad required)
 
 ### Detection & scheme memory

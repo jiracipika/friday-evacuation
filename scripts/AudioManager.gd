@@ -55,6 +55,7 @@ func _make_effect(effect_name: String, intensity: float) -> AudioStream:
 	var duration = 0.18
 	match effect_name:
 		"boost": duration = 0.34
+		"flush": duration = 0.6
 		"jump": duration = 0.20
 		"land": duration = 0.14
 		"trap": duration = 0.38
@@ -76,6 +77,12 @@ func _make_effect(effect_name: String, intensity: float) -> AudioStream:
 			"boost":
 				frequency = lerpf(180.0, 70.0, progress)
 				amplitude *= 1.0 - progress
+			"flush":
+				# Bubbling swoosh: warbling mid band rising into a
+				# gurgle tail, like water spiraling down a drain.
+				frequency = lerpf(320.0, 90.0, progress) + sin(t * 47.0) * 40.0
+				amplitude *= sin(PI * minf(progress * 1.4, 1.0)) * 0.85
+				amplitude += (1.0 - progress) * 0.1 * intensity
 			"jump":
 				frequency = lerpf(220.0, 720.0, progress)
 				amplitude *= 1.0 - progress
