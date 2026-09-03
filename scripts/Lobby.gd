@@ -286,6 +286,23 @@ func _refresh_players() -> void:
 			var display_name: String = String(network.connected_players[peer_id])
 			if int(peer_id) == own_id:
 				display_name += "  (you)"
-			player_list.add_item("%s  •  %s" % [display_name, "READY" if peer_ready else "NOT READY"])
+			player_list.add_item("%s  •  %s  •  %s" % [
+				display_name,
+				_avatar_label(int(peer_id)),
+				"READY" if peer_ready else "NOT READY",
+			])
 			if network.has_method("get_player_color"):
 				player_list.set_item_custom_fg_color(player_list.item_count - 1, network.get_player_color(int(peer_id)))
+
+## Player-visible proof that LAN cosmetic identity arrived before match start.
+## Keep this compact: ItemList has a fixed 130px budget at 720p.
+func _avatar_label(peer_id: int) -> String:
+	if network == null:
+		return "DEFAULT RIDER / OFFICE STANDARD"
+	var character_id: String = String(network.get_player_character(peer_id)) if network.has_method("get_player_character") else "deadline_dana"
+	var skin_id: String = String(network.get_player_skin(peer_id)) if network.has_method("get_player_skin") else "office_standard"
+	var roster: GDScript = load("res://scripts/CharacterRoster.gd")
+	var skins: GDScript = load("res://scripts/ChairSkins.gd")
+	var character_name: String = String(roster.get_character(character_id).get("name", "Default Rider")) if roster else "Default Rider"
+	var skin_name: String = String(skins.display_name(skin_id)) if skins else "Office Standard"
+	return "%s / %s" % [character_name, skin_name]

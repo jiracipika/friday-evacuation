@@ -96,7 +96,7 @@ In LAN play the **host's pick is authoritative** — everyone races the host's m
 
 **Hotspot mode (no Wi-Fi):** one player hosts over a phone hotspot. Joiners get one-tap buttons for the common hotspot gateway addresses (Android `192.168.43.1` / `192.168.49.1`, iPhone `172.20.10.1`); discovery falls back to a subnet sweep when hotspot AP-isolation blocks broadcasts.
 
-**In lobby & in match:** chat overlay, name + color identity, live roster with ready states. Traps, pickups, and stuns replicate to all peers. Late joiners drop straight into a running match.
+**In lobby & in match:** chat overlay and full avatar identity sync — name, color, rider character, and chair skin. The lobby names each player's rider/chair before START, and remote procedural models use those exact choices in the race. Traps, pickups, and stuns replicate to all peers. Late joiners drop straight into a running match with their avatar intact.
 
 **Requirements:**
 - All players on the same Wi-Fi network (or one phone's hotspot)

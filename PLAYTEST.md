@@ -93,7 +93,9 @@ Setup: two machines (or phone hotspot + laptop + phone), same subnet ideally.
 - [ ] SCAN finds the host; host sees "your address: x.x.x.x" in the lobby
 - [ ] Join by typed IP works even when SCAN finds nothing
 - [ ] macOS firewall prompt appears on host; allow → joins fine
-- [ ] Roster shows names/colors; READY UP gates the host's START button
+- [ ] Roster shows each player's name/color plus exact RIDER / CHAIR choice; READY UP gates the host's START button
+- [ ] Pick visibly different avatars on both machines (e.g. Remote Ron + Throne vs Dana + Office Standard) → each remote chair/rider matches in-race
+- [ ] Late join with a non-default rider/chair → existing player sees the correct avatar immediately (no default-chair flash or permanent fallback)
 
 ### Map sync (NEW — software-verified, never tested on real peers)
 - [ ] Host picks CUBICLE MAZE, client picked OPEN PLAN locally → everyone races the maze
@@ -122,7 +124,7 @@ Each mode: one full loop, pre-match modal correct, HUD timer honest.
 
 ## Regression guards (already automated — don't hand-test)
 
-The bot now proves these headlessly: `bash scripts/run_ladder.sh` (32 suites)
+The bot now proves these headlessly: `bash scripts/run_ladder.sh` (38 suites)
 + `scripts/CheckpointBotTest.gd` (checkpoint traversal: 3 elevators, respawn
 point advancement, real ExitZone finish signal, chair-only finish).
 

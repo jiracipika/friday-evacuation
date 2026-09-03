@@ -1,7 +1,7 @@
 # Next Development Slice — Friday 5PM: Evacuation
 
 Status: implementation-ready handoff
-Branch: `main` (Phase 8B accessibility — this session)
+Branch: `main` (Phase 8C LAN avatar identity sync — this session)
 Godot: `/usr/local/bin/godot` 4.7.1
 
 ## Current verified baseline
@@ -41,14 +41,29 @@ Phases 1–7 complete in software. Phase 8A (chair skins) and Phase 8B
   glyph, pairwise glyph distinctness from the RENDERED texture alpha,
   time-scale round trip + corrupt snap + reset + TEST_MODE guard,
   dead-wiring detectors (mode + Settings call-site greps).
-- Ladder now 37 suites (added `SkinBotSanityTest`, `Phase8BAccessTest`).
+- Keyboard steering follow-up (`7503673`): default turn-in scale 0.35,
+  slider floor 0.15, v3 save migration, and the dead brake branch fixed.
+- Phase 8C LAN avatar identity sync: `Network.gd` roster payload now carries
+  validated rider-character and chair-skin ids beside name/color. Socket
+  placeholders stay host-local and are NOT announced/spawned until the
+  complete identity RPC lands (prevents permanent default-chair remotes).
+  `Evacuation._on_network_player_connected()` pins both ids and disables
+  both global-selection flags BEFORE `add_child()` constructs the remote
+  procedural model. Lobby rows visibly name each rider/chair selection.
+  Backward-compatible missing fields fall back to Dana / Office Standard.
+- `LanAvatarSyncTest.gd` (21 checks): placeholder lifecycle, atomic identity
+  announcement, RPC float-key normalization, invalid-id fallback, lobby
+  label, and a REAL Evacuation remote model (Remote Ron + Throne).
+- Ladder now 38 suites.
 
 ## Remaining software slices
 
-1. **Skin sync (LAN)** — remote chairs currently spawn with defaults
-   (handoff 8A guardrail). Match payload could carry the peer's skin id.
-2. **Phase 8C candidates** — anything from PLAYTEST sessions; otherwise
-   content polish (GLM pass: artsy FX, more arena props/skins).
+1. **Real-device/network QA** — run PLAYTEST sessions 2–4: controller,
+   phone touch, and two physical LAN/hotspot peers. Software now covers
+   identity/layout/late-join paths, but radio/firewall behavior and visual
+   interpolation still require real hardware.
+2. **Phase 8D candidates** — findings from those sessions; otherwise
+   content polish (artsy FX, stronger arena landmarks, more props/skins).
 
 ## Hardware QA (unverified, needs real devices)
 
@@ -66,12 +81,11 @@ Phases 1–7 complete in software. Phase 8A (chair skins) and Phase 8B
 - Never run two implementation sessions against this working tree.
 - Keep `FLOOR3_LANDINGS` synchronized across Evacuation, LevelClearTest,
   and Hazards.
-- Skins apply in `PlayerChair._ready()` — anything that spawns a chair
-  with `use_global_skin = true` inherits the local player's pick
-  (remote chairs currently use defaults; leave unless doing skin sync).
+- Skins/characters apply in `PlayerChair._ready()` — remote avatar ids MUST
+  be pinned with both `use_global_* = false` before `add_child()`.
 - `CheckpointBotTest.gd` must stay in the ladder; keep traversal logic
   in `CheckpointBot.gd` (both suites import it — no copy drift).
 - `SkinBotSanityTest` runs 6 full traversals (~2–4 min wall). Keep it
   AFTER the base bot in the ladder order.
-- Ladder now 37 suites; `Phase8BAccessTest` + `AccessibilitySmokeTest`
-  must both stay in `scripts/run_ladder.sh`.
+- Ladder now 38 suites; `LanAvatarSyncTest`, `Phase8BAccessTest`, and `AccessibilitySmokeTest`
+  must all stay in `scripts/run_ladder.sh`.

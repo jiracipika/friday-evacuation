@@ -22,6 +22,7 @@ func _init() -> void:
 		"res://scripts/Lobby.gd",
 		"res://scripts/Network.gd",
 		"res://scripts/NetworkSmokeTest.gd",
+		"res://scripts/LanAvatarSyncTest.gd",
 		"res://scripts/Hauled.gd",
 		"res://scripts/ShopSeek.gd",
 		"res://scripts/PizzaColony.gd",

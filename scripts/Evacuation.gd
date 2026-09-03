@@ -314,6 +314,15 @@ func _on_network_player_connected(peer_id: int, player_name: String) -> void:
 	var network_node = get_node_or_null("/root/Network")
 	if network_node and network_node.has_method("get_player_color"):
 		remote.player_color = network_node.get_player_color(peer_id)
+	# Full LAN avatar identity must be pinned BEFORE add_child: PlayerChair
+	# builds its procedural chassis + rider in _ready(). Remote chairs must
+	# not read this machine's GameManager selection.
+	remote.use_global_character = false
+	remote.use_global_skin = false
+	if network_node and network_node.has_method("get_player_character"):
+		remote.character_id = network_node.get_player_character(peer_id)
+	if network_node and network_node.has_method("get_player_skin"):
+		remote.skin_id = network_node.get_player_skin(peer_id)
 	remote.set_can_move(false)
 	remote.position = _slot_for_peer(int(peer_id))
 	remote.name = "Remote_%d" % peer_id
