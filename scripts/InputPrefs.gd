@@ -12,11 +12,12 @@
 # Sensitivity model:
 #   The chair is a target-velocity controller (move_toward at
 #   `acceleration`). Steering response scales LINEARLY with
-#   keyboard_sensitivity over [0.35 .. 1.5]; 1.0 = the original shipped
-#   feel. The user asked for a LOWER default TWICE, so KEYBOARD_DEFAULT
-#   is 0.55 — acceleration ~19 (34 * 0.55), gentle turn-in without
-#   touching top speed. Controller play runs at full acceleration:
-#   the analog stick IS the finesse control there.
+#   keyboard_sensitivity over [0.15 .. 1.5]; 1.0 = the original shipped
+#   feel. The user asked for a LOWER default THREE times (1.0 -> 0.7 ->
+#   0.55 -> 0.35), so KEYBOARD_DEFAULT is 0.35 — acceleration ~12
+#   (34 * 0.35), gentle turn-in without touching top speed. Controller
+#   play runs at full acceleration: the analog stick IS the finesse
+#   control there.
 class_name InputPrefs
 extends RefCounted
 
@@ -26,7 +27,7 @@ static var CFG_PATH := "user://settings.cfg"
 const SECTION := "input"
 
 # --- persisted keys -------------------------------------------------------
-const KEY_KB_SENS := "keyboard_sensitivity"      # 0.35 .. 1.5 (1.0 = old feel)
+const KEY_KB_SENS := "keyboard_sensitivity"      # 0.15 .. 1.5 (1.0 = old feel)
 const KEY_MOUSE_LOOK := "mouse_look_enabled"     # bool
 const KEY_MOUSE_SENS := "mouse_sensitivity"      # 0.25 .. 2.0 (0.8 default)
 const KEY_STICK_LOOK := "stick_look_enabled"     # right-stick camera orbit
@@ -39,12 +40,13 @@ const KEY_TOUCH := "touch_controls"              # auto|on|off (web/mobile UI)
 
 # --- defaults ---------------------------------------------------------------
 # Keyboard deliberately LOWER than 1.0: the pre-settings feel (accel 34)
-# read twitchy to new players. 0.55 -> accel ~19 keeps full top speed
-# but smooths turn-in (user asked to lower it a second time — was 0.7).
-# Mouse/stick look default 0.8: same "a notch gentler" reasoning, and the
-# range still reaches the old 1.0 feel if a player wants it back.
-const KEYBOARD_DEFAULT := 0.55
-const KEYBOARD_MIN := 0.35
+# read twitchy to new players. 0.35 -> accel ~12 keeps full top speed but
+# makes turn-in genuinely gentle (user asked THREE times: 1.0 -> 0.7 ->
+# 0.55 -> 0.35). Mouse/stick look default 0.8: same "a notch gentler"
+# reasoning, and the range still reaches the old 1.0 feel if a player
+# wants it back.
+const KEYBOARD_DEFAULT := 0.35
+const KEYBOARD_MIN := 0.15
 const KEYBOARD_MAX := 1.5
 const MOUSE_DEFAULT := 0.8
 const MOUSE_MIN := 0.25
@@ -118,24 +120,32 @@ static func refresh_cache() -> void:
 	_last_device = raw_device if raw_device is StringName or raw_device is String else SCHEME_KEYBOARD
 	apply_pad_map_to_input_map()
 
-## One-time migration to the second, lower sensitivity defaults. Only
-## values still sitting EXACTLY on an old default move — anything the
-## player personalized is left alone.
+## One-time migrations to lower sensitivity defaults. Only values still
+## sitting EXACTLY on an old default move — anything the player
+## personalized is left alone. v2: 0.7 -> 0.55. v3: 0.55 -> 0.35 (user
+## asked for gentler turn-in a third time). Each flag fires once per save.
 const KEY_MIGRATED := "sens_migration_v2"
+const KEY_MIGRATED_V3 := "sens_migration_v3"
 const KEY_LAST_DEVICE := "last_device"
 
 static func migrate_defaults() -> void:
 	var config := _cfg()
-	if _as_bool(config.get_value(SECTION, KEY_MIGRATED, false), false):
-		return
-	if is_equal_approx(float(config.get_value(SECTION, KEY_KB_SENS, 0.7)), 0.7):
-		config.set_value(SECTION, KEY_KB_SENS, KEYBOARD_DEFAULT)
-	if is_equal_approx(float(config.get_value(SECTION, KEY_MOUSE_SENS, 1.0)), 1.0):
-		config.set_value(SECTION, KEY_MOUSE_SENS, MOUSE_DEFAULT)
-	if is_equal_approx(float(config.get_value(SECTION, KEY_STICK_SENS, 1.0)), 1.0):
-		config.set_value(SECTION, KEY_STICK_SENS, STICK_DEFAULT)
-	config.set_value(SECTION, KEY_MIGRATED, true)
-	config.save(CFG_PATH)
+	if not _as_bool(config.get_value(SECTION, KEY_MIGRATED, false), false):
+		if is_equal_approx(float(config.get_value(SECTION, KEY_KB_SENS, 0.7)), 0.7):
+			config.set_value(SECTION, KEY_KB_SENS, 0.55)
+		if is_equal_approx(float(config.get_value(SECTION, KEY_MOUSE_SENS, 1.0)), 1.0):
+			config.set_value(SECTION, KEY_MOUSE_SENS, MOUSE_DEFAULT)
+		if is_equal_approx(float(config.get_value(SECTION, KEY_STICK_SENS, 1.0)), 1.0):
+			config.set_value(SECTION, KEY_STICK_SENS, STICK_DEFAULT)
+		config.set_value(SECTION, KEY_MIGRATED, true)
+		config.save(CFG_PATH)
+	# v3: re-run migrate_defaults() from any state — a save that JUST did
+	# v2 in the same call also gets v3 in the same call.
+	if not _as_bool(config.get_value(SECTION, KEY_MIGRATED_V3, false), false):
+		if is_equal_approx(float(config.get_value(SECTION, KEY_KB_SENS, KEYBOARD_DEFAULT)), 0.55):
+			config.set_value(SECTION, KEY_KB_SENS, KEYBOARD_DEFAULT)
+		config.set_value(SECTION, KEY_MIGRATED_V3, true)
+		config.save(CFG_PATH)
 
 # --- control scheme ---------------------------------------------------------
 
@@ -442,7 +452,7 @@ static func vibration_enabled() -> bool:
 # --- chair-facing helpers ---------------------------------------------------
 
 ## Acceleration multiplier for PlayerChair. 1.0 would be the old feel;
-## default cfg ships 0.55 for keyboard play, 1.0 (full accel) when a
+## default cfg ships 0.35 for keyboard play, 1.0 (full accel) when a
 ## controller is the active scheme. Remote chairs never scale (host
 ## physics only drives the local chair; remote chairs are interpolated).
 static func acceleration_multiplier() -> float:

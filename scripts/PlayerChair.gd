@@ -732,12 +732,21 @@ func _handle_input(delta: float) -> void:
 	var fwd_speed: float = 0.0
 	if input_dir.length() > 0.1:
 		fwd_speed = horiz_now.dot(Vector2(input_dir.x, input_dir.z))
+	# BRAKE-vs-REVERSE gate: brake when the held input OPPOSES the current
+	# motion while still rolling (dot < 0), regardless of which world
+	# direction that is. The old gate (fwd_speed > 1.0 against the INPUT
+	# direction) was a dead branch for back-input: input_dir IS the back
+	# direction, so v.dot(input) was always negative while rolling forward
+	# and the code routed to REVERSE (0.9x decel through zero) instead of
+	# BRAKE (2.5x). It only looked right at sens 0.55; the 0.35 turn-in
+	# scale exposed it as a >1.1s "brake".
+	var opposes_motion := horiz_now.length() > 1.0 and fwd_speed < -0.5
 
 	if input_dir.length() > 0.1:
 		# Target-velocity steering is responsive while retaining weaker control
 		# during a boost, so the chair still has readable momentum.
 		# InputPrefs.active_keyboard_scale() eases turn-in for keyboard play
-		# (default 0.55) without touching top speed; controller play runs
+		# (default 0.35) without touching top speed; controller play runs
 		# FULL acceleration — the analog stick is the finesse control.
 		# Only ever reached for controllable chairs — remote chairs
 		# early-return via can_move.
@@ -749,13 +758,9 @@ func _handle_input(delta: float) -> void:
 		var target := Vector2(input_dir.x, input_dir.z) * effective_max
 		var control := boost_steering if is_boosting else 1.0
 		if raw_input.y > 0.5:
-			if fwd_speed > 1.0:
+			if opposes_motion:
 				# BRAKE: back input while rolling forward stops the chair
 				# much faster than coasting (2.5x accel toward zero).
-				# Threshold 1.0 sits safely above the reverse step size
-				# (accel*0.9*dt ≈ 0.28/tick at default sens) so a
-				# reversing chair can never tip into the brake branch —
-				# that flapped brake/reverse every 3 ticks at 0.5.
 				horiz_now = horiz_now.move_toward(Vector2.ZERO, steer_accel * 2.5 * delta)
 				velocity.x = horiz_now.x
 				velocity.z = horiz_now.y

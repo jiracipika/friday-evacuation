@@ -8,8 +8,8 @@
 #      fall back to defaults (no crash).
 #   5. Yaw math: mouse motion accumulates, stick applies per-second rate,
 #      wrapped_yaw stays in [-PI, PI], reset zeroes; invert flips signs.
-#   6. Sensitivity contract: keyboard default 0.55 (lowered TWICE from the
-#      legacy 1.0/0.7 feel), bounds 0.35..1.5; camera default 0.8.
+#   6. Sensitivity contract: keyboard default 0.35 (lowered THREE times from
+#      the legacy 1.0/0.7/0.55 feel), bounds 0.15..1.5; camera default 0.8.
 #   7. Vibration guard: rumble() no-ops safely with zero pads (headless).
 #   8. refresh_cache() syncs all cached values.
 #   9. Control scheme: default AUTO, device tracking flips which_scheme,
@@ -51,19 +51,19 @@ func _run() -> void:
 	cfg.save(TEST_CFG)  # empty file -> all defaults
 	P.refresh_cache()
 
-	# 1. Defaults (v2: lowered a second time)
-	check(absf(float(P.keyboard_sensitivity()) - 0.55) < 0.001,
-		"keyboard default 0.55 (lowered from 0.7, legacy 1.0)")
+	# 1. Defaults (v3: lowered a third time)
+	check(absf(float(P.keyboard_sensitivity()) - 0.35) < 0.001,
+		"keyboard default 0.35 (lowered from 0.55, legacy 1.0)")
 	check(absf(float(P.mouse_sensitivity()) - 0.8) < 0.001, "mouse sens default 0.8")
 	check(absf(float(P.stick_sensitivity()) - 0.8) < 0.001, "stick sens default 0.8")
 	check(P.mouse_look_enabled() == true, "mouse look default ON")
 	check(P.stick_look_enabled() == true, "stick look default ON")
 	check(P.vibration_enabled() == true, "vibration default ON")
-	check(absf(float(P.acceleration_multiplier()) - 0.55) < 0.001,
-		"acceleration_multiplier returns cached 0.55 scale (keyboard)")
+	check(absf(float(P.acceleration_multiplier()) - 0.35) < 0.001,
+		"acceleration_multiplier returns cached 0.35 scale (keyboard)")
 
 	# 6. Range contract
-	check(P.KEYBOARD_MIN == 0.35 and P.KEYBOARD_MAX == 1.5, "kb slider bounds 0.35..1.5")
+	check(P.KEYBOARD_MIN == 0.15 and P.KEYBOARD_MAX == 1.5, "kb slider bounds 0.15..1.5")
 	check(P.MOUSE_MIN == 0.25 and P.MOUSE_MAX == 2.0, "camera slider bounds 0.25..2.0")
 
 	# 3. Persistence round-trip
@@ -91,10 +91,12 @@ func _run() -> void:
 
 	# 5. Yaw math (fresh baseline so the corrupt-cfg clamps above don't
 	#    leak into these expectations — test-order coupling guard).
-	# KEY_MIGRATED is pinned so refresh_cache's (correct) one-time
-	# migration of old defaults doesn't rewrite these explicit values.
+	# KEY_MIGRATED + KEY_MIGRATED_V3 are pinned so refresh_cache's
+	# (correct) one-time migrations of old defaults don't rewrite these
+	# explicit values.
 	var cfg4 := ConfigFile.new()
 	cfg4.set_value("input", P.KEY_MIGRATED, true)
+	cfg4.set_value("input", P.KEY_MIGRATED_V3, true)
 	cfg4.set_value("input", P.KEY_MOUSE_SENS, 1.0)
 	cfg4.set_value("input", P.KEY_MOUSE_LOOK, true)
 	cfg4.set_value("input", P.KEY_STICK_SENS, 1.0)
@@ -178,8 +180,8 @@ func _run() -> void:
 	key.physical_keycode = KEY_W
 	P.note_device(key)
 	check(P.which_scheme() == P.SCHEME_KEYBOARD, "key press flips AUTO back to keyboard")
-	check(absf(float(P.acceleration_multiplier()) - 0.55) < 0.001,
-		"keyboard scheme restores the 0.55 scale")
+	check(absf(float(P.acceleration_multiplier()) - 0.35) < 0.001,
+		"keyboard scheme restores the 0.35 scale")
 	# Manual pin: controller stays controller even on key input.
 	P.set_scheme_mode(P.SCHEME_CONTROLLER)
 	P.note_device(key)
@@ -231,8 +233,8 @@ func _run() -> void:
 	P.migrate_defaults()
 	var cfg9 := ConfigFile.new()
 	cfg9.load(TEST_CFG)
-	check(absf(float(cfg9.get_value("input", P.KEY_KB_SENS, 0.0)) - 0.55) < 0.001,
-		"old kb default 0.7 migrates to 0.55")
+	check(absf(float(cfg9.get_value("input", P.KEY_KB_SENS, 0.0)) - 0.35) < 0.001,
+		"old kb default 0.7 migrates through to 0.35 (v2 then v3)")
 	check(absf(float(cfg9.get_value("input", P.KEY_MOUSE_SENS, 0.0)) - 0.8) < 0.001,
 		"old mouse default 1.0 migrates to 0.8")
 	check(absf(float(cfg9.get_value("input", P.KEY_STICK_SENS, 0.0)) - 0.8) < 0.001,

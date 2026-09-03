@@ -165,11 +165,11 @@ func _build_ui() -> void:
 	scheme_option.item_selected.connect(func(_index): _apply_settings())
 
 	keyboard_sens_slider = HSlider.new()
-	keyboard_sens_slider.min_value = 0.35
+	keyboard_sens_slider.min_value = 0.15
 	keyboard_sens_slider.max_value = 1.5
 	keyboard_sens_slider.step = 0.05
 	keyboard_sens_slider.custom_minimum_size = Vector2(0, 28)
-	keyboard_sens_slider.value = float(config.get_value("input", "keyboard_sensitivity", 0.55))
+	keyboard_sens_slider.value = float(config.get_value("input", "keyboard_sensitivity", 0.35))
 	_add_setting(box, "KEYBOARD SENSITIVITY (LOW = GENTLER STEERING)", keyboard_sens_slider)
 
 	camera_sens_slider = HSlider.new()

@@ -130,10 +130,11 @@ func _run() -> void:
 	motion.axis = 1
 	motion.axis_value = -1.0  # stick up -> move_forward
 	Input.parse_input_event(motion)
-	# 3 physics frames was enough at the legacy accel (34); the lower
-	# default sensitivity (0.7 -> accel ~24) needs a few more frames to
-	# cover the same 1.0 speed threshold.
-	for i in 6:
+	# Frames-to-threshold scales INVERSELY with the sensitivity default
+	# (legacy 34 needed 3; 0.7/accel~24 needed 6; 0.35/accel~12 with the
+	# ~80ms input ramp needs ~14). Generous margin: this is a dead-wiring
+	# detector (stick must DRIVE the chair), not a speedometer.
+	for i in 14:
 		await physics_frame
 	var horizontal := Vector3(chair.velocity.x, 0, chair.velocity.z)
 	var cam_fwd := -cam.global_transform.basis.z
