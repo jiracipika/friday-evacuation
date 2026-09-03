@@ -60,6 +60,9 @@ var bee_swarm: GPUParticles3D
 var can_projectiles: Array[RigidBody3D] = []
 
 func _ready() -> void:
+	# Phase 8B: single-player game-speed knob (no-op in test mode; get_time_scale
+	# itself returns 1.0 whenever a network peer is active).
+	load("res://scripts/Accessibility.gd").apply_time_scale()
 	# Mouse-look: capture cursor for the match; PauseMenu re-shows it.
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	rng.seed = int(Time.get_unix_time_from_system()) % 100000
@@ -77,6 +80,7 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	_release_carried_cargo()
+	load("res://scripts/Accessibility.gd").reset_time_scale()
 
 # ============================ match flow ============================
 

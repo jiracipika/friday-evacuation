@@ -73,6 +73,9 @@ var mode_hud: CanvasLayer
 var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
+	# Phase 8B: single-player game-speed knob (no-op in test mode; get_time_scale
+	# itself returns 1.0 whenever a network peer is active).
+	load("res://scripts/Accessibility.gd").apply_time_scale()
 	# Mouse-look: capture cursor for the match; PauseMenu re-shows it.
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	rng.seed = 62026
@@ -93,6 +96,10 @@ func _ready() -> void:
 		"Caught too often and the round is over.",
 	])
 	_caption("GRAB %d ITEMS — GUARD ON PATROL" % list_target)
+
+func _exit_tree() -> void:
+	# Phase 8B teardown: never leak a boosted time_scale into the menu.
+	load("res://scripts/Accessibility.gd").reset_time_scale()
 
 func _process(delta: float) -> void:
 	if match_over:

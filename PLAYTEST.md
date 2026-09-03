@@ -50,6 +50,13 @@ want to compare. Run the real game: `open -a Godot` → open `project.godot` →
 - [ ] Drive each unlocked skin at least once — Bean Bag should feel heavy/grippy, Exercise Ball jumpy/ slippery, The Throne boost plays a FLUSH sound
 - [ ] Skin choice persists across app restarts and is the chair you spawn with
 
+### Accessibility — traps & game speed (Phase 8B)
+- [ ] Every trap shows a floating name label + shape icon (waves / banana arc / staple / droplet); readable at driving speed without stopping
+- [ ] Banana and spill (both yellow) are instantly tellable apart by SHAPE alone — squint or glance, don't read
+- [ ] Game speed: Settings → GAME SPEED 0.75x makes the whole race feel slower (physics AND the countdown/timer together, not just one); 1.25x faster; back to 1.0x normal
+- [ ] Changing game speed in the pause menu mid-race applies the moment you resume — no restart needed
+- [ ] Game speed returns to normal on the main menu after leaving a race (menu animations not stuck fast/slow)
+
 ## Session 2 — Controller pass (real pad required)
 
 ### Detection & scheme memory

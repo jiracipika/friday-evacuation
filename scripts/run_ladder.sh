@@ -2,14 +2,14 @@
 # run_ladder.sh — full serial verification ladder for friday-evacuation.
 cd /Volumes/HARD/projects/friday-evacuation || exit 1
 git diff --check || { echo "diff-check FAILED"; exit 1; }
-TESTS="BootTest PlayerChairMechanicsSmokeTest ChairSkinSmokeTest CharacterRosterSmokeTest HauledSmokeTest ShopSeekSmokeTest PizzaColonySmokeTest TouchControlsSmokeTest ModeSmokeTest NetworkSmokeTest NetworkTwoPeerTest AnnouncerSmokeTest PanicCamSmokeTest LevelClearTest CheckpointBotTest HazardsSmokeTest ThemedFloorsSmokeTest PowerUpSmokeTest PauseMenuSmokeTest AccessibilitySmokeTest RaceModifiersSmokeTest ModifierMenuSmokeTest GhostRacerSmokeTest StatsRoundTripTest VisualDesignSmokeTest WallMaterialsSmokeTest FaceSmokeTest InputPrefsSmokeTest ControlsOverlaySmokeTest SettingsRoundTripTest NormalMapSmokeTest PropMaterialsSmokeTest LevelLayoutSmokeTest PreMatchModalSmokeTest GamepadSupportTest"
+TESTS="BootTest PlayerChairMechanicsSmokeTest ChairSkinSmokeTest CharacterRosterSmokeTest HauledSmokeTest ShopSeekSmokeTest PizzaColonySmokeTest TouchControlsSmokeTest ModeSmokeTest NetworkSmokeTest NetworkTwoPeerTest AnnouncerSmokeTest PanicCamSmokeTest LevelClearTest CheckpointBotTest SkinBotSanityTest HazardsSmokeTest ThemedFloorsSmokeTest PowerUpSmokeTest PauseMenuSmokeTest AccessibilitySmokeTest Phase8BAccessTest RaceModifiersSmokeTest ModifierMenuSmokeTest GhostRacerSmokeTest StatsRoundTripTest VisualDesignSmokeTest WallMaterialsSmokeTest FaceSmokeTest InputPrefsSmokeTest ControlsOverlaySmokeTest SettingsRoundTripTest NormalMapSmokeTest PropMaterialsSmokeTest LevelLayoutSmokeTest PreMatchModalSmokeTest GamepadSupportTest"
 overall=0
 for t in $TESTS; do
   if [ ! -f "scripts/$t.gd" ]; then
     echo "=== $t MISSING (skipped) ==="
     continue
   fi
-  /usr/local/bin/godot --headless --path . --script "scripts/$t.gd" > "/tmp/lad_$t.log" 2>&1
+  /usr/local/bin/godot --headless --path . --script "scripts/$t.gd" -- --test-mode > "/tmp/lad_$t.log" 2>&1
   rc=$?
   if [ $rc -ne 0 ]; then
     echo "=== $t FAILED rc=$rc ==="
@@ -19,6 +19,6 @@ for t in $TESTS; do
     echo "=== $t PASS ==="
   fi
 done
-/usr/local/bin/godot --headless --path . --quit-after 3 > /tmp/boot.log 2>&1
+/usr/local/bin/godot --headless --path . --quit-after 3 -- --test-mode > /tmp/boot.log 2>&1
 echo "BOOT script errors: $(grep -c 'SCRIPT ERROR' /tmp/boot.log)"
 exit $overall

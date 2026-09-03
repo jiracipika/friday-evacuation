@@ -378,6 +378,15 @@ func _apply_settings() -> void:
 	config.set_value("accessibility", "subtitles", subtitles_toggle.button_pressed if subtitles_toggle else false)
 	if time_scale_option:
 		config.set_value("accessibility", "time_scale", _time_scale_value(time_scale_option.selected))
+		# Phase 8B live-apply: pause-menu change takes effect immediately
+		# (no restart). apply_time_scale() resolves network-peer safety and
+		# snaps corrupt values; reset if no option is selected.
+		var a11y = load("res://scripts/Accessibility.gd")
+		if a11y:
+			if time_scale_option.selected >= 0:
+				a11y.apply_time_scale()
+			else:
+				a11y.reset_time_scale()
 	if keyboard_sens_slider and camera_sens_slider:
 		config.set_value("input", "keyboard_sensitivity", keyboard_sens_slider.value)
 		config.set_value("input", "mouse_sensitivity", camera_sens_slider.value)

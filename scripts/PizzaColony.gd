@@ -66,6 +66,9 @@ var mode_hud: CanvasLayer
 var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
+	# Phase 8B: single-player game-speed knob (no-op in test mode; get_time_scale
+	# itself returns 1.0 whenever a network peer is active).
+	load("res://scripts/Accessibility.gd").apply_time_scale()
 	# Mouse-look: capture cursor for the match; PauseMenu re-shows it.
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	rng.seed = 630
@@ -85,6 +88,10 @@ func _ready() -> void:
 		"Forts block the chef — and everyone else. Use that.",
 	])
 	_caption("STAND ON PEPPERONI TO CLAIM — E BUILDS A FORT")
+
+func _exit_tree() -> void:
+	# Phase 8B teardown: never leak a boosted time_scale into the menu.
+	load("res://scripts/Accessibility.gd").reset_time_scale()
 
 func _process(delta: float) -> void:
 	if match_over:

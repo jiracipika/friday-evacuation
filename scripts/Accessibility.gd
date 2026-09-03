@@ -8,6 +8,13 @@ extends RefCounted
 ## Test seam: overridable so smoke tests never clobber the real player save.
 static var CFG_PATH := "user://settings.cfg"
 
+## Ladder harnesses pass --test-mode (run_ladder.sh) so a developer's real
+## 0.75x save can't skew deterministic bot/smoke runs. Overridable so the
+## Phase 8B round-trip test can exercise the real wiring anyway. Checks both
+## arg arrays: Godot only reports args after a `--` separator as user args.
+static var TEST_MODE := \
+	"--test-mode" in OS.get_cmdline_args() or "--test-mode" in OS.get_cmdline_user_args()
+
 ## Setting keys (section "accessibility")
 const KEY_SCREEN_SHAKE := "screen_shake"
 const KEY_FLASH_EFFECTS := "flash_effects"
@@ -52,6 +59,19 @@ static func get_time_scale() -> float:
 
 static func captions_enabled() -> bool:
 	return bool(get_setting(KEY_SUBTITLES, false))
+
+## Phase 8B wiring: actually drive Engine.time_scale from the setting.
+## The race clock and every _process(delta) in the game tick on scaled delta,
+## so physics, timers, tweens, and captions all follow one knob. No-op in
+## test mode so a developer's real 0.75x save can't skew ladder runs.
+static func apply_time_scale() -> void:
+	if TEST_MODE:
+		return
+	Engine.time_scale = get_time_scale()
+
+## Restore neutral speed (mode teardown; also the network desync guard).
+static func reset_time_scale() -> void:
+	Engine.time_scale = 1.0
 
 ## Show a caption now, routed through whatever overlay exists.
 ## Call sites never need to know whether subtitles are enabled or mounted.

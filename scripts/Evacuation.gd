@@ -82,6 +82,9 @@ func _ready() -> void:
 	_spawn_player()
 	_apply_player_modifiers()
 	_maybe_spawn_ghost()
+	# Phase 8B: single-player game-speed knob (no-op in test mode; get_time_scale
+	# itself returns 1.0 whenever a network peer is active).
+	load("res://scripts/Accessibility.gd").apply_time_scale()
 	# Blocking pre-game briefing: tree PAUSED until the player agrees.
 	# Countdown starts after dismissal (timer frozen while paused).
 	load("res://scripts/PreMatchModal.gd").mount(self, "EVACUATION", [
@@ -1868,6 +1871,7 @@ func _on_back_to_menu() -> void:
 func _exit_tree() -> void:
 	# Safety net: rematch reloads the scene without _on_back_to_menu.
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	load("res://scripts/Accessibility.gd").reset_time_scale()
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Mouse-look camera motion (toggle+sensitivity inside InputPrefs).
