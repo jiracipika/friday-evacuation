@@ -21,6 +21,7 @@ config/icon="res://icon.png"
 
 GameManager="*res://scripts/GameManager.gd"
 Network="*res://scripts/Network.gd"
+InputHelper="*res://addons/input_helper/input_helper.gd"
 AudioManager="*res://scripts/AudioManager.gd"
 StatsManager="*res://scripts/StatsManager.gd"
 

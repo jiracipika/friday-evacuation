@@ -34,7 +34,8 @@ const KEY_STICK_LOOK := "stick_look_enabled"     # right-stick camera orbit
 const KEY_STICK_SENS := "stick_sensitivity"      # 0.25 .. 2.0 (0.8 default)
 const KEY_VIBRATION := "vibration_enabled"       # controller rumble
 const KEY_SCHEME := "control_scheme"             # auto|keyboard_mouse|controller
-const KEY_PAD_MAP := "pad_button_map"            # action -> joypad button index
+const KEY_PAD_MAP := "pad_button_map"            # action -> joypad button index (legacy v1)
+const KEY_BINDINGS := "action_bindings_serialized"  # InputHelper JSON blob (keys+mouse+pad)
 const KEY_INVERT := "invert_camera_x"            # mirrored camera pan
 const KEY_TOUCH := "touch_controls"              # auto|on|off (web/mobile UI)
 
@@ -118,7 +119,7 @@ static func refresh_cache() -> void:
 		_scheme_mode = SCHEME_AUTO
 	var raw_device: Variant = get_setting(KEY_LAST_DEVICE, SCHEME_KEYBOARD)
 	_last_device = raw_device if raw_device is StringName or raw_device is String else SCHEME_KEYBOARD
-	apply_pad_map_to_input_map()
+	apply_saved_bindings()
 
 ## One-time migrations to lower sensitivity defaults. Only values still
 ## sitting EXACTLY on an old default move — anything the player
@@ -343,7 +344,125 @@ static func set_invert_camera_x(value: bool) -> void:
 static func camera_x_sign() -> float:
 	return -1.0 if _invert_x else 1.0
 
-# --- controller button remapping --------------------------------------------
+# --- action bindings (InputHelper-backed) ------------------------------------
+#
+# Since the Input Helper addon (addons/input_helper/input_helper.gd) is
+# available, ALL button/key remapping goes through it:
+#   - set_*_input_for_action gives automatic conflict swapping (taking a
+#     binding moves the other action's binding to the old one — no more
+#     silently colliding maps).
+#   - serialize_inputs_for_actions / deserialize_inputs_for_actions give a
+#     stable save format for keys, mouse buttons AND joypad buttons.
+# Persisted as one JSON blob (KEY_BINDINGS) covering the five button
+# actions ONLY. Movement actions keep their project.godot events: their
+# joypad STICK-AXIS events would be destroyed by deserialize (it erases
+# the action's whole event list), and arrow-key movement shouldn't be
+# broken by a bad save either.
+# Legacy v1 (KEY_PAD_MAP action->button dict) is migrated once: if the
+# blob is absent but a pad map exists, pad defaults are re-applied through
+# InputHelper and saved as the blob.
+
+## Actions whose key/mouse/pad bindings the player may change.
+const REMAPPABLE_ACTIONS := ["boost", "action", "sabotage", "pause", "recenter_camera"]
+
+static func _helper() -> Node:
+	return Engine.get_main_loop().root.get_node_or_null("InputHelper")
+
+## Apply the saved blob (or migrate legacy pad map) to the live InputMap.
+static func apply_saved_bindings() -> void:
+	var blob: Variant = get_setting(KEY_BINDINGS, "")
+	var helper := _helper()
+	if blob is String and blob != "" and helper != null:
+		helper.deserialize_inputs_for_actions(blob)
+	elif helper != null:
+		_migrate_legacy_pad_map(helper)
+	apply_pad_map_to_input_map()
+
+## v1 -> v2 migration: old pad-button dict becomes a real InputHelper blob
+## (keys/mouse untouched — they weren't remappable in v1 anyway).
+static func _migrate_legacy_pad_map(helper: Node) -> void:
+	var raw: Variant = get_setting(KEY_PAD_MAP, {})
+	if not (raw is Dictionary) or raw.is_empty():
+		return
+	for action in REMAPPABLE_ACTIONS:
+		if not raw.has(action):
+			continue
+		var idx := clampi(int(raw[action]), 0, 30)
+		if idx == int(DEFAULT_PAD_MAP.get(action, -1)):
+			continue  # default binding: nothing to migrate
+		var ev := InputEventJoypadButton.new()
+		ev.button_index = idx
+		helper.set_joypad_input_for_action(action, ev, false)
+	save_bindings()
+
+## Snapshot the five remappable actions' current events into the cfg.
+## Call after every successful remap/reset.
+static func save_bindings() -> void:
+	var helper := _helper()
+	if helper == null:
+		return
+	set_setting(KEY_BINDINGS,
+		helper.serialize_inputs_for_actions(PackedStringArray(REMAPPABLE_ACTIONS)))
+
+## Player pressed a key/mouse button while remapping `action`.
+## Returns true on success (conflicts auto-swap via InputHelper).
+static func set_key_binding(action: String, event: InputEvent) -> bool:
+	var helper := _helper()
+	if helper == null:
+		return false
+	var err: int = helper.set_keyboard_input_for_action(action, event, true)
+	if err == OK:
+		save_bindings()
+	return err == OK
+
+## Player pressed a pad button while remapping `action`.
+static func set_pad_binding(action: String, event: InputEventJoypadButton) -> bool:
+	var helper := _helper()
+	if helper == null:
+		return false
+	var err: int = helper.set_joypad_input_for_action(action, event, true)
+	if err == OK:
+		save_bindings()
+	return err == OK
+
+## Reset the five actions to project defaults and persist.
+static func reset_bindings() -> void:
+	var helper := _helper()
+	if helper == null:
+		return
+	helper.reset_all_actions()
+	save_bindings()
+
+## Primary KEYBOARD/MOUSE label for the HUD/overlay ("SPACE", "LMB", "E").
+static func key_binding_name(action: String) -> String:
+	var helper := _helper()
+	if helper == null:
+		return KEY_FALLBACK_NAMES.get(action, action.to_upper())
+	var ev: InputEvent = helper.get_keyboard_input_for_action(action)
+	if ev == null:
+		return KEY_FALLBACK_NAMES.get(action, action.to_upper())
+	return helper.get_label_for_input(ev).to_upper()
+
+## Primary PAD label via InputHelper's per-device tables (real
+## Xbox/PlayStation/Switch names — no more "A / CROSS" dual labels).
+static func pad_binding_name(action: String) -> String:
+	var helper := _helper()
+	if helper == null:
+		var index := pad_button_for(action)
+		return PAD_BUTTON_NAMES.get(index, "BUTTON %d" % index)
+	var ev: InputEvent = helper.get_joypad_input_for_action(action)
+	if ev == null:
+		return "?"
+	return helper.get_label_for_input(ev).to_upper()
+
+## Keyboard/mouse fallback labels when InputHelper is absent (raw tests).
+const KEY_FALLBACK_NAMES := {
+	"boost": "SPACE",
+	"action": "E",
+	"sabotage": "Q",
+	"pause": "ESC",
+	"recenter_camera": "R",
+}
 
 ## Common joypad buttons offered in the remap UI. Dpad left/right are
 ## excluded (bound to camera pan); stick clicks are reserved.
@@ -359,6 +478,8 @@ const PAD_BUTTON_NAMES := {
 	10: "R SHOULDER (R1)",
 }
 
+# --- legacy v1 pad-map API (kept for existing call sites) ---------------------
+
 static func pad_button_map() -> Dictionary:
 	var raw: Variant = get_setting(KEY_PAD_MAP, {})
 	var map := {}
@@ -373,24 +494,37 @@ static func pad_button_for(action: String) -> int:
 	return pad_button_map().get(action, DEFAULT_PAD_MAP.get(action, -1))
 
 ## Friendly label for HUD/overlay text ("BOOST: A / CROSS").
+## LIVE path: reads the real InputMap through InputHelper so a remap made
+## this session is reflected. Helperless fallback uses the legacy dict.
 static func pad_button_name(action: String) -> String:
-	var index := pad_button_for(action)
-	return PAD_BUTTON_NAMES.get(index, "BUTTON %d" % index)
+	return pad_binding_name(action)
 
+## v1 writer: still works (routes through InputHelper) but Settings now
+## uses set_pad_binding directly.
 static func set_pad_button(action: String, button_index: int) -> void:
-	var map := pad_button_map()
-	map[action] = button_index
-	set_setting(KEY_PAD_MAP, map)
-	apply_pad_map_to_input_map()
+	var ev := InputEventJoypadButton.new()
+	ev.button_index = button_index
+	if not set_pad_binding(action, ev):
+		# Helperless fallback: legacy dict + manual InputMap rewrite.
+		var map := pad_button_map()
+		map[action] = button_index
+		set_setting(KEY_PAD_MAP, map)
+		apply_pad_map_to_input_map()
 
 ## Rewrite the joypad BUTTON events of the pad actions so a remap (or a
-## saved map at boot) takes effect immediately. Movement axes and every
-## keyboard/mouse event are untouched.
+## saved map at boot) takes effect immediately — WITHOUT clobbering
+## keyboard/mouse events (those belong to InputHelper now). Movement axes
+## are untouched.
 static func apply_pad_map_to_input_map() -> void:
-	var map := pad_button_map()
-	for action in map:
+	var helper := _helper()
+	for action in REMAPPABLE_ACTIONS:
 		if not InputMap.has_action(action):
 			continue
+		if helper != null:
+			# InputHelper owns the joypad slots for these actions now.
+			continue
+		# Helperless legacy path (raw SceneTree tests): dict-driven rewrite.
+		var map := pad_button_map()
 		var keep: Array[InputEvent] = []
 		for ev in InputMap.action_get_events(action):
 			if ev is InputEventJoypadButton:

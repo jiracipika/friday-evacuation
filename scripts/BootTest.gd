@@ -43,6 +43,8 @@ func _init() -> void:
 		"res://scripts/Accessibility.gd",
 		"res://scripts/InputPrefs.gd",
 		"res://scripts/ControlsOverlay.gd",
+		"res://addons/input_helper/input_helper.gd",
+		"res://scripts/BindingsSmokeTest.gd",
 		"res://scripts/SubtitleOverlay.gd",
 		"res://scripts/RaceModifiers.gd",
 		"res://scripts/ModifierMenu.gd",

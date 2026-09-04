@@ -21,8 +21,9 @@ var curve_option: OptionButton
 var invert_toggle: CheckButton
 var remap_grid: GridContainer
 var _input_toggles: Dictionary = {}
-var _remap_buttons: Dictionary = {}  # action -> Button
-var _remap_action := ""  # non-empty while listening for a pad button
+var _remap_buttons: Dictionary = {}  # action -> {"key": Button, "pad": Button}
+var _remap_action := ""  # non-empty while listening for a key or pad button
+var _remap_kind := ""  # "kb" or "pad" — which column is armed
 var _restoring := false  # blocks reentrant _apply_settings during value restore
 
 const TIME_SCALE_LABELS := ["0.75x (SLOWER)", "1.0x (NORMAL)", "1.25x (FASTER)"]
@@ -223,22 +224,22 @@ func _build_ui() -> void:
 	box.add_child(curve_row)
 	self.curve_option = curve_option
 
-	# --- controller button remapping (easy, live-applied) ----------------
+	# --- button remapping (keyboard/mouse + controller, live-applied) ----
 	var remap_title = Label.new()
-	remap_title.text = "CONTROLLER BUTTONS — TAP A ROW, THEN PRESS A PAD BUTTON"
+	remap_title.text = "CONTROLS — TAP A ROW, THEN PRESS A KEY OR PAD BUTTON"
 	remap_title.add_theme_font_size_override("font_size", 13)
 	remap_title.add_theme_color_override("font_color", Color("ff9a1a"))
 	box.add_child(remap_title)
 
 	remap_grid = GridContainer.new()
-	remap_grid.columns = 2
+	remap_grid.columns = 3
 	remap_grid.add_theme_constant_override("h_separation", 10)
 	remap_grid.add_theme_constant_override("v_separation", 6)
 	box.add_child(remap_grid)
 	_build_remap_rows()
 
 	var reset_remap = Button.new()
-	reset_remap.text = "RESET CONTROLLER BUTTONS TO DEFAULT"
+	reset_remap.text = "RESET ALL CONTROLS TO DEFAULT"
 	reset_remap.add_theme_font_size_override("font_size", 13)
 	box.add_child(reset_remap)
 	reset_remap.pressed.connect(_reset_remap)
@@ -279,42 +280,54 @@ const REMAP_LABELS := {
 	"recenter_camera": "RECENTER CAMERA",
 }
 
+## Two-column binding rows: ACTION | KEY/MOUSE | PAD. Capture is armed per
+## cell ("kb" listens for key/mouse, "pad" for pad buttons).
 func _build_remap_rows() -> void:
-	var prefs = load("res://scripts/InputPrefs.gd")
 	if remap_grid == null:
 		return
 	for child in remap_grid.get_children():
 		child.queue_free()
 	_remap_buttons.clear()
+	var headers := ["ACTION", "KEY / MOUSE", "CONTROLLER"]
+	for h in headers:
+		var hl = Label.new()
+		hl.text = h
+		hl.add_theme_font_size_override("font_size", 11)
+		hl.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
+		remap_grid.add_child(hl)
 	for action in REMAP_ACTIONS:
 		var label = Label.new()
 		label.text = REMAP_LABELS[action]
 		label.add_theme_font_size_override("font_size", 13)
 		label.add_theme_color_override("font_color", Color(1, 1, 1, 0.65))
 		remap_grid.add_child(label)
-		var btn = Button.new()
-		btn.text = "…" if prefs == null else prefs.pad_button_name(action)
-		btn.custom_minimum_size = Vector2(0, 34)
-		btn.add_theme_font_size_override("font_size", 13)
-		var bound_action: String = action
-		btn.pressed.connect(func(): _remap_listen(bound_action, btn))
-		remap_grid.add_child(btn)
-		_remap_buttons[action] = btn
+		var kbtn = Button.new()
+		kbtn.custom_minimum_size = Vector2(0, 34)
+		kbtn.add_theme_font_size_override("font_size", 13)
+		var bound_kb: String = action
+		kbtn.pressed.connect(func(): _remap_listen(bound_kb, "kb", kbtn))
+		remap_grid.add_child(kbtn)
+		var pbtn = Button.new()
+		pbtn.custom_minimum_size = Vector2(0, 34)
+		pbtn.add_theme_font_size_override("font_size", 13)
+		var bound_pad: String = action
+		pbtn.pressed.connect(func(): _remap_listen(bound_pad, "pad", pbtn))
+		remap_grid.add_child(pbtn)
+		_remap_buttons[action] = {"key": kbtn, "pad": pbtn}
+	_refresh_remap_labels()
 
-## Arm one row to capture the next pad button press. The button caption
-## flips to "PRESS A PAD BUTTON…"; the next InputEventJoypadButton wins.
-func _remap_listen(action: String, btn: Button) -> void:
+## Arm one cell to capture the next key/mouse button or pad button press.
+func _remap_listen(action: String, kind: String, btn: Button) -> void:
 	_remap_action = action
-	btn.text = "PRESS A PAD BUTTON…"
+	_remap_kind = kind
+	btn.text = "PRESS…"
 	btn.grab_focus()
 
 func _reset_remap() -> void:
 	var prefs = load("res://scripts/InputPrefs.gd")
 	if prefs == null:
 		return
-	for action in REMAP_ACTIONS:
-		prefs.set_pad_button(action, prefs.DEFAULT_PAD_MAP[action])
-	config.set_value("input", "pad_button_map", prefs.pad_button_map())
+	prefs.reset_bindings()
 	_refresh_remap_labels()
 
 func _refresh_remap_labels() -> void:
@@ -322,27 +335,40 @@ func _refresh_remap_labels() -> void:
 	if prefs == null:
 		return
 	for action in _remap_buttons:
+		var cells: Dictionary = _remap_buttons[action]
 		if action == _remap_action:
+			var armed: Button = cells.get(_remap_kind, cells["key"])
+			armed.text = "PRESS…"
+			var idle: Button = cells.get("pad" if _remap_kind == "kb" else "key")
+			if idle:
+				idle.text = prefs.key_binding_name(action) if _remap_kind == "pad" else prefs.pad_button_name(action)
 			continue
-		var b: Button = _remap_buttons[action]
-		b.text = prefs.pad_button_name(action)
+		var kb: Button = cells["key"]
+		kb.text = prefs.key_binding_name(action)
+		var pb: Button = cells["pad"]
+		pb.text = prefs.pad_button_name(action)
 
-## Capture the pressed pad button for the armed action.
+## Capture the pressed key/mouse/pad button for the armed action.
+## InputHelper auto-swaps conflicts; InputPrefs persists the whole blob.
 func _input(event: InputEvent) -> void:
 	if _remap_action == "":
 		return
-	if event is InputEventJoypadButton and event.pressed:
-		var prefs = load("res://scripts/InputPrefs.gd")
-		if prefs:
-			prefs.set_pad_button(_remap_action, event.button_index)
-			# Keep the local snapshot in sync so the next _apply_settings
-			# save doesn't clobber the remap on disk.
-			config.set_value("input", "pad_button_map", prefs.pad_button_map())
+	var prefs = load("res://scripts/InputPrefs.gd")
+	if prefs == null:
 		_remap_action = ""
-		_refresh_remap_labels()
-		get_viewport().set_input_as_handled()
-	elif event is InputEventKey and event.pressed:
-		# Any key press cancels listening (escape hatch without a pad).
+		return
+	var accepted := false
+	if _remap_kind == "pad" and event is InputEventJoypadButton and event.pressed:
+		accepted = prefs.set_pad_binding(_remap_action, event)
+	elif _remap_kind == "kb" and event is InputEventKey and event.pressed and not event.echo:
+		# Escape cancels listening; other keys bind (physical keycode kept).
+		if event.physical_keycode == KEY_ESCAPE:
+			accepted = false
+		else:
+			accepted = prefs.set_key_binding(_remap_action, event)
+	elif _remap_kind == "kb" and event is InputEventMouseButton and event.pressed:
+		accepted = prefs.set_key_binding(_remap_action, event)
+	if accepted or event is InputEventKey:
 		_remap_action = ""
 		_refresh_remap_labels()
 		get_viewport().set_input_as_handled()
@@ -418,6 +444,15 @@ func _apply_settings() -> void:
 		var prefs3 = load("res://scripts/InputPrefs.gd")
 		if prefs3:
 			prefs3.set_invert_camera_x(invert_toggle.button_pressed)
+	# Sync the InputHelper bindings blob into the snapshot BEFORE saving.
+	# Remaps write through InputPrefs immediately (separate cfg write);
+	# without this sync, config.save would restore the mount-time snapshot
+	# and wipe bindings made this session (the v1 pad-map clobber, new
+	# clothes).
+	var bprefs = load("res://scripts/InputPrefs.gd")
+	if bprefs:
+		config.set_value("input", "action_bindings_serialized",
+			bprefs.get_setting(bprefs.KEY_BINDINGS, ""))
 	config.save("user://settings.cfg")
 	var audio = get_node_or_null("/root/AudioManager")
 	if audio:

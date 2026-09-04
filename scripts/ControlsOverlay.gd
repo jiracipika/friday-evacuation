@@ -155,9 +155,10 @@ func _refresh() -> void:
 	if kb_box == null:
 		return  # not ready yet; show_for re-calls this on first frame
 	var pad_active := _active_is_pad()
-	var signature := "%s|%s|%s" % [
+	var signature := "%s|%s|%s|%s" % [
 		"pad" if pad_active else "kb",
 		_prefs.scheme_mode() if _prefs else "none",
+		str(_prefs.get_setting(_prefs.KEY_BINDINGS, "")) if _prefs else "",
 		str(_prefs.pad_button_map()) if _prefs else "{}",
 	]
 	if signature == _last_signature:
@@ -166,12 +167,12 @@ func _refresh() -> void:
 
 	_fill_column(kb_box, kb_header, "KEYBOARD & MOUSE", [
 		["WASD / ARROWS", "MOVE"],
-		["SPACE / LEFT CLICK", "BOOST"],
-		["E / MIDDLE CLICK", "ACTION"],
-		["Q / RIGHT CLICK", "SABOTAGE"],
+		[_kb_name(_prefs, "boost"), "BOOST"],
+		[_kb_name(_prefs, "action"), "ACTION"],
+		[_kb_name(_prefs, "sabotage"), "SABOTAGE"],
 		["MOVE MOUSE", "CAMERA"],
-		["R", "RECENTER CAMERA"],
-		["ESC", "PAUSE"],
+		[_kb_name(_prefs, "recenter_camera"), "RECENTER CAMERA"],
+		[_kb_name(_prefs, "pause"), "PAUSE"],
 	], not pad_active)
 
 	var pad_rows: Array = [
@@ -195,6 +196,13 @@ func _refresh() -> void:
 func _pad_name(prefs: Variant, action: String) -> String:
 	if prefs and prefs.has_method("pad_button_name"):
 		return prefs.pad_button_name(action)
+	return action.to_upper()
+
+
+## Live primary key/mouse label for an action ("SPACE", "MOUSE LEFT", "E").
+func _kb_name(prefs: Variant, action: String) -> String:
+	if prefs and prefs.has_method("key_binding_name"):
+		return prefs.key_binding_name(action)
 	return action.to_upper()
 
 

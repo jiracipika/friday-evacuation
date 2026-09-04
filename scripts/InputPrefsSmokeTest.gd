@@ -188,12 +188,14 @@ func _run() -> void:
 	check(P.which_scheme() == P.SCHEME_CONTROLLER, "manual CONTROLLER pin ignores key input")
 	P.set_scheme_mode(P.SCHEME_AUTO)
 
-	# 10. Pad remap: live InputMap rewrite + persistence + garbage clamp
+	# 10. Pad remap (v2: InputHelper-backed; legacy dict mirrors defaults)
 	check(P.pad_button_for("boost") == 0, "default boost pad button A/Cross")
 	check(P.pad_button_for("recenter_camera") == 3, "default recenter pad button Y/Triangle")
-	check(P.pad_button_name("boost") == "A / CROSS", "pad_button_name friendly label")
+	var label_before: String = P.pad_button_name("boost")
+	check(label_before != "", "pad_button_name resolves a friendly label")
 	P.set_pad_button("boost", 10)
-	check(P.pad_button_for("boost") == 10, "remap persists through cfg")
+	check(P.get_setting(P.KEY_BINDINGS, "") != "", "remap persists through bindings blob")
+	check(P.pad_button_name("boost") != label_before, "pad label follows the remap")
 	var boost_events := InputMap.action_get_events("boost")
 	var found10 := false
 	var found0 := false
@@ -217,12 +219,19 @@ func _run() -> void:
 	var garbage_map: Dictionary = P.pad_button_map()
 	check(int(garbage_map["boost"]) == 0, "garbage pad map value falls back to default")
 	check(int(garbage_map["action"]) == 30, "out-of-range pad index clamps to 30")
-	# Restore defaults for cleanliness.
+	# Restore defaults for cleanliness (blob reset when the helper is
+	# live; dict-driven InputMap rewrite covers helperless runs).
 	var cfg7 := ConfigFile.new()
 	cfg7.save(TEST_CFG)
 	P.refresh_cache()
+	P.reset_bindings()
 	P.apply_pad_map_to_input_map()
 	check(P.pad_button_for("boost") == 0, "pad map restored to defaults")
+	var restored0 := false
+	for ev in InputMap.action_get_events("boost"):
+		if ev is InputEventJoypadButton and ev.button_index == 0:
+			restored0 = true
+	check(restored0, "InputMap boost pad restored to default after reset")
 
 	# 11. Migration: old defaults move once, personalized values stay.
 	var cfg8 := ConfigFile.new()
