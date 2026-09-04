@@ -67,6 +67,13 @@ var menu_time: float = 0.0
 
 func _ready() -> void:
 	get_window().title = "Friday 5PM: Evacuation"
+	# Apply saved input prefs once at menu boot: re-arms the persisted
+	# bindings remap, refreshes sensitivity caches, and syncs scheme
+	# memory. Modes used to do this per-_ready, so launching Hauled/Shop
+	# & Seek/Pizza Colony paths that skip Evacuation still need it HERE.
+	var prefs_boot = load("res://scripts/InputPrefs.gd")
+	if prefs_boot and prefs_boot.has_method("refresh_cache"):
+		prefs_boot.refresh_cache()
 	# Debug virtual gamepad (--virtual-pad or FE_VIRTUAL_PAD=1): pumps real
 	# joypad events for pad-play QA without hardware. Lives on the root so
 	# it survives scene changes into the race.

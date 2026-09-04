@@ -28,6 +28,13 @@ var _restoring := false  # blocks reentrant _apply_settings during value restore
 
 const TIME_SCALE_LABELS := ["0.75x (SLOWER)", "1.0x (NORMAL)", "1.25x (FASTER)"]
 
+## Safe bool read for cfg values: GDScript's bool() CRASHES on String
+## values ("Nonexistent 'bool' constructor") and a hand-edited cfg can
+## hold "yes"/"no". Non-bool -> default.
+static func _cfg_bool(cfg: ConfigFile, section: String, key: String, default: bool) -> bool:
+	var v: Variant = cfg.get_value(section, key, default)
+	return v if v is bool else default
+
 func _ready() -> void:
 	_load_settings()
 	_build_ui()
@@ -105,37 +112,37 @@ func _build_ui() -> void:
 
 	shake_toggle = CheckButton.new()
 	shake_toggle.text = "ENABLE SCREEN SHAKE"
-	shake_toggle.button_pressed = bool(config.get_value("accessibility", "screen_shake", true))
+	shake_toggle.button_pressed = _cfg_bool(config, "accessibility", "screen_shake", true)
 	box.add_child(shake_toggle)
 	shake_toggle.toggled.connect(func(_value): _apply_settings())
 
 	flash_toggle = CheckButton.new()
 	flash_toggle.text = "ENABLE FLASH EFFECTS"
-	flash_toggle.button_pressed = bool(config.get_value("accessibility", "flash_effects", true))
+	flash_toggle.button_pressed = _cfg_bool(config, "accessibility", "flash_effects", true)
 	box.add_child(flash_toggle)
 	flash_toggle.toggled.connect(func(_value): _apply_settings())
 
 	ghost_toggle = CheckButton.new()
 	ghost_toggle.text = "SINGLE-PLAYER GHOST PACER"
-	ghost_toggle.button_pressed = bool(config.get_value("race", "ghost_enabled", true))
+	ghost_toggle.button_pressed = _cfg_bool(config, "race", "ghost_enabled", true)
 	box.add_child(ghost_toggle)
 	ghost_toggle.toggled.connect(func(_value): _apply_settings())
 
 	reduced_motion_toggle = CheckButton.new()
 	reduced_motion_toggle.text = "REDUCED MOTION"
-	reduced_motion_toggle.button_pressed = bool(config.get_value("accessibility", "reduced_motion", false))
+	reduced_motion_toggle.button_pressed = _cfg_bool(config, "accessibility", "reduced_motion", false)
 	box.add_child(reduced_motion_toggle)
 	reduced_motion_toggle.toggled.connect(func(_value): _apply_settings())
 
 	high_contrast_toggle = CheckButton.new()
 	high_contrast_toggle.text = "HIGH CONTRAST HUD"
-	high_contrast_toggle.button_pressed = bool(config.get_value("accessibility", "high_contrast", false))
+	high_contrast_toggle.button_pressed = _cfg_bool(config, "accessibility", "high_contrast", false)
 	box.add_child(high_contrast_toggle)
 	high_contrast_toggle.toggled.connect(func(_value): _apply_settings())
 
 	subtitles_toggle = CheckButton.new()
 	subtitles_toggle.text = "AUDIO CUE SUBTITLES"
-	subtitles_toggle.button_pressed = bool(config.get_value("accessibility", "subtitles", false))
+	subtitles_toggle.button_pressed = _cfg_bool(config, "accessibility", "subtitles", false)
 	box.add_child(subtitles_toggle)
 	subtitles_toggle.toggled.connect(func(_value): _apply_settings())
 
@@ -444,15 +451,15 @@ func _apply_settings() -> void:
 		var prefs3 = load("res://scripts/InputPrefs.gd")
 		if prefs3:
 			prefs3.set_invert_camera_x(invert_toggle.button_pressed)
-	# Sync the InputHelper bindings blob into the snapshot BEFORE saving.
-	# Remaps write through InputPrefs immediately (separate cfg write);
-	# without this sync, config.save would restore the mount-time snapshot
-	# and wipe bindings made this session (the v1 pad-map clobber, new
-	# clothes).
+	# Sync keys Settings itself doesn't own into the snapshot BEFORE
+	# saving. Remaps and device-memory write through InputPrefs immediately
+	# (separate cfg writes); without these syncs, config.save would
+	# restore the mount-time snapshot and wipe them (clobber class bug).
 	var bprefs = load("res://scripts/InputPrefs.gd")
 	if bprefs:
 		config.set_value("input", "action_bindings_serialized",
 			bprefs.get_setting(bprefs.KEY_BINDINGS, ""))
+		config.set_value("input", "last_device", bprefs.get_setting(bprefs.KEY_LAST_DEVICE, "keyboard_mouse"))
 	config.save("user://settings.cfg")
 	var audio = get_node_or_null("/root/AudioManager")
 	if audio:

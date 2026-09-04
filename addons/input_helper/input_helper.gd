@@ -41,8 +41,11 @@ const PLAYSTATION_5_BUTTON_LABELS = ["Cross", "Circle", "Square", "Triangle", "C
 
 const SERIAL_VERSION = 1
 
-## The deadzone to ignore for joypad motion
-var deadzone: float = 0.5
+## The deadzone to ignore for joypad motion. Kept in sync with the
+## project-wide 0.2 (project.godot actions + InputPrefs): at the upstream
+## 0.5, light stick touches move the chair (project actions respond from
+## 0.2) WITHOUT flipping the scheme to CONTROLLER — input and UI disagree.
+var deadzone: float = 0.2
 ## The mouse distance to ignore before movement is assumed
 var mouse_motion_threshold: int = 100
 ## The last known joypad device name (or "" if no joypad detected)

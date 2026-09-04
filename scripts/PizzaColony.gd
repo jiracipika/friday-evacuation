@@ -71,6 +71,11 @@ func _ready() -> void:
 	load("res://scripts/Accessibility.gd").apply_time_scale()
 	# Mouse-look: capture cursor for the match; PauseMenu re-shows it.
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# Camera yaw is GLOBAL state (InputPrefs.camera_yaw_offset): reset at
+	# match start or the camera spawns pre-orbited by the last match's pan.
+	var prefs_yaw = load("res://scripts/InputPrefs.gd")
+	if prefs_yaw:
+		prefs_yaw.reset_yaw()
 	rng.seed = 630
 	_build_pizza()
 	_spawn_pepperonis()

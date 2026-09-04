@@ -58,7 +58,8 @@ static func get_time_scale() -> float:
 	return best
 
 static func captions_enabled() -> bool:
-	return bool(get_setting(KEY_SUBTITLES, false))
+	# bool() over a corrupt String crashes ("Nonexistent 'bool' constructor").
+	return _as_bool(get_setting(KEY_SUBTITLES, false), false)
 
 ## Phase 8B wiring: actually drive Engine.time_scale from the setting.
 ## The race clock and every _process(delta) in the game tick on scaled delta,
@@ -87,13 +88,20 @@ static func caption(text: String, duration := 1.5) -> void:
 			return
 
 static func screen_shake_enabled() -> bool:
-	return bool(get_setting(KEY_SCREEN_SHAKE, true))
+	return _as_bool(get_setting(KEY_SCREEN_SHAKE, true), true)
 
 static func flash_effects_enabled() -> bool:
-	return bool(get_setting(KEY_FLASH_EFFECTS, true))
+	return _as_bool(get_setting(KEY_FLASH_EFFECTS, true), true)
 
 static func reduced_motion_enabled() -> bool:
-	return bool(get_setting(KEY_REDUCED_MOTION, false))
+	return _as_bool(get_setting(KEY_REDUCED_MOTION, false), false)
 
 static func high_contrast_enabled() -> bool:
-	return bool(get_setting(KEY_HIGH_CONTRAST, false))
+	return _as_bool(get_setting(KEY_HIGH_CONTRAST, false), false)
+
+
+## Safe bool coercion: GDScript's bool() CRASHES on String values
+## ("Nonexistent 'bool' constructor") and a hand-edited or legacy cfg can
+## hold "yes"/"no". Anything not literally a bool falls back to default.
+static func _as_bool(value: Variant, default: bool) -> bool:
+	return value if value is bool else default

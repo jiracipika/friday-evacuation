@@ -366,24 +366,45 @@ static func camera_x_sign() -> float:
 const REMAPPABLE_ACTIONS := ["boost", "action", "sabotage", "pause", "recenter_camera"]
 
 static func _helper() -> Node:
-	return Engine.get_main_loop().root.get_node_or_null("InputHelper")
+	var ml := Engine.get_main_loop()
+	if ml == null or not (ml is SceneTree):
+		return null
+	return (ml as SceneTree).root.get_node_or_null("InputHelper")
 
-## Apply the saved blob (or migrate legacy pad map) to the live InputMap.
+## Apply the saved bindings blob to the live InputMap. Handles, in order:
+## v2 physical-faithful blobs, upstream v1 blobs (keycode-only, from the
+## d1195f0 release), and the pre-InputHelper pad dict. Corrupt data is
+## discarded (defaults kept) instead of crashing — JSON.parse_string on
+## garbage used to hard-crash here and kill bindings for the session.
 static func apply_saved_bindings() -> void:
 	var blob: Variant = get_setting(KEY_BINDINGS, "")
-	var helper := _helper()
-	if blob is String and blob != "" and helper != null:
-		helper.deserialize_inputs_for_actions(blob)
-	elif helper != null:
-		_migrate_legacy_pad_map(helper)
+	var applied := false
+	if blob is String and blob != "":
+		var parsed: Variant = JSON.parse_string(blob)
+		if parsed is Dictionary:
+			if int(parsed.get("v", 0)) == 2 and parsed.get("actions") is Dictionary:
+				_apply_bindings_v2(parsed.actions)
+				applied = true
+			elif parsed.has("version") and parsed.get("map") is Dictionary:
+				# Upstream InputHelper v1 format: keycode-only. Convert to
+				# v2 (best effort) so non-QWERTY users get keys on the
+				# right LOGICAL key until they rebind.
+				_apply_bindings_v2(_convert_v1_blob(parsed.map))
+				applied = true
+		if not applied:
+			push_warning("InputPrefs: discarding corrupt bindings blob")
+	elif _helper() != null:
+		applied = _migrate_legacy_pad_map()
 	apply_pad_map_to_input_map()
 
-## v1 -> v2 migration: old pad-button dict becomes a real InputHelper blob
-## (keys/mouse untouched — they weren't remappable in v1 anyway).
-static func _migrate_legacy_pad_map(helper: Node) -> void:
+## v1 -> v2 migration: old pad-button dict becomes a real bindings blob.
+## Returns true when a blob was produced. Clears the stale dict afterwards
+## so the legacy code paths and the overlay signature stop churning.
+static func _migrate_legacy_pad_map() -> bool:
 	var raw: Variant = get_setting(KEY_PAD_MAP, {})
 	if not (raw is Dictionary) or raw.is_empty():
-		return
+		return false
+	var changed := false
 	for action in REMAPPABLE_ACTIONS:
 		if not raw.has(action):
 			continue
@@ -392,45 +413,220 @@ static func _migrate_legacy_pad_map(helper: Node) -> void:
 			continue  # default binding: nothing to migrate
 		var ev := InputEventJoypadButton.new()
 		ev.button_index = idx
-		helper.set_joypad_input_for_action(action, ev, false)
-	save_bindings()
+		InputMap.action_erase_events(action)
+		for keep_ev in _non_button_events(action):
+			InputMap.action_add_event(action, keep_ev)
+		InputMap.action_add_event(action, ev)
+		changed = true
+	if changed:
+		save_bindings()
+		clear_setting(KEY_PAD_MAP)
+	return changed
 
-## Snapshot the five remappable actions' current events into the cfg.
-## Call after every successful remap/reset.
+## Rebuild the five remappable actions from a v2 actions dict
+## ({action: {"k": int, "p": 0/1, "m": int, "j": int}}). Helper-free by
+## design: raw SceneTree tests and headless boots can restore bindings.
+static func _apply_bindings_v2(actions: Dictionary) -> void:
+	for action in REMAPPABLE_ACTIONS:
+		if not actions.has(action):
+			continue
+		if not InputMap.has_action(action):
+			continue
+		var spec: Dictionary = actions[action]
+		var keep: Array[InputEvent] = _non_button_events(action)
+		InputMap.action_erase_events(action)
+		for ev in keep:
+			InputMap.action_add_event(action, ev)
+		var k := int(spec.get("k", 0))
+		if k > 0:
+			var key_ev := InputEventKey.new()
+			if int(spec.get("p", 0)) == 1:
+				key_ev.physical_keycode = k
+			else:
+				key_ev.keycode = k
+			InputMap.action_add_event(action, key_ev)
+		var m := int(spec.get("m", -1))
+		if m >= 0:
+			var mouse_ev := InputEventMouseButton.new()
+			mouse_ev.button_index = m
+			InputMap.action_add_event(action, mouse_ev)
+		var j := int(spec.get("j", -1))
+		if j >= 0:
+			var pad_ev := InputEventJoypadButton.new()
+			pad_ev.button_index = j
+			InputMap.action_add_event(action, pad_ev)
+
+## Everything in an action that is NOT a key/mouse/pad-button event
+## (nothing today for the five remappables, but future-proof).
+static func _non_button_events(action: String) -> Array[InputEvent]:
+	var keep: Array[InputEvent] = []
+	for ev in InputMap.action_get_events(action):
+		if ev is InputEventKey or ev is InputEventMouseButton or ev is InputEventJoypadButton:
+			continue
+		keep.append(ev)
+	return keep
+
+## Convert an upstream-format blob map into a v2 actions dict. Upstream
+## serializes keys by KEYCODE string ("key:J"), so physical info is gone —
+## that loss is exactly why v2 exists; this path keeps old saves working.
+static func _convert_v1_blob(map: Dictionary) -> Dictionary:
+	var out := {}
+	for action in REMAPPABLE_ACTIONS:
+		if not map.has(action):
+			continue
+		var spec := {"k": 0, "p": 0, "m": -1, "j": -1}
+		var entry: String = String(map[action])
+		for part in entry.split(";"):
+			var bits := part.split(":")
+			if bits.size() < 2:
+				continue
+			match bits[0]:
+				"key":
+					var code := OS.find_keycode_from_string(bits[1])
+					if code > 0:
+						spec["k"] = code
+						spec["p"] = 0
+				"mouse":
+					spec["m"] = int(bits[1])
+				"joypad":
+					if "|" in bits[1]:
+						continue  # axis events are not part of v2
+					spec["j"] = int(bits[1])
+		out[action] = spec
+	return out
+
+## Snapshot the five remappable actions' current events into the cfg as a
+## v2 blob. PHYSICAL keycodes are preserved (upstream's serializer stores
+## logical keycodes only, which rebinds non-QWERTY layouts on restore).
+## Helper-free: reads the live InputMap directly.
 static func save_bindings() -> void:
-	var helper := _helper()
-	if helper == null:
+	var actions := {}
+	for action in REMAPPABLE_ACTIONS:
+		if not InputMap.has_action(action):
+			continue
+		var spec := {"k": 0, "p": 0, "m": -1, "j": -1}
+		for ev in InputMap.action_get_events(action):
+			if ev is InputEventKey and int(spec["k"]) == 0:
+				if (ev as InputEventKey).physical_keycode > 0:
+					spec["k"] = (ev as InputEventKey).physical_keycode
+					spec["p"] = 1
+				else:
+					spec["k"] = (ev as InputEventKey).keycode
+					spec["p"] = 0
+			elif ev is InputEventMouseButton and int(spec["m"]) < 0:
+				spec["m"] = (ev as InputEventMouseButton).button_index
+			elif ev is InputEventJoypadButton and int(spec["j"]) < 0:
+				spec["j"] = (ev as InputEventJoypadButton).button_index
+		actions[action] = spec
+	set_setting(KEY_BINDINGS, JSON.stringify({"v": 2, "actions": actions}))
+
+## Find another REMAPPABLE action whose same-class binding matches `event`.
+## Conflict swaps must NEVER touch movement/camera actions — the upstream
+## swap scans ALL actions and would happily hand move_forward's W to boost.
+## Returns [other_action, their_event] or [].
+static func _fenced_conflict(action: String, event: InputEvent) -> Array:
+	for other in REMAPPABLE_ACTIONS:
+		if other == action:
+			continue
+		for ev in InputMap.action_get_events(other):
+			if _same_class_match(ev, event):
+				return [other, ev]
+	return []
+
+static func _same_class_match(a: InputEvent, b: InputEvent) -> bool:
+	if a is InputEventKey and b is InputEventKey:
+		var ka := a as InputEventKey
+		var kb := b as InputEventKey
+		if ka.physical_keycode > 0 and kb.physical_keycode > 0:
+			return ka.physical_keycode == kb.physical_keycode
+		return ka.keycode > 0 and ka.keycode == kb.keycode
+	if a is InputEventMouseButton and b is InputEventMouseButton:
+		return (a as InputEventMouseButton).button_index == (b as InputEventMouseButton).button_index
+	if a is InputEventJoypadButton and b is InputEventJoypadButton:
+		return (a as InputEventJoypadButton).button_index == (b as InputEventJoypadButton).button_index
+	return false
+
+## Same SLOT class (key->key, mouse->mouse, pad-button->pad-button) but
+## ignoring WHICH binding — used to decide which old event a new binding
+## replaces (upstream semantics: the primary key slot is replaced, not
+## appended after).
+static func _same_slot_class(a: InputEvent, b: InputEvent) -> bool:
+	return (a is InputEventKey and b is InputEventKey) \
+		or (a is InputEventMouseButton and b is InputEventMouseButton) \
+		or (a is InputEventJoypadButton and b is InputEventJoypadButton)
+
+## Remove one specific event from an action (for conflict handoffs when
+## there is no spare binding to give back).
+static func _remove_event(action: String, dead: InputEvent) -> void:
+	if not InputMap.has_action(action):
 		return
-	set_setting(KEY_BINDINGS,
-		helper.serialize_inputs_for_actions(PackedStringArray(REMAPPABLE_ACTIONS)))
+	var keep: Array[InputEvent] = []
+	for ev in InputMap.action_get_events(action):
+		if ev == dead or _same_class_match(ev, dead):
+			continue
+		keep.append(ev)
+	InputMap.action_erase_events(action)
+	for ev in keep:
+		InputMap.action_add_event(action, ev)
 
-## Player pressed a key/mouse button while remapping `action`.
-## Returns true on success (conflicts auto-swap via InputHelper).
+## Player pressed a key/mouse/pad button while remapping `action`. Conflicts
+## are swapped ONLY within the remappable set: taking a button moves the
+## other remappable action's binding aside; movement keys are untouchable.
+## The old occupant of the replaced slot is handed to the displaced action
+## (upstream swap semantics, fenced).
 static func set_key_binding(action: String, event: InputEvent) -> bool:
-	var helper := _helper()
-	if helper == null:
+	if not InputMap.has_action(action):
 		return false
-	var err: int = helper.set_keyboard_input_for_action(action, event, true)
-	if err == OK:
-		save_bindings()
-	return err == OK
+	var conflict := _fenced_conflict(action, event)
+	# Scan FIRST (the list is invalid after action_erase_events), replacing
+	# the first SAME-CLASS slot (key->key, mouse->mouse, pad->pad) with the
+	# new event.
+	var kept: Array[InputEvent] = []
+	var old_occupant: InputEvent = null
+	var replaced := false
+	for ev in InputMap.action_get_events(action):
+		var is_button := ev is InputEventKey or ev is InputEventMouseButton or ev is InputEventJoypadButton
+		if is_button and not replaced and _same_slot_class(ev, event):
+			old_occupant = ev
+			kept.append(event)
+			replaced = true
+		else:
+			kept.append(ev)
+	if not replaced:
+		kept.append(event)
+	InputMap.action_erase_events(action)
+	for ev in kept:
+		InputMap.action_add_event(action, ev)
+	# Hand the old binding to the displaced remappable action.
+	if conflict.size() == 2:
+		var other: String = conflict[0]
+		var their: InputEvent = conflict[1]
+		if old_occupant != null:
+			var other_kept: Array[InputEvent] = []
+			for ev in InputMap.action_get_events(other):
+				if _same_class_match(ev, their):
+					other_kept.append(old_occupant)
+				else:
+					other_kept.append(ev)
+			InputMap.action_erase_events(other)
+			for ev in other_kept:
+				InputMap.action_add_event(other, ev)
+		else:
+			_remove_event(other, their)
+	save_bindings()
+	return true
 
-## Player pressed a pad button while remapping `action`.
+## Player pressed a pad button while remapping `action` (fenced swap).
 static func set_pad_binding(action: String, event: InputEventJoypadButton) -> bool:
-	var helper := _helper()
-	if helper == null:
-		return false
-	var err: int = helper.set_joypad_input_for_action(action, event, true)
-	if err == OK:
-		save_bindings()
-	return err == OK
+	return set_key_binding(action, event)
 
 ## Reset the five actions to project defaults and persist.
 static func reset_bindings() -> void:
 	var helper := _helper()
-	if helper == null:
-		return
-	helper.reset_all_actions()
+	if helper != null:
+		helper.reset_all_actions()
+	else:
+		InputMap.load_from_project_settings()
 	save_bindings()
 
 ## Primary KEYBOARD/MOUSE label for the HUD/overlay ("SPACE", "LMB", "E").
@@ -491,6 +687,13 @@ static func pad_button_map() -> Dictionary:
 	return map
 
 static func pad_button_for(action: String) -> int:
+	# The live InputMap is the source of truth: the fenced remap writer
+	# updates events immediately but intentionally no longer maintains the
+	# legacy dict. Dict falls back only when the action has no pad button.
+	if InputMap.has_action(action):
+		for ev in InputMap.action_get_events(action):
+			if ev is InputEventJoypadButton:
+				return (ev as InputEventJoypadButton).button_index
 	return pad_button_map().get(action, DEFAULT_PAD_MAP.get(action, -1))
 
 ## Friendly label for HUD/overlay text ("BOOST: A / CROSS").
@@ -549,18 +752,34 @@ static func _cfg() -> ConfigFile:
 	return config
 
 static func get_setting(key: String, default: Variant) -> Variant:
-	return _cfg().get_value(SECTION, key, default)
+	var config := _cfg()
+	if not config.has_section_key(SECTION, key):
+		return default
+	return config.get_value(SECTION, key, default)
 
 static func set_setting(key: String, value: Variant) -> void:
 	var config := _cfg()
 	config.set_value(SECTION, key, value)
 	config.save(CFG_PATH)
 
+## Remove a key from the cfg (retires legacy formats after migration so
+## stale data stops churning signature-based UI).
+static func clear_setting(key: String) -> void:
+	var config := _cfg()
+	if config.has_section_key(SECTION, key):
+		config.erase_section_key(SECTION, key)
+		config.save(CFG_PATH)
+
+## Safe float coercion: float("garbage") returns 0.0 (no crash), which
+## clampf would turn into the MINIMUM — a corrupt value should fall back
+## to the default, not pin the slider to the floor.
+static func _as_float(value: Variant, default: float) -> float:
+	return float(value) if value is float or value is int else default
+
 # --- typed getters (clamped against corrupt/legacy cfg values) -------------
 
 static func keyboard_sensitivity() -> float:
-	var raw := float(get_setting(KEY_KB_SENS, KEYBOARD_DEFAULT))
-	return clampf(raw, KEYBOARD_MIN, KEYBOARD_MAX)
+	return clampf(_as_float(get_setting(KEY_KB_SENS, KEYBOARD_DEFAULT), KEYBOARD_DEFAULT), KEYBOARD_MIN, KEYBOARD_MAX)
 
 ## Safe bool coercion: GDScript's bool() crashes on a String value
 ## ("Nonexistent 'bool' constructor"), and a hand-edited cfg can hold
@@ -572,13 +791,13 @@ static func mouse_look_enabled() -> bool:
 	return _as_bool(get_setting(KEY_MOUSE_LOOK, true), true)
 
 static func mouse_sensitivity() -> float:
-	return clampf(float(get_setting(KEY_MOUSE_SENS, MOUSE_DEFAULT)), MOUSE_MIN, MOUSE_MAX)
+	return clampf(_as_float(get_setting(KEY_MOUSE_SENS, MOUSE_DEFAULT), MOUSE_DEFAULT), MOUSE_MIN, MOUSE_MAX)
 
 static func stick_look_enabled() -> bool:
 	return _as_bool(get_setting(KEY_STICK_LOOK, true), true)
 
 static func stick_sensitivity() -> float:
-	return clampf(float(get_setting(KEY_STICK_SENS, STICK_DEFAULT)), STICK_MIN, STICK_MAX)
+	return clampf(_as_float(get_setting(KEY_STICK_SENS, STICK_DEFAULT), STICK_DEFAULT), STICK_MIN, STICK_MAX)
 
 static func vibration_enabled() -> bool:
 	return _as_bool(get_setting(KEY_VIBRATION, true), true)
