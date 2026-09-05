@@ -14,10 +14,20 @@ var item_label: Label
 func _ready() -> void:
 	_build_hud()
 
+# MOBILE PASS: scale HUD chrome with viewport height so phones get readable
+# text and desktop keeps the current sizes. 720p => 1.0; a 360px-tall
+# landscape phone viewport => ~0.72; tall portrait windows => up to ~1.6.
+func _ui_scale() -> float:
+	var h := get_viewport().get_visible_rect().size.y
+	return clampf(h / 720.0, 0.85, 1.6)
+
+func _px(v: float) -> int:
+	return int(round(v * _ui_scale()))
+
 func _build_hud() -> void:
 	var top = PanelContainer.new()
 	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top.offset_bottom = 76
+	top.offset_bottom = _px(76)
 	var top_style = StyleBoxFlat.new()
 	top_style.bg_color = Color(0.03, 0.03, 0.06, 0.88)
 	top_style.border_color = Color(1, 0.6, 0.1, 0.7)
@@ -25,39 +35,40 @@ func _build_hud() -> void:
 	top.add_theme_stylebox_override("panel", top_style)
 	add_child(top)
 	var top_row = HBoxContainer.new()
-	top_row.add_theme_constant_override("separation", 26)
+	top_row.add_theme_constant_override("separation", _px(26))
 	top_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	top.add_child(top_row)
-	floor_label = _make_label("FLOOR 1", 18, Color(1, 1, 1, 0.75))
+	floor_label = _make_label("FLOOR 1", _px(18), Color(1, 1, 1, 0.75))
 	top_row.add_child(floor_label)
-	timer_label = _make_label("2:00", 34, Color("ffb52e"))
+	timer_label = _make_label("2:00", _px(34), Color("ffb52e"))
 	top_row.add_child(timer_label)
-	status_label = _make_label("RACE", 18, Color(0.4, 1, 0.65))
+	status_label = _make_label("RACE", _px(18), Color(0.4, 1, 0.65))
 	top_row.add_child(status_label)
 	var minimap_script = load("res://scripts/Minimap.gd")
 	minimap = Control.new()
 	minimap.set_script(minimap_script)
 	minimap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	minimap.position = Vector2(-174, 92)
-	minimap.size = Vector2(150, 150)
+	var map_size := _px(150)
+	minimap.position = Vector2(-map_size - _px(24), _px(92))
+	minimap.size = Vector2(map_size, map_size)
 	add_child(minimap)
 
 	var bottom = MarginContainer.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.offset_top = -118
-	bottom.add_theme_constant_override("margin_left", 28)
-	bottom.add_theme_constant_override("margin_right", 28)
-	bottom.add_theme_constant_override("margin_bottom", 24)
+	bottom.offset_top = -_px(118)
+	bottom.add_theme_constant_override("margin_left", _px(28))
+	bottom.add_theme_constant_override("margin_right", _px(28))
+	bottom.add_theme_constant_override("margin_bottom", _px(24))
 	add_child(bottom)
 	var row = HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_BEGIN
-	row.add_theme_constant_override("separation", 18)
+	row.add_theme_constant_override("separation", _px(18))
 	bottom.add_child(row)
 	var speed_box = VBoxContainer.new()
-	speed_label = _make_label("0 km/h", 24, Color.WHITE)
+	speed_label = _make_label("0 km/h", _px(24), Color.WHITE)
 	speed_box.add_child(speed_label)
 	speed_bar = ProgressBar.new()
-	speed_bar.custom_minimum_size = Vector2(220, 18)
+	speed_bar.custom_minimum_size = Vector2(_px(220), _px(18))
 	speed_bar.show_percentage = false
 	speed_box.add_child(speed_bar)
 	row.add_child(speed_box)
@@ -65,15 +76,15 @@ func _build_hud() -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
 	var abilities = VBoxContainer.new()
-	boost_label = _make_label("☕ BOOST READY [SPACE]", 18, Color("ff9a1a"))
+	boost_label = _make_label("☕ BOOST READY [SPACE]", _px(18), Color("ff9a1a"))
 	abilities.add_child(boost_label)
 	boost_bar = ProgressBar.new()
-	boost_bar.custom_minimum_size = Vector2(240, 16)
+	boost_bar.custom_minimum_size = Vector2(_px(240), _px(16))
 	boost_bar.show_percentage = false
 	abilities.add_child(boost_bar)
-	sabotage_label = _make_label("Q  SABOTAGE", 16, Color(1, 1, 1, 0.72))
+	sabotage_label = _make_label("Q  SABOTAGE", _px(16), Color(1, 1, 1, 0.72))
 	abilities.add_child(sabotage_label)
-	item_label = _make_label("", 16, Color(0.7, 0.9, 1.0))
+	item_label = _make_label("", _px(16), Color(0.7, 0.9, 1.0))
 	abilities.add_child(item_label)
 	row.add_child(abilities)
 

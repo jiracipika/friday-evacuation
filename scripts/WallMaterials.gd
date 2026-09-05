@@ -58,8 +58,10 @@ static func wall_albedo(floor_index: int) -> ImageTexture:
 			elif wainscot:
 				col = paint.darkened(0.35)
 			else:
-				# Vertical sheen bands: two soft periods across width.
-				var band := 0.10 * sin(float(x) * TAU * 2.0 / float(TEX_W))
+				# Vertical sheen bands: GRAPHICS PASS halved (0.10->0.05) —
+				# the full-strength bands read as wavy stripes on the tall
+				# walls from the chase camera (movie-frame QA).
+				var band := 0.05 * sin(float(x) * TAU * 2.0 / float(TEX_W))
 				col = Color(col.r + band, col.g + band, col.b + band)
 			if stud and not baseboard:
 				col = col.darkened(0.22)

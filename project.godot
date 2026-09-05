@@ -30,7 +30,12 @@ StatsManager="*res://scripts/StatsManager.gd"
 window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
-window/handheld/orientation=1
+# GRAPHICS/MOBILE PASS: expand (not letterbox) so the HUD fills phones and
+# portrait browser windows edge-to-edge; anchors reflow instead of scaling.
+window/stretch/aspect="expand"
+# SENSOR_LANDSCAPE (4) — this is a landscape game; it previously shipped
+# PORTRAIT (1), which is the tiny-UI + black-bars mobile screenshot bug.
+window/handheld/orientation=4
 
 [input]
 

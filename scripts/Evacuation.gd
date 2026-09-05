@@ -437,6 +437,9 @@ func _setup_arena() -> void:
 		hazards.set_script(hazards_script)
 		hazards.name = "Hazards"
 		add_child(hazards)
+	# GRAPHICS PASS: structural columns at ±10 — real collision, placed on
+	# lane boundaries verified against gates/landings (see OfficeDressing).
+	_spawn_columns()
 
 	# Elevator pads connect floors. Each pad is an Area3D trigger zone that
 	# smoothly lifts the player to the next floor when entered.
@@ -448,6 +451,10 @@ func _setup_arena() -> void:
 	_spawn_obstacles()
 	_spawn_powerups()
 	_add_exit_marker()
+	# GRAPHICS PASS: soft contact shadows under grounded props — must run
+	# AFTER obstacles/dressing exist so it reads real footprints (GL
+	# Compatibility has no SSAO; discs are cheap unshaded quads).
+	_spawn_floor_blob_shadows()
 
 # --- PHASE 4A THEMED FLOORS ---
 
@@ -787,10 +794,13 @@ func _make_round_table() -> StaticBody3D:
 
 func _make_parked_car() -> StaticBody3D:
 	var car := StaticBody3D.new()
+	# GRAPHICS PASS: stylized car paint — rich clearcoat-style red with a
+	# long shared highlight (roughness 0.18, faint metalness). Wheels get
+	# their own rubber material instead of inheriting body paint.
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.55, 0.12, 0.12)
-	mat.roughness = 0.35
-	mat.metallic = 0.4
+	mat.albedo_color = Color(0.62, 0.11, 0.10)
+	mat.roughness = 0.18
+	mat.metallic = 0.25
 	var body_col := CollisionShape3D.new()
 	var body_shape := BoxShape3D.new()
 	body_shape.size = Vector3(1.9, 0.9, 4.2)
@@ -810,11 +820,14 @@ func _make_parked_car() -> StaticBody3D:
 	cabin.mesh = cabin_mesh
 	cabin.position = Vector3(0, 1.25, -0.2)
 	var cmat := StandardMaterial3D.new()
-	cmat.albedo_color = Color(0.15, 0.17, 0.2, 0.9)
-	cmat.roughness = 0.2
-	cmat.metallic = 0.6
+	cmat.albedo_color = Color(0.08, 0.09, 0.12)
+	cmat.roughness = 0.12
+	cmat.metallic = 0.7
 	cabin.material_override = cmat
 	car.add_child(cabin)
+	var wheel_mat := StandardMaterial3D.new()
+	wheel_mat.albedo_color = Color(0.05, 0.05, 0.06)
+	wheel_mat.roughness = 0.9
 	for wheel_spec in [
 		Vector3(-0.95, 0.35, 1.4), Vector3(0.95, 0.35, 1.4),
 		Vector3(-0.95, 0.35, -1.4), Vector3(0.95, 0.35, -1.4),
@@ -827,9 +840,91 @@ func _make_parked_car() -> StaticBody3D:
 		wheel.mesh = wmesh
 		wheel.rotation.z = PI / 2.0
 		wheel.position = wheel_spec
-		wheel.material_override = mat
+		wheel.material_override = wheel_mat
 		car.add_child(wheel)
 	return car
+
+# --- GRAPHICS PASS: columns / dressing / contact shadows -------------------
+
+## Structural columns. Solid floors get them at (±10, ±10) — outside the
+## center corridor (|x|<5), clear of elevator pads (12,±14 / -12,±14), and
+## clear of every checkpoint waypoint. Floor 3 (gapped stairwell) only has
+## landing at the perimeter ring + cross arms, so its columns sit at the
+## ring corners (±17.5, ±17.5), which are solid in every landing rect.
+func _spawn_columns() -> void:
+	var Dressing = load("res://scripts/OfficeDressing.gd")
+	if not Dressing:
+		return
+	for floor_index in 4:
+		var y := float(floor_index) * 6.0
+		var spots: Array[Vector3] = []
+		if floor_index == 2:
+			# Floor 3 (stairwell): only the perimeter ring + cross arms are
+			# solid — columns live at the ring corners where landing is
+			# guaranteed ({x:±17.5,z:0,w:5,d:40} and {x:0,z:±17.5,w:40,d:5}).
+			spots = [
+				Vector3(17.5, y, -17.5), Vector3(-17.5, y, -17.5),
+				Vector3(17.5, y, 17.5), Vector3(-17.5, y, 17.5),
+			]
+		else:
+			spots = [
+				Vector3(10, y, 10), Vector3(-10, y, 10),
+				Vector3(10, y, -10), Vector3(-10, y, -10),
+			]
+		for spot in spots:
+			var col: StaticBody3D = Dressing.column()
+			col.position = spot
+			# Register with the floor group so culling hides it wholesale.
+			_register_floor_node(floor_index, col)
+			add_child(col)
+
+## Contact-shadow discs under grounded props, grouped by floor for culling.
+## Reads live StaticBody3D footprints (desks/tables/crates/plants/cars/
+## coolers) — dressing and future props stay in sync automatically.
+func _spawn_floor_blob_shadows() -> void:
+	var Dressing = load("res://scripts/OfficeDressing.gd")
+	if not Dressing or not _quality_allows_post():
+		return
+	var floors: Dictionary = {}  # floor_index -> Array[Transform3D footprint]
+	for sb in get_children():
+		if not (sb is StaticBody3D):
+			continue
+		var col: CollisionShape3D = null
+		for child in (sb as StaticBody3D).get_children():
+			if child is CollisionShape3D:
+				col = child
+				break
+		if col == null or col.shape == null:
+			continue
+		var shape := col.shape
+		var radius := 0.0
+		if shape is BoxShape3D:
+			var b := shape as BoxShape3D
+			radius = max(b.size.x, b.size.z) * 0.62
+		elif shape is CylinderShape3D:
+			radius = (shape as CylinderShape3D).radius * 1.25
+		elif shape is SphereShape3D:
+			radius = (shape as SphereShape3D).radius * 1.25
+		elif shape is CapsuleShape3D:
+			radius = (shape as CapsuleShape3D).radius * 1.3
+		else:
+			continue
+		if radius < 0.4 or radius > 3.6:
+			continue  # skip floors/walls themselves
+		var pos: Vector3 = sb.global_position + col.position
+		var floor_index := clampi(int(round(pos.y / 6.0)), 0, 3)
+		if not floors.has(floor_index):
+			floors[floor_index] = [] as Array[Node3D]
+		var blob: MeshInstance3D = Dressing.blob_shadow(radius * 2.0, 0.34)
+		blob.position = Vector3(pos.x, float(floor_index) * 6.0 + 0.025, pos.z)
+		(floors[floor_index] as Array).append(blob)
+	for floor_index in floors.keys():
+		var group := Node3D.new()
+		group.name = "BlobShadows_F%d" % int(floor_index)
+		add_child(group)
+		for blob in floors[floor_index]:
+			group.add_child(blob)
+		_register_floor_node(int(floor_index), group)
 
 # --- FLOOR/RAMP GUIDANCE ---
 func _apply_player_modifiers() -> void:
@@ -920,9 +1015,15 @@ func _build_floor(pos: Vector3, color: Color, floor_index: int = 0) -> void:
 	_build_floor_walls(pos, color, floor_index)
 
 func _build_floor_walls(pos: Vector3, color: Color, floor_index: int) -> void:
+	# GRAPHICS PASS: walls now span the FULL 6m floor gap (3.0->5.98m tall,
+	# capped just under the next slab to avoid z-fighting). The old 3m walls
+	# left a 3m open band around every floor showing the void — the single
+	# biggest "prototype" tell in the old look. The darkened lower band
+	# (collider 0..3.0m, albedo band baked in the texture) keeps the existing
+	# wainscot/baseboard texture readable at the new height.
 	for i in range(4):
 		var wall = StaticBody3D.new()
-		wall.position = pos + Vector3([0, 20, 0, -20][i], 1.5, [20, 0, -20, 0][i])
+		wall.position = pos + Vector3([0, 20, 0, -20][i], 2.99, [20, 0, -20, 0][i])
 		# CRITICAL: the E/W walls must be rotated 90° — the BoxShape/Mesh are
 		# authored long-in-X (40x3x0.3); leaving E/W walls unrotated laid two
 		# phantom 40m slabs ACROSS each floor's interior at z~0 (players and
@@ -939,21 +1040,19 @@ func _build_floor_walls(pos: Vector3, color: Color, floor_index: int) -> void:
 
 		var wall_mesh = MeshInstance3D.new()
 		var wall_m = BoxMesh.new()
-		wall_m.size = Vector3(40, 3, 0.3)
+		wall_m.size = Vector3(40, 5.98, 0.3)
 		wall_mesh.mesh = wall_m
 		var wall_mat = _make_wall_material(color, floor_index)
 		wall_mesh.material_override = wall_mat
 		wall.add_child(wall_mesh)
 
-		# PHASE 2: dusk-sky window band along N/S exterior walls (i=0 south
-		# z+20, i=2 north z-20). A thin emissive gradient quad on the wall
-		# face reads as floor-to-ceiling office windows at dusk. Cheap: one
-		# shared material, no extra light. E/W walls stay solid (they face
-		# the neighboring office towers).
+		# PHASE 2 (rescaled): dusk-sky window band along N/S exterior walls
+		# (i=0 south z+20, i=2 north z-20). Now ~3.4m tall spanning 2.0..5.4m
+		# so the glass fills the tall wall instead of a letterbox strip.
 		if i == 0 or i == 2:
 			var glass = MeshInstance3D.new()
 			var glass_mesh = PlaneMesh.new()
-			glass_mesh.size = Vector2(36, 1.6)
+			glass_mesh.size = Vector2(36, 3.4)
 			glass.mesh = glass_mesh
 			glass.material_override = _dusk_window_material()
 			# PlaneMesh lies in XZ facing +Y; stand it upright against the
@@ -961,10 +1060,62 @@ func _build_floor_walls(pos: Vector3, color: Color, floor_index: int) -> void:
 			# = +90). North wall (i=2, z-20): face +Z (rot.x = -90).
 			glass.rotation.x = -PI / 2.0 if i == 2 else PI / 2.0
 			# Inner face of the wall (0.3 thick): offset toward the room,
-			# raised to window height (wall is 3m: band spans ~1.1..2.7m).
+			# centered on the 2.0..5.4m band.
 			var inward_z := -0.17 if i == 0 else 0.17
-			glass.position = Vector3(0, 0.4, inward_z)
+			glass.position = Vector3(0, 1.7, inward_z)
 			wall.add_child(glass)
+
+	# GRAPHICS PASS: real drop-ceiling slab closing the top of every floor
+	# (mesh only, no collision — nothing walks on ceilings). Floor 4 keeps a
+	# 20-wide opening above the parking-lot strip so the exit skyline reads.
+	# cast_shadow OFF: the tilted key light would smear slab/grid shadows in
+	# long stripes across the whole floor (caught in movie-frame QA).
+	if floor_index == 3:
+		for half in [-1.0, 1.0]:
+			var half_mesh := MeshInstance3D.new()
+			var half_box := BoxMesh.new()
+			half_box.size = Vector3(40.0, 0.12, 10.0)
+			half_mesh.mesh = half_box
+			half_mesh.material_override = _ceiling_material(floor_index)
+			half_mesh.position = pos + Vector3(0, 5.94, half * 15.0)
+			half_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(half_mesh)
+	else:
+		var ceiling := StaticBody3D.new()
+		ceiling.name = "Ceiling_F%d" % floor_index
+		var ceil_mesh := MeshInstance3D.new()
+		var ceil_box := BoxMesh.new()
+		ceil_box.size = Vector3(40, 0.12, 40)
+		ceil_mesh.mesh = ceil_box
+		ceil_mesh.material_override = _ceiling_material(floor_index)
+		ceil_mesh.position = pos + Vector3(0, 5.94, 0)
+		ceil_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ceiling.add_child(ceil_mesh)
+		add_child(ceiling)
+
+## Cached ceiling-tile material: off-white with a subtle panel grid so the
+## fifth face of every floor reads as finished office ceiling.
+var _ceil_mats: Dictionary = {}
+func _ceiling_material(floor_index: int) -> StandardMaterial3D:
+	if _ceil_mats.has(floor_index):
+		return _ceil_mats[floor_index] as StandardMaterial3D
+	var img := Image.create(256, 256, false, Image.FORMAT_RGB8)
+	var base := Color(0.82, 0.82, 0.80)
+	for y in 256:
+		for x in 256:
+			var col := base
+			if x % 64 < 2 or y % 64 < 2:
+				col = Color(0.42, 0.42, 0.44)  # T-bar grid
+			elif x % 64 < 4 or y % 64 < 4:
+				col = Color(0.66, 0.66, 0.66)
+			img.set_pixel(x, y, col)
+	img.generate_mipmaps()
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = ImageTexture.create_from_image(img)
+	mat.uv1_scale = Vector3(8, 8, 1)
+	mat.roughness = 0.95
+	_ceil_mats[floor_index] = mat
+	return mat
 
 var _dusk_window_mat: StandardMaterial3D = null
 
@@ -990,7 +1141,7 @@ func _dusk_window_material() -> StandardMaterial3D:
 	mat.emission_enabled = true
 	mat.emission_texture = grad_tex
 	mat.emission = Color(1, 1, 1)
-	mat.emission_energy_multiplier = 0.55  # glows softly, not a light source
+	mat.emission_energy_multiplier = 0.9  # brighter: the band is now 3.4m tall and must read as dusk
 	mat.roughness = 0.2
 	mat.metallic = 0.1
 	# Mullion stripes: vertical window-frame bars baked into transparency.
@@ -1189,10 +1340,13 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 	add_child(light_group)
 	_register_floor_node(floor_index, light_group)
 	_build_ceiling_grid(floor_pos, light_group)
+	var Dressing = load("res://scripts/OfficeDressing.gd")
 	for x in [-12.0, 0.0, 12.0]:
 		for z in [-12.0, 0.0, 12.0]:
 			var light = OmniLight3D.new()
-			light.position = floor_pos + Vector3(x, 3.0, z)
+			# GRAPHICS PASS: lighting plane raised to sit just under the new
+			# 5.94m ceiling (was 3.0m, floating mid-room in the tall band).
+			light.position = floor_pos + Vector3(x, 5.6, z)
 			light.light_color = Color(1.0, 0.92, 0.78)
 			light.light_energy = 1.05
 			light.omni_range = 22.0
@@ -1200,21 +1354,16 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 			light.light_bake_mode = OmniLight3D.BAKE_STATIC
 			light_group.add_child(light)
 
-			var fixture = MeshInstance3D.new()
-			fixture.position = floor_pos + Vector3(x, 2.92, z)
-			var fixture_mesh = BoxMesh.new()
-			fixture_mesh.size = Vector3(3.0, 0.06, 0.22)
-			fixture.mesh = fixture_mesh
-			var fixture_mat = StandardMaterial3D.new()
-			fixture_mat.albedo_color = Color(0.95, 0.9, 0.72)
-			fixture_mat.emission_enabled = true
-			fixture_mat.emission = Color(1.0, 0.72, 0.35)
-			fixture_mat.emission_energy_multiplier = 1.4
-			fixture.material_override = fixture_mat
-			light_group.add_child(fixture)
-			# Flicker: a few fixtures buzz irregularly (Lethal Company vibe).
-			if (x + z) == 0.0 or (x == 12.0 and z == -12.0):
-				fixture.set_meta("flicker", true)
+			# GRAPHICS PASS: recessed troffer panels (frame + emissive lens)
+			# replace the old floating 3x0.06x0.22 bars — panels are the
+			# size of real 2x4 fixtures and visually anchor the light grid.
+			if Dressing:
+				var panel: MeshInstance3D = Dressing.ceiling_panel()
+				panel.position = floor_pos + Vector3(x, 5.86, z)
+				light_group.add_child(panel)
+				# Flicker: a few fixtures buzz irregularly (Lethal Company vibe).
+				if (x + z) == 0.0 or (x == 12.0 and z == -12.0):
+					panel.set_meta("flicker", true)
 
 var _flicker_t := 0.0
 var _flicker_fixtures: Array = []
@@ -1222,6 +1371,9 @@ func _process_flicker(delta: float) -> void:
 	pass
 
 ## Irregular fluorescent buzz on flagged fixtures — cheap dread.
+## Flicker targets CLONE the lens material first: panels share one cached
+## material, so dimming it directly would brown out every fixture on the
+## floor (shared-material side-effect, caught before shipping).
 func _tick_light_flicker(delta: float) -> void:
 	_flicker_t -= delta
 	if _flicker_t > 0.0:
@@ -1236,7 +1388,9 @@ func _tick_light_flicker(delta: float) -> void:
 	var target = _flicker_fixtures[randi() % _flicker_fixtures.size()]
 	if not is_instance_valid(target):
 		return
-	var mat: StandardMaterial3D = target.material_override
+	var lens: MeshInstance3D = target.get_child(0)
+	var mat: StandardMaterial3D = lens.material_override.duplicate()
+	lens.material_override = mat
 	var tw := create_tween()
 	tw.tween_callback(func(): mat.emission_energy_multiplier = 0.15)
 	tw.tween_interval(randf_range(0.04, 0.12))
@@ -1247,6 +1401,8 @@ func _tick_light_flicker(delta: float) -> void:
 	tw.tween_callback(func(): mat.emission_energy_multiplier = 1.4)
 
 ## Drop-ceiling grid: dark T-bar panels between light fixtures.
+## Bars cast NO shadows — thin geometry at ceiling height smears long
+## stripes across the floor under the tilted key light.
 func _build_ceiling_grid(floor_pos: Vector3, parent: Node3D) -> void:
 	var grid_mat = StandardMaterial3D.new()
 	grid_mat.albedo_color = Color(0.09, 0.09, 0.11)
@@ -1257,7 +1413,8 @@ func _build_ceiling_grid(floor_pos: Vector3, parent: Node3D) -> void:
 		bm_x.size = Vector3(0.25, 0.08, 40)
 		bar_x.mesh = bm_x
 		bar_x.material_override = grid_mat
-		bar_x.position = floor_pos + Vector3(x, 2.97, 0)
+		bar_x.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		bar_x.position = floor_pos + Vector3(x, 5.91, 0)
 		parent.add_child(bar_x)
 	for z in [-20.0, -8.0, 8.0, 20.0]:
 		var bar_z = MeshInstance3D.new()
@@ -1265,7 +1422,8 @@ func _build_ceiling_grid(floor_pos: Vector3, parent: Node3D) -> void:
 		bm_z.size = Vector3(40, 0.08, 0.25)
 		bar_z.mesh = bm_z
 		bar_z.material_override = grid_mat
-		bar_z.position = floor_pos + Vector3(0, 2.97, z)
+		bar_z.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		bar_z.position = floor_pos + Vector3(0, 5.91, z)
 		parent.add_child(bar_z)
 
 ## Phase 7C: track per-floor visual nodes for distance culling. StaticBody3D
@@ -1317,12 +1475,16 @@ func _setup_environment() -> void:
 	# while ambient stays high enough that GL Compatibility keeps chairs,
 	# hazards and routes readable.
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.72, 0.76, 0.9)
-	env.ambient_light_energy = 0.82
+	env.ambient_light_color = Color(0.74, 0.76, 0.88)
+	env.ambient_light_energy = 0.85
 	var key_light := get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if key_light:
 		key_light.light_energy = 1.05
 		key_light.light_color = Color(1.0, 0.93, 0.82)
+		# GRAPHICS PASS: keep dir shadows but soften edges; bias raised so
+		# the normal-mapped carpet doesn't self-shadow into acne stripes.
+		key_light.shadow_blur = 1.1
+		key_light.shadow_bias = 0.35
 	# Fog+glow default OFF here (Settings quality gate decides at runtime;
 	# LOW profile never pays for them), but configured when enabled.
 	env.fog_enabled = false
@@ -1484,6 +1646,25 @@ func _build_elevator(from_pos: Vector3, to_pos: Vector3, target_floor: int) -> v
 	dest_marker.material_override = pad_mat
 	add_child(dest_marker)
 
+	# GRAPHICS PASS: elevator portal housing behind the pad (door frame +
+	# metal double doors + blue seam glow + EXIT sign). The portal faces the
+	# room center so the doors read from anywhere on the floor; approach
+	# traffic comes over the pad from the center side, so the housing never
+	# blocks the trigger. Registered with the floor group for culling.
+	var Dressing = load("res://scripts/OfficeDressing.gd")
+	if Dressing:
+		var floor_index := clampi(int(round((from_pos.y - 0.5) / 6.0)), 0, 3)
+		var outward := Vector2(from_pos.x, from_pos.z).normalized()
+		# Face the ROOM: portal local +Z must point at the floor center, so
+		# the yaw uses the negated outward direction.
+		var portal: Node3D = Dressing.elevator_portal(
+			from_pos + Vector3(outward.x * 2.3, -0.5, outward.y * 2.3),
+			atan2(-outward.x, -outward.y))
+		add_child(portal)
+		var sign_node: Node3D = Dressing.exit_sign(Vector3(0, 3.62, 0.1))
+		portal.add_child(sign_node)
+		_register_floor_node(floor_index, portal)
+
 	# Connect the trigger — when player enters, teleport them to the destination
 	# (must teleport because floors are solid boxes; launching would hit the underside)
 	trigger.body_entered.connect(func(body: Node3D):
@@ -1569,20 +1750,39 @@ func _make_desk() -> StaticBody3D:
 	col.shape = shape
 	desk.add_child(col)
 
-	var mesh_inst = MeshInstance3D.new()
-	var mesh = BoxMesh.new()
-	mesh.size = Vector3(2, 1.2, 1)
-	mesh_inst.mesh = mesh
-	# Phase 2: plank-seamed desk wood with derived normals (falls back to
-	# the old noise wood if the helper is missing).
+	# GRAPHICS PASS: the old solid 2x1.2x1 block becomes a real desk —
+	# 0.06m top slab on two leg panels (same 2x1 footprint, same 1.2m top
+	# height, so collision/gameplay are identical).
+	var top_mesh_inst = MeshInstance3D.new()
+	var top_mesh = BoxMesh.new()
+	top_mesh.size = Vector3(2, 0.07, 1)
+	top_mesh_inst.mesh = top_mesh
 	var prop_mats = load("res://scripts/PropMaterials.gd")
 	var mat: StandardMaterial3D = null
 	if prop_mats and prop_mats.has_method("wood_planks"):
 		mat = prop_mats.wood_planks()
 	if mat == null:
 		mat = _make_wood_material()
-	mesh_inst.material_override = mat
-	desk.add_child(mesh_inst)
+	top_mesh_inst.material_override = mat
+	top_mesh_inst.position = Vector3(0, 1.165, 0)
+	desk.add_child(top_mesh_inst)
+	var leg_mat := mat if mat == null else mat.duplicate()
+	if leg_mat:
+		leg_mat.uv1_scale = Vector3(0.5, 1, 1)
+	for side in [-1.0, 1.0]:
+		var panel = MeshInstance3D.new()
+		var panel_mesh = BoxMesh.new()
+		panel_mesh.size = Vector3(0.08, 1.13, 0.9)
+		panel.mesh = panel_mesh
+		panel.position = Vector3(side * 0.9, 0.565, 0)
+		panel.material_override = leg_mat
+		desk.add_child(panel)
+
+	# GRAPHICS PASS: monitor + keyboard + mug + papers on top (all
+	# non-colliding dressing; footprint unchanged).
+	var Dressing = load("res://scripts/OfficeDressing.gd")
+	if Dressing and Dressing.has_method("desk_dressing"):
+		Dressing.desk_dressing(desk, 1.2)
 
 	return desk
 

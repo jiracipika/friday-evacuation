@@ -68,6 +68,9 @@ const JUMP_BUFFER_TIME := 0.14
 var _coyote_left := 0.0
 var _jump_buffer_left := 0.0
 var _jump_consumed := false
+# GRAPHICS PASS: contact shadow + landing puff (set up in _ready).
+var chair_blob_shadow: MeshInstance3D = null
+var landing_puff: GPUParticles3D = null
 
 # Held item charges (Phase 4B power-up variety)
 var item_kind: StringName = &"none"  # none, stapler, spill
@@ -124,6 +127,43 @@ func _ready() -> void:
 	# Boost particles off by default
 	_setup_boost_particles()
 	_setup_dust_particles()
+
+	# GRAPHICS PASS: soft contact shadow riding under the chair — grounds
+	# the chair visually at all times (renderer has no SSAO; the disc is
+	# one unshaded textured quad). NOT a child of ModelParent: the squash
+	# and wheelie animations must not distort the shadow.
+	var Dressing = load("res://scripts/OfficeDressing.gd")
+	if Dressing:
+		var blob: MeshInstance3D = Dressing.blob_shadow(1.7, 0.42)
+		blob.name = "ChairBlobShadow"
+		add_child(blob)
+		chair_blob_shadow = blob
+
+	# GRAPHICS PASS: one-shot landing puff, armed on hard landings.
+	landing_puff = GPUParticles3D.new()
+	landing_puff.name = "LandingPuff"
+	landing_puff.emitting = false
+	landing_puff.amount = 14
+	landing_puff.lifetime = 0.4
+	landing_puff.one_shot = true
+	landing_puff.explosiveness = 0.95
+	var puff_mat := ParticleProcessMaterial.new()
+	puff_mat.direction = Vector3.UP
+	puff_mat.spread = 70.0
+	puff_mat.initial_velocity_min = 1.0
+	puff_mat.initial_velocity_max = 2.6
+	puff_mat.gravity = Vector3(0, -2.5, 0)
+	puff_mat.scale_min = 0.05
+	puff_mat.scale_max = 0.14
+	puff_mat.color = Color(0.78, 0.72, 0.6, 0.5)
+	landing_puff.process_material = puff_mat
+	var puff_mesh := SphereMesh.new()
+	puff_mesh.radius = 0.06
+	puff_mesh.height = 0.12
+	landing_puff.draw_pass_1 = puff_mesh
+	landing_puff.position = Vector3(0, 0.05, 0)
+	add_child(landing_puff)
+	landing_puff.finished.connect(func(): landing_puff.emitting = false)
 
 func _setup_boost_particles() -> void:
 	if not boost_particles:
@@ -214,12 +254,54 @@ func _build_office_chair(chair_root: Node3D) -> void:
 
 	chair_backrest = MeshInstance3D.new()
 	chair_backrest.name = "Backrest"
-	var back_mesh = BoxMesh.new()
-	back_mesh.size = Vector3(0.9, 0.95, 0.14)
-	chair_backrest.mesh = back_mesh
-	chair_backrest.position = Vector3(0, 0.75, 0.28)
+	# GRAPHICS PASS: rounded backrest slab (cylinder laid on its side) — a
+	# real office-chair silhouette instead of a hard box. Same coverage.
+	var back_cyl := CylinderMesh.new()
+	back_cyl.top_radius = 0.46
+	back_cyl.bottom_radius = 0.46
+	back_cyl.height = 0.14
+	chair_backrest.mesh = back_cyl
+	chair_backrest.rotation.x = PI / 2.0
+	chair_backrest.position = Vector3(0, 0.75, 0.3)
 	chair_backrest.material_override = chair_mat
 	chair_root.add_child(chair_backrest)
+
+	# GRAPHICS PASS: emissive player-color halo ring on the backrest edge —
+	# strong silhouette + team identification from any camera angle.
+	var halo := MeshInstance3D.new()
+	halo.name = "BackrestHalo"
+	var halo_mesh := TorusMesh.new()
+	halo_mesh.inner_radius = 0.42
+	halo_mesh.outer_radius = 0.5
+	halo.mesh = halo_mesh
+	halo.rotation.x = PI / 2.0
+	halo.position = Vector3(0, 0.75, 0.3)
+	var halo_mat := StandardMaterial3D.new()
+	halo_mat.albedo_color = player_color * 1.2
+	halo_mat.emission_enabled = true
+	halo_mat.emission = player_color
+	halo_mat.emission_energy_multiplier = 0.9
+	halo_mat.roughness = 0.4
+	halo.material_override = halo_mat
+	chair_root.add_child(halo)
+
+	# GRAPHICS PASS: armrests — two small loops that finish the chair read.
+	var armrest_mat = dark_mat
+	for arm_side in [-1.0, 1.0]:
+		var rest := MeshInstance3D.new()
+		var rest_mesh := BoxMesh.new()
+		rest_mesh.size = Vector3(0.12, 0.05, 0.42)
+		rest.mesh = rest_mesh
+		rest.position = Vector3(arm_side * 0.5, 0.6, 0.02)
+		rest.material_override = armrest_mat
+		chair_root.add_child(rest)
+		var post := MeshInstance3D.new()
+		var post_mesh := BoxMesh.new()
+		post_mesh.size = Vector3(0.06, 0.28, 0.06)
+		post.mesh = post_mesh
+		post.position = Vector3(arm_side * 0.5, 0.45, 0.1)
+		post.material_override = armrest_mat
+		chair_root.add_child(post)
 
 	var stem = MeshInstance3D.new()
 	var stem_mesh = CylinderMesh.new()
@@ -412,23 +494,72 @@ func _build_rider_model(chair_root: Node3D) -> void:
 	rider_root.name = "Rider_%s" % character_id
 	chair_root.add_child(rider_root)
 
+	# GRAPHICS PASS: stylized low-poly rider upgrade. Rounded torso, visible
+	# neck (no more floating head), simple arms, and a hand mug — all visual
+	# only; collision/nametag/skin rigs are untouched.
 	var torso := MeshInstance3D.new()
 	var torso_mesh := CapsuleMesh.new()
-	torso_mesh.radius = 0.28
-	torso_mesh.height = 0.72
+	torso_mesh.radius = 0.26
+	torso_mesh.height = 0.78
 	torso.mesh = torso_mesh
-	torso.position = Vector3(0, 0.92, 0.04)
+	torso.position = Vector3(0, 0.9, 0.04)
 	torso.material_override = _character_material(body_color, 0.7)
 	rider_root.add_child(torso)
+
+	# Shirt hem: a thin cylinder under the torso reads as a shirt over legs
+	# and kills the "capsule on a stick" look from the game camera.
+	var hem := MeshInstance3D.new()
+	var hem_mesh := CylinderMesh.new()
+	hem_mesh.top_radius = 0.24
+	hem_mesh.bottom_radius = 0.2
+	hem_mesh.height = 0.22
+	hem.mesh = hem_mesh
+	hem.position = Vector3(0, 0.56, 0.04)
+	hem.material_override = _character_material(body_color.darkened(0.25), 0.75)
+	rider_root.add_child(hem)
+
+	# Neck: connects head to torso so the head is no longer floating.
+	var neck := MeshInstance3D.new()
+	var neck_mesh := CylinderMesh.new()
+	neck_mesh.top_radius = 0.08
+	neck_mesh.bottom_radius = 0.1
+	neck_mesh.height = 0.16
+	neck.mesh = neck_mesh
+	neck.position = Vector3(0, 1.33, -0.03)
+	neck.material_override = _character_material(Color("f0b58f").darkened(0.15), 0.8)
+	rider_root.add_child(neck)
 
 	var head := MeshInstance3D.new()
 	var head_mesh := SphereMesh.new()
 	head_mesh.radius = 0.24
 	head_mesh.height = 0.48
 	head.mesh = head_mesh
-	head.position = Vector3(0, 1.48, -0.03)
+	head.position = Vector3(0, 1.5, -0.03)
 	head.material_override = _character_material(Color("f0b58f"), 0.8)
 	rider_root.add_child(head)
+
+	# Simple arms: two capsules angled forward toward the desk-drive pose.
+	for arm_side in [-1.0, 1.0]:
+		var arm := MeshInstance3D.new()
+		var arm_mesh := CapsuleMesh.new()
+		arm_mesh.radius = 0.065
+		arm_mesh.height = 0.5
+		arm.mesh = arm_mesh
+		arm.position = Vector3(arm_side * 0.3, 0.94, 0.14)
+		arm.rotation.x = -0.85
+		arm.material_override = _character_material(body_color.darkened(0.1), 0.72)
+		rider_root.add_child(arm)
+
+	# Hand mug: tiny accent prop in the right hand (the Friday 5PM cliché).
+	var mug := MeshInstance3D.new()
+	var mug_mesh := CylinderMesh.new()
+	mug_mesh.top_radius = 0.05
+	mug_mesh.bottom_radius = 0.04
+	mug_mesh.height = 0.11
+	mug.mesh = mug_mesh
+	mug.position = Vector3(0.38, 0.86, 0.3)
+	mug.material_override = _character_material(Color(1.0, 0.62, 0.1), 0.35, true)
+	rider_root.add_child(mug)
 
 	# Comedy face decal + googly eyes (FaceStudio; fallback-safe).
 	var face_lib = load("res://scripts/FaceStudio.gd")
@@ -440,7 +571,7 @@ func _build_rider_model(chair_root: Node3D) -> void:
 		decal_mesh.radius = 0.245
 		decal_mesh.height = 0.49
 		decal.mesh = decal_mesh
-		decal.position = Vector3(0, 1.48, -0.026)
+		decal.position = Vector3(0, 1.5, -0.026)
 		decal.material_override = face_lib.make_head_overlay(variant)
 		rider_root.add_child(decal)
 		_googly_eyes(rider_root, face_lib)
@@ -455,7 +586,7 @@ func _build_rider_model(chair_root: Node3D) -> void:
 		eye_mesh.radius = 0.035
 		eye_mesh.height = 0.07
 		eye.mesh = eye_mesh
-		eye.position = Vector3(eye_x, 1.51, -0.235)
+		eye.position = Vector3(eye_x, 1.53, -0.235)
 		eye.material_override = _character_material(Color("15151d"), 0.4)
 		rider_root.add_child(eye)
 
@@ -515,7 +646,7 @@ func _googly_eyes(parent: Node3D, face_lib) -> void:
 		mat.roughness = 0.25
 		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 		g.material_override = mat
-		g.position = Vector3(side * 0.085, 1.54, -0.225)
+		g.position = Vector3(side * 0.085, 1.56, -0.225)
 		parent.add_child(g)
 
 func _update_googly_eyes(delta: float) -> void:
@@ -667,6 +798,18 @@ func _apply_visual_feedback(delta: float) -> void:
 
 	if not is_on_floor():
 		landing_velocity = min(landing_velocity, velocity.y)
+
+	# GRAPHICS PASS: contact shadow grounds the chair; it hides while
+	# airborne, fades back in on the ground, and keeps a small margin above
+	# the carpet so it never z-fights or intersects floor slabs.
+	if chair_blob_shadow and is_instance_valid(chair_blob_shadow):
+		chair_blob_shadow.visible = is_on_floor()
+		chair_blob_shadow.position = Vector3(0, 0.03, 0)
+
+	# GRAPHICS PASS: one-shot dust puff on hard landings (visual only).
+	if landed and landing_puff and is_instance_valid(landing_puff):
+		landing_puff.restart()
+		landing_puff.emitting = true
 
 	target_squash = lerpf(target_squash, 1.0, 1.0 - exp(-7.0 * delta))
 	squash_amount = lerpf(squash_amount, target_squash, 1.0 - exp(-16.0 * delta))

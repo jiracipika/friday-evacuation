@@ -45,7 +45,10 @@ static func floor_albedo(base_color: Color, floor_index: int) -> ImageTexture:
 			# feet actually travel. Darkened + slight sheen loss. Wide
 			# gaussian-ish falloff so it reads as wear, not a stripe.
 			var lane := absf(float(x) - float(TEX) * 0.5) / float(TEX)
-			var lane_wear := exp(-pow(lane * 5.5, 2.0)) * 0.14
+			# GRAPHICS PASS: wear amplitude halved — at 4 repeats over the
+			# slab it painted one dark 10m band down EVERY floor, reading
+			# as a giant diagonal smear from the chase camera.
+			var lane_wear := exp(-pow(lane * 5.5, 2.0)) * 0.06
 			# Structural tile grid: dark grout line on each tile edge —
 			# this is what survives mips and kills the "flat slab" look.
 			var edge_x := x % TILE_PX
@@ -55,21 +58,23 @@ static func floor_albedo(base_color: Color, floor_index: int) -> ImageTexture:
 			elif edge_x == 3 or edge_y == 3:
 				col = col.darkened(0.25)
 			else:
-				# Per-quarter luminance jitter: tiles subtly differ, like
-				# real worn carpet. Deterministic per tile coordinate.
+				# Per-quarter luminance jitter: tiles subtly differ, like real
+				# worn carpet. GRAPHICS PASS: amplitude halved (0.28->0.14) —
+				# at gameplay distance the old ±14% jitter banded into wavy
+				# moiré across the floor (pixel-measured in movie QA).
 				var h := float((tx * 73856093) ^ (ty * 19349663)) / 2147483647.0
-				col = Color(col.r * (0.86 + 0.28 * h),
-					col.g * (0.86 + 0.28 * h),
-					col.b * (0.86 + 0.28 * h))
-				# Directional nap: faint diagonal brush streaks inside tiles.
-				var nap := sin(float(x + y) * PI / 11.0) * 0.05
-				col = Color(col.r + nap, col.g + nap, col.b + nap)
+				col = Color(col.r * (0.93 + 0.14 * h),
+					col.g * (0.93 + 0.14 * h),
+					col.b * (0.93 + 0.14 * h))
+				# Directional nap REMOVED: a 22cm-period sine reads as
+				# diagonal stripe moiré under mips; per-pixel grain below
+				# carries the carpet fiber feel instead.
 			# Apply traffic wear last (after grid), darkening the lane.
 			col = Color(
 				clampf(col.r - lane_wear, 0.0, 1.0),
 				clampf(col.g - lane_wear, 0.0, 1.0),
 				clampf(col.b - lane_wear, 0.0, 1.0))
-			var n := (rng.randf() - 0.5) * 0.09
+			var n := (rng.randf() - 0.5) * 0.06
 			img.set_pixel(x, y, Color(
 				clampf(col.r + n, 0.0, 1.0),
 				clampf(col.g + n, 0.0, 1.0),

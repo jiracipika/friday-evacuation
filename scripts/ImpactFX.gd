@@ -25,6 +25,14 @@ static func burst(parent: Node, world_position: Vector3, color: Color, amount: i
 	particles.emitting = true
 	particles.finished.connect(particles.queue_free)
 
+## GRAPHICS PASS: jet burst used by elevator rides / boost pickups — a
+## short upward cone of warm sparks. Self-cleaning like the others.
+static func boost_burst(world_position: Vector3) -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null:
+		return
+	burst(tree.root, world_position, Color(1.0, 0.6, 0.15), 26)
+
 static func confetti(parent: Node, world_position: Vector3) -> void:
 	var particles = GPUParticles3D.new()
 	particles.amount = 64

@@ -56,6 +56,7 @@ func _init() -> void:
 		"res://scripts/StunFixture.gd",
 		"res://scripts/Hazards.gd",
 		"res://scripts/Roomba.gd",
+		"res://scripts/OfficeDressing.gd",
 		"res://scripts/JumpForgivenessTest.gd",
 		]
 	

@@ -478,10 +478,15 @@ func _process(delta: float) -> void:
 	menu_time += delta
 	if title_label:
 		title_label.modulate.a = 0.96 + sin(menu_time * 2.0) * 0.04
-	# Responsive: hide the hero column below 1080px so the menu column
-	# keeps its full width; the identity pickers remain in the main flow.
+	# Responsive: hide the hero column below 1080px AND release its reserved
+	# right margin — the VBox keeps offset_right=-420 for the hero dock on
+	# wide screens, which goes NEGATIVE on phones (text clipped off-screen).
 	if hero_panel:
-		hero_panel.visible = get_viewport_rect().size.x >= 1080.0
+		var wide := get_viewport_rect().size.x >= 1080.0
+		hero_panel.visible = wide
+		var vbox := get_node_or_null("VBox") as Control
+		if vbox:
+			vbox.offset_right = -420.0 if wide else -12.0
 
 func _build_menu_theme() -> void:
 	title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
