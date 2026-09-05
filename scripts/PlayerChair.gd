@@ -62,6 +62,12 @@ var target_squash: float = 1.0
 var landing_velocity: float = 0.0
 var boost_visual_timer: float = 0.0
 var mobile_input := Vector2.ZERO
+# Forgiving platforming shared by keyboard, controller and touch.
+const COYOTE_TIME := 0.12
+const JUMP_BUFFER_TIME := 0.14
+var _coyote_left := 0.0
+var _jump_buffer_left := 0.0
+var _jump_consumed := false
 
 # Held item charges (Phase 4B power-up variety)
 var item_kind: StringName = &"none"  # none, stapler, spill
@@ -811,19 +817,25 @@ func _handle_input(delta: float) -> void:
 	if Input.is_action_just_pressed("action"):
 		if suppress_action_jump:
 			interaction_requested.emit()
-		elif is_on_floor():
-			velocity.y = jump_force
-			target_squash = 1.18
-			_play_sfx("jump")
-			_rumble(0.25)
-			# BOOST-CANCEL: jumping during the first 0.2s of a boost ends
-			# the boost early but clears HALF its remaining cooldown —
-			# a tech for skilled players (boost into a jump-ledge line).
-			if is_boosting and (boost_duration - boost_visual_timer) < 0.2:
-				is_boosting = false
-				if boost_particles:
-					boost_particles.emitting = false
-				boost_cd_timer *= 0.5
+		else:
+			# BUFFERED JUMP: remember the press for a short window so a
+			# press just before landing still jumps on the landing tick.
+			_jump_buffer_left = JUMP_BUFFER_TIME
+
+	# --- Forgiving jump resolution (coyote + buffer) ---------------------
+	# Coyote: keep granting ground for COYOTE_TIME after leaving the floor
+	# so late jumps off ledges still fire (input feels fair at speed).
+	# Buffer: a press inside JUMP_BUFFER_TIME before touching down fires
+	# on the landing tick instead of eating the input.
+	if is_on_floor():
+		_coyote_left = COYOTE_TIME
+		_jump_consumed = false
+	else:
+		_coyote_left = maxf(_coyote_left - delta, 0.0)
+	if _jump_buffer_left > 0.0:
+		_jump_buffer_left = maxf(_jump_buffer_left - delta, 0.0)
+		if _coyote_left > 0.0 and not _jump_consumed:
+			_execute_jump()
 
 	# Held item (stapler/spill charges) — Q uses the item first; without an
 	# item Q falls back to dropping a sabotage trap (existing behavior).
@@ -834,6 +846,23 @@ func _handle_input(delta: float) -> void:
 			_use_item()
 		else:
 			_drop_trap()
+
+func _execute_jump() -> void:
+	velocity.y = jump_force
+	_jump_consumed = true
+	_jump_buffer_left = 0.0
+	_coyote_left = 0.0
+	target_squash = 1.18
+	_play_sfx("jump")
+	_rumble(0.25)
+	# BOOST-CANCEL: jumping during the first 0.2s of a boost ends
+	# the boost early but clears HALF its remaining cooldown —
+	# a tech for skilled players (boost into a jump-ledge line).
+	if is_boosting and (boost_duration - boost_visual_timer) < 0.2:
+		is_boosting = false
+		if boost_particles:
+			boost_particles.emitting = false
+		boost_cd_timer *= 0.5
 
 func _smooth_facing(delta: float) -> void:
 	if not model_parent:
@@ -996,10 +1025,8 @@ func trigger_mobile_action(action_name: StringName) -> void:
 	elif action_name == &"action":
 		if suppress_action_jump:
 			interaction_requested.emit()
-		elif is_on_floor():
-			velocity.y = jump_force
-			target_squash = 1.18
-			_play_sfx("jump")
+		else:
+			_jump_buffer_left = JUMP_BUFFER_TIME  # touch gets buffering too
 	elif action_name == &"sabotage":
 		if suppress_sabotage:
 			sabotage_requested.emit()

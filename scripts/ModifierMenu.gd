@@ -121,9 +121,12 @@ func _build_chips() -> void:
 		var chip := Button.new()
 		chip.toggle_mode = true
 		chip.focus_mode = Control.FOCUS_ALL
-		chip.custom_minimum_size = Vector2(0, 48)
-		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		chip.size_flags_stretch_ratio = 0.5
+		# Fixed-width chips that WRAP via the HFlowContainer: EXPAND_FILL
+		# chips force-shrunk to one per row at narrow menu widths, shredding
+		# their labels (caught in 720p vision QA). Chips now take a fixed
+		# minimum and flow 5/4/3-up as space allows.
+		chip.custom_minimum_size = Vector2(150, 62)
+		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		chip.add_theme_stylebox_override("normal", _chip_style(UI_THEME.color(UI_THEME.SURFACE), Color(accent.r, accent.g, accent.b, 0.25), 1))
 		chip.add_theme_stylebox_override("hover", _chip_style(UI_THEME.color(UI_THEME.SURFACE_HOVER), Color(accent.r, accent.g, accent.b, 0.55), 1))
 		chip.add_theme_stylebox_override("pressed", _chip_style(accent.darkened(0.78), accent, 2))
@@ -134,23 +137,24 @@ func _build_chips() -> void:
 		chip_flow.add_child(chip)
 		chips[mod] = chip
 
-		# SIDE layout: rule name left, wrapped hint right — the hint reuses
-		# the name row's height instead of adding its own row below.
-		var content := HBoxContainer.new()
+		# STACKED layout: name on top, hint underneath. The old side-by-side
+		# (88px name + expanding hint) shredded both at 150px chip width
+		# (vision QA: mid-word breaks + overlapping labels). Stacking keeps
+		# every chip readable down to two-per-row widths.
+		var content := VBoxContainer.new()
 		content.set_anchors_preset(Control.PRESET_FULL_RECT)
 		content.offset_left = 12.0
 		content.offset_right = -10.0
-		content.offset_top = 4.0
-		content.offset_bottom = -4.0
-		content.add_theme_constant_override("separation", 8)
+		content.offset_top = 5.0
+		content.offset_bottom = -5.0
+		content.add_theme_constant_override("separation", 1)
 		content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		chip.add_child(content)
 
 		var name_label := Label.new()
 		name_label.name = "NameLabel"
 		name_label.text = RaceModifiers.LABELS[mod].split(" — ")[0]
-		name_label.add_theme_font_size_override("font_size", 13)
-		name_label.custom_minimum_size = Vector2(88, 0)
+		name_label.add_theme_font_size_override("font_size", 12)
 		name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		content.add_child(name_label)
@@ -158,11 +162,11 @@ func _build_chips() -> void:
 		var hint_label := Label.new()
 		hint_label.name = "HintLabel"
 		hint_label.text = HINTS[mod]
-		hint_label.add_theme_font_size_override("font_size", 10)
+		hint_label.add_theme_font_size_override("font_size", 9)
 		hint_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
-		# Wrap inside the chip — long one-line hints clip at 5-across widths.
+		# Wrap inside the chip — hints stay 1-2 short lines at all widths.
 		hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		hint_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hint_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		hint_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		content.add_child(hint_label)

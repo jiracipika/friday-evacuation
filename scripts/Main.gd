@@ -54,12 +54,15 @@ var skin_select: OptionButton
 var skin_detail: Label
 var stats_label: Label
 var menu_time: float = 0.0
+var hero_panel: Control
+var hero: Control
+var backdrop: Control
 
 # UI nodes
 @onready var title_label: Label = $VBox/Title
 @onready var subtitle_label: Label = $VBox/Subtitle
 @onready var desc_label: Label = $VBox/Description
-@onready var mode_list: VBoxContainer = $VBox/ModeList
+@onready var mode_list: VBoxContainer = $VBox/ModeListScroll/ModeList
 @onready var play_button: Button = $VBox/PlayButton
 @onready var host_button: Button = $VBox/HostButton
 @onready var join_button: Button = $VBox/JoinButton
@@ -85,6 +88,7 @@ func _ready() -> void:
 			get_tree().root.add_child.call_deferred(vpad_node)
 	_build_mode_buttons()
 	_select_mode(0)
+	_build_hero_panel()
 	_build_character_selector()
 	_build_skin_selector()
 	
@@ -163,9 +167,61 @@ func _build_mode_buttons() -> void:
 		btn.set_script(card_script)
 		btn.configure(info.title, info.subtitle, MODE_STATUS[i], info.color)
 		btn.custom_minimum_size = Vector2(0, 34)
+		btn.focus_mode = Control.FOCUS_ALL
 		btn.pressed.connect(_select_mode.bind(i))
 		mode_list.add_child(btn)
 		buttons.append(btn)
+
+## HERO PANEL: rotating chair preview + identity pickers, docked right.
+## Two-column layout at >= 1080px wide; collapses (hides hero) below that
+## so small viewports keep the single-column scroll.
+func _build_hero_panel() -> void:
+	# Animated skyline backdrop behind everything (child of BG so it stays
+	# behind the VBox contents; Control draw order follows tree order).
+	backdrop = Control.new()
+	backdrop.set_script(load("res://scripts/MenuBackdrop.gd"))
+	backdrop.name = "MenuBackdrop"
+	get_node("BG").add_child(backdrop)
+
+	hero_panel = PanelContainer.new()
+	hero_panel.name = "HeroPanel"
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.055, 0.055, 0.09, 0.92)
+	style.border_color = Color(1.0, 0.60, 0.22, 0.35)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(16)
+	hero_panel.add_theme_stylebox_override("panel", style)
+	# Dock right: full-height column at 28% width on wide screens.
+	hero_panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	hero_panel.anchor_left = 0.70
+	hero_panel.offset_left = 12
+	hero_panel.offset_top = 10
+	hero_panel.offset_right = -12
+	hero_panel.offset_bottom = -10
+	var hero_vb := VBoxContainer.new()
+	hero_vb.add_theme_constant_override("separation", 10)
+	hero_panel.add_child(hero_vb)
+	var hero_title := Label.new()
+	hero_title.text = "YOUR RIDE"
+	hero_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hero_title.add_theme_font_size_override("font_size", 15)
+	hero_title.add_theme_color_override("font_color", Color(1.0, 0.60, 0.22))
+	hero_vb.add_child(hero_title)
+	var hero_script = load("res://scripts/MenuHero.gd")
+	if hero_script:
+		hero = hero_script.new()
+		hero_vb.add_child(hero)
+	var hero_hint := Label.new()
+	hero_hint.text = "Rider & chair update live"
+	hero_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hero_hint.add_theme_font_size_override("font_size", 11)
+	hero_hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
+	hero_vb.add_child(hero_hint)
+	add_child(hero_panel)
+
+func _refresh_hero() -> void:
+	if hero and hero.has_method("refresh_for_pick"):
+		hero.refresh_for_pick()
 
 func _build_modifier_row() -> void:
 	# Race-modifier picker panel — single-player Evacuation only.
@@ -230,6 +286,7 @@ func _on_character_selected(index: int) -> void:
 	GameManager.selected_character_id = character_id
 	GameManager.player_color = Color.from_string(character["body"], GameManager.player_color)
 	GameManager.save_identity()
+	_refresh_hero()
 	if character_detail:
 		character_detail.text = character["tagline"]
 		character_detail.tooltip_text = "%s • %s" % [character["silhouette"], character["accessory"]]
@@ -310,6 +367,7 @@ func _on_skin_selected(index: int) -> void:
 	var skin: Dictionary = skins.get_skin(id)
 	GameManager.selected_skin_id = id
 	GameManager.save_identity()
+	_refresh_hero()
 	if skin_detail:
 		var stats = get_node_or_null("/root/StatsManager")
 		var wins: int = stats.races_won if stats else 0
@@ -420,6 +478,10 @@ func _process(delta: float) -> void:
 	menu_time += delta
 	if title_label:
 		title_label.modulate.a = 0.96 + sin(menu_time * 2.0) * 0.04
+	# Responsive: hide the hero column below 1080px so the menu column
+	# keeps its full width; the identity pickers remain in the main flow.
+	if hero_panel:
+		hero_panel.visible = get_viewport_rect().size.x >= 1080.0
 
 func _build_menu_theme() -> void:
 	title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))

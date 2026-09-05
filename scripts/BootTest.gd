@@ -56,7 +56,8 @@ func _init() -> void:
 		"res://scripts/StunFixture.gd",
 		"res://scripts/Hazards.gd",
 		"res://scripts/Roomba.gd",
-	]
+		"res://scripts/JumpForgivenessTest.gd",
+		]
 	
 	var all_pass = true
 	for script_path in scripts:

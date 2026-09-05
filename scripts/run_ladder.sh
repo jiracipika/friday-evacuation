@@ -1,8 +1,9 @@
 #!/bin/bash
 # run_ladder.sh — full serial verification ladder for friday-evacuation.
-cd /Volumes/HARD/projects/friday-evacuation || exit 1
+# Runs from the repo that contains it (SSD checkout or HDD original).
+cd "$(dirname "$0")/.." || exit 1
 git diff --check || { echo "diff-check FAILED"; exit 1; }
-TESTS="BootTest PlayerChairMechanicsSmokeTest ChairSkinSmokeTest CharacterRosterSmokeTest HauledSmokeTest ShopSeekSmokeTest PizzaColonySmokeTest TouchControlsSmokeTest ModeSmokeTest NetworkSmokeTest NetworkTwoPeerTest LanAvatarSyncTest AnnouncerSmokeTest PanicCamSmokeTest LevelClearTest CheckpointBotTest SkinBotSanityTest HazardsSmokeTest ThemedFloorsSmokeTest PowerUpSmokeTest PauseMenuSmokeTest AccessibilitySmokeTest Phase8BAccessTest RaceModifiersSmokeTest ModifierMenuSmokeTest GhostRacerSmokeTest StatsRoundTripTest VisualDesignSmokeTest WallMaterialsSmokeTest FaceSmokeTest BindingsSmokeTest InputPrefsSmokeTest ControlsOverlaySmokeTest SettingsRoundTripTest NormalMapSmokeTest PropMaterialsSmokeTest LevelLayoutSmokeTest PreMatchModalSmokeTest GamepadSupportTest"
+TESTS="BootTest PlayerChairMechanicsSmokeTest JumpForgivenessTest ChairSkinSmokeTest CharacterRosterSmokeTest HauledSmokeTest ShopSeekSmokeTest PizzaColonySmokeTest TouchControlsSmokeTest ModeSmokeTest NetworkSmokeTest NetworkTwoPeerTest LanAvatarSyncTest AnnouncerSmokeTest PanicCamSmokeTest LevelClearTest CheckpointBotTest SkinBotSanityTest HazardsSmokeTest ThemedFloorsSmokeTest PowerUpSmokeTest PauseMenuSmokeTest AccessibilitySmokeTest Phase8BAccessTest RaceModifiersSmokeTest ModifierMenuSmokeTest GhostRacerSmokeTest StatsRoundTripTest VisualDesignSmokeTest WallMaterialsSmokeTest FaceSmokeTest BindingsSmokeTest InputPrefsSmokeTest ControlsOverlaySmokeTest SettingsRoundTripTest NormalMapSmokeTest PropMaterialsSmokeTest LevelLayoutSmokeTest PreMatchModalSmokeTest GamepadSupportTest"
 overall=0
 for t in $TESTS; do
   if [ ! -f "scripts/$t.gd" ]; then
