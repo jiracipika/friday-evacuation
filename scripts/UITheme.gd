@@ -51,6 +51,11 @@ static func button_style(bg: Color, border: Color, width: int = 1, radius: int =
 
 static func apply_mode_card(button: Button, accent: Color, selected: bool = false) -> void:
 	button.add_theme_font_size_override("font_size", 18)
+	# UI SLICE: two-line card labels must wrap instead of forcing a 455px
+	# minimum button width (the mode list was the menu column's width floor
+	# in portrait; wrapping lets cards reflow at any window size).
+	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	button.clip_text = false
 	button.add_theme_color_override("font_color", color(TEXT))
 	button.add_theme_color_override("font_hover_color", color(TEXT))
 	button.add_theme_color_override("font_disabled_color", accent.lightened(0.18))

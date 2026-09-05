@@ -63,6 +63,9 @@ const CULL_LIGHT_DISTANCE_FLOORS := 1
 
 func _ready() -> void:
 	_setup_arena()
+	# UI SLICE: portrait in-match hint (rotate your phone / tap to continue).
+	# Desktop-wide viewports never see it; headless tests never render it.
+	load("res://scripts/PortraitHint.gd").mount(self)
 	# Debug virtual pad: direct-scene launches bypass Main.gd's mount, so
 	# ensure the node exists here too (deduped by name on the root).
 	if "virtual-pad" in OS.get_cmdline_user_args() or OS.get_environment("FE_VIRTUAL_PAD") == "1":

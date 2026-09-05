@@ -44,7 +44,7 @@ var settings_button: Button
 var layout_option: OptionButton
 var touch_button: Button
 var credits_button: Button
-var utility_row: HBoxContainer
+var utility_row: Container
 var modifier_menu: Control
 var character_row: HBoxContainer
 var character_select: OptionButton
@@ -95,7 +95,14 @@ func _ready() -> void:
 	play_button.pressed.connect(_on_play)
 	play_button.pressed.connect(_play_click_sound)
 	_build_modifier_row()
-	utility_row = HBoxContainer.new()
+	# UI SLICE: utility row becomes a wrapping flow at narrow widths — four
+	# side-by-side buttons had a 449px combined minimum (sum of text widths,
+	# the last thing keeping the menu column wider than a phone viewport).
+	# A flow row wraps to 2x2 with a minimum of just the widest button.
+	if _is_narrow():
+		utility_row = HFlowContainer.new()
+	else:
+		utility_row = HBoxContainer.new()
 	utility_row.add_theme_constant_override("separation", 8)
 	$VBox.add_child(utility_row)
 	settings_button = Button.new()
@@ -114,9 +121,12 @@ func _ready() -> void:
 	credits_button.pressed.connect(_open_credits)
 	# PHASE 4: map layout picker (single-player + host authority).
 	layout_option = OptionButton.new()
-	layout_option.add_item("MAP: OPEN PLAN", 0)
-	layout_option.add_item("MAP: CUBICLE MAZE", 1)
-	layout_option.add_item("MAP: EXECUTIVE", 2)
+	# UI SLICE: short map names at narrow widths (the utility row's 520px
+	# combined minimum was the last floor above the 390px viewport).
+	var narrow := _is_narrow()
+	layout_option.add_item("MAP: OPEN PLAN" if not narrow else "OPEN PLAN", 0)
+	layout_option.add_item("MAP: CUBICLE MAZE" if not narrow else "CUBICLES", 1)
+	layout_option.add_item("MAP: EXECUTIVE" if not narrow else "EXECUTIVE", 2)
 	layout_option.custom_minimum_size = Vector2(0, 28)
 	layout_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	layout_option.add_theme_font_size_override("font_size", 12)
@@ -148,6 +158,7 @@ func _ready() -> void:
 	stats_label.add_theme_font_size_override("font_size", 12)
 	stats_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
 	$VBox.add_child(stats_label)
+	_register_small_label(stats_label)
 	var stats = get_node_or_null("/root/StatsManager")
 	if stats:
 		stats_label.text = stats.get_summary_line()
@@ -260,16 +271,30 @@ func _build_character_selector() -> void:
 	character_select.add_theme_font_size_override("font_size", 14)
 	character_row.add_child(character_select)
 	character_detail = Label.new()
-	character_detail.custom_minimum_size.x = 250
+	# UI SLICE: clip (ellipsis) instead of forcing a 250px+ minimum width —
+	# the unwrapped tagline was the single biggest contributor to the menu
+	# column's 700px minimum width (probe-measured), which made the whole
+	# VBox refuse to shrink below 700px in portrait windows.
+	character_detail.custom_minimum_size.x = 0
+	character_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	character_detail.clip_text = true
+	character_detail.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	character_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	character_detail.add_theme_font_size_override("font_size", 11)
 	character_detail.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	character_row.add_child(character_detail)
+	_register_detail_label(character_detail)
 	var selected := 0
 	var characters: Array[Dictionary] = roster.all()
+	# UI SLICE: drop the role suffix in narrow windows — the full
+	# "Name — ROLE" strings forced a 361px dropdown minimum width.
+	var short_items := _is_narrow()
 	for i in range(characters.size()):
 		var character: Dictionary = characters[i]
-		character_select.add_item("%s — %s" % [character["name"], character["role"]])
+		if short_items:
+			character_select.add_item(String(character["name"]))
+		else:
+			character_select.add_item("%s — %s" % [character["name"], character["role"]])
 		character_select.set_item_metadata(i, character["id"])
 		if character["id"] == GameManager.selected_character_id:
 			selected = i
@@ -319,11 +344,17 @@ func _build_skin_selector() -> void:
 	skin_row.add_child(skin_select)
 
 	skin_detail = Label.new()
-	skin_detail.custom_minimum_size.x = 250
+	# UI SLICE: same ellipsis treatment as the rider tagline (probe: this
+	# label alone carried a 341px minimum into the column's min width).
+	skin_detail.custom_minimum_size.x = 0
+	skin_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	skin_detail.clip_text = true
+	skin_detail.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	skin_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	skin_detail.add_theme_font_size_override("font_size", 11)
 	skin_detail.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	skin_row.add_child(skin_detail)
+	_register_detail_label(skin_detail)
 
 	var all_skins: Array[Dictionary] = skins.all()
 	var selected := 0
@@ -340,7 +371,13 @@ func _build_skin_selector() -> void:
 		else:
 			locked_count += 1
 			var need := int(skin["unlock_wins"])
-			skin_select.add_item("%s  —  LOCKED (win %d)" % [skin["name"], need])
+			# UI SLICE: compact lock tag at narrow widths (the long form
+			# forced a 300px dropdown minimum; the unlock progress already
+			# lives in the detail line beside it).
+			if _is_narrow():
+				skin_select.add_item("%s 🔒%d" % [skin["name"], need])
+			else:
+				skin_select.add_item("%s  —  LOCKED (win %d)" % [skin["name"], need])
 			skin_select.set_item_metadata(skin_select.item_count - 1, "")
 			skin_select.set_item_disabled(skin_select.item_count - 1, true)
 			if id == GameManager.selected_skin_id:
@@ -445,15 +482,19 @@ func _on_layout_selected(index: int) -> void:
 ## e.g. "TOUCH: AUTO (ON)" on a phone, "TOUCH: AUTO (OFF)" on desktop.
 func _touch_button_label(mode: String) -> String:
 	var prefs = load("res://scripts/InputPrefs.gd")
+	# UI SLICE: compact labels at narrow widths (utility-row min width).
+	var short := _is_narrow()
 	match mode:
 		"on":
-			return "TOUCH: ON"
+			return "TOUCH ON" if short else "TOUCH: ON"
 		"off":
-			return "TOUCH: OFF"
+			return "TOUCH OFF" if short else "TOUCH: OFF"
 		_:
 			var resolved := false
 			if prefs and prefs.has_method("touch_enabled"):
 				resolved = prefs.touch_enabled()
+			if short:
+				return "TOUCH AUTO (%s)" % ("ON" if resolved else "OFF")
 			return "TOUCH: AUTO (%s)" % ("ON" if resolved else "OFF")
 
 func _on_touch_button() -> void:
@@ -478,15 +519,74 @@ func _process(delta: float) -> void:
 	menu_time += delta
 	if title_label:
 		title_label.modulate.a = 0.96 + sin(menu_time * 2.0) * 0.04
-	# Responsive: hide the hero column below 1080px AND release its reserved
-	# right margin — the VBox keeps offset_right=-420 for the hero dock on
-	# wide screens, which goes NEGATIVE on phones (text clipped off-screen).
+	_update_layout()
+
+## UI SLICE: single deterministic responsive layout for the main menu.
+## Runs every frame (cheap — a compare + occasional assignment). Handles:
+##   - hero column: visible + reserved 420px margin only at >= 1080px
+##   - margins: fixed desktop 80px shrinks progressively down to 12px so
+##     portrait windows never get a negative content rect (the old
+##     "title clipped off the left edge" bug)
+##   - header rows: left-aligned edge-to-edge on narrow screens, centered
+##     inside the margins on wide screens (centered text in a shrunken
+##     rect is what sliced the title in half in portrait)
+##   - utility/stats rows: one-liners get a 10px minimum font at 390px
+##     where the fixed 12px wraps; full size >= 560px
+func _update_layout() -> void:
+	var w := get_viewport_rect().size.x
+	var wide := w >= 1080.0
 	if hero_panel:
-		var wide := get_viewport_rect().size.x >= 1080.0
 		hero_panel.visible = wide
-		var vbox := get_node_or_null("VBox") as Control
-		if vbox:
-			vbox.offset_right = -420.0 if wide else -12.0
+	var vbox := get_node_or_null("VBox") as Control
+	if vbox == null:
+		return
+	var margin: float
+	if wide:
+		margin = 80.0
+	elif w >= 700.0:
+		margin = 40.0
+	elif w >= 500.0:
+		margin = 20.0
+	else:
+		margin = 12.0
+	vbox.offset_left = margin
+	vbox.offset_right = -420.0 if wide else -margin
+	var center_header := w >= 700.0
+	var small := w < 560.0
+	if utility_row and utility_row is HBoxContainer:
+		(utility_row as HBoxContainer).alignment = BoxContainer.ALIGNMENT_CENTER if center_header \
+			else BoxContainer.ALIGNMENT_BEGIN
+	if stats_label:
+		stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if center_header \
+			else HORIZONTAL_ALIGNMENT_LEFT
+	for child in [title_label, subtitle_label, desc_label]:
+		if child:
+			child.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if center_header \
+				else HORIZONTAL_ALIGNMENT_LEFT
+	for label in _small_labels:
+		if is_instance_valid(label):
+			label.add_theme_font_size_override("font_size", 10 if small else 12)
+
+var _small_labels: Array[Label] = []
+
+## UI SLICE: narrow-window test used at build time; the menu builds ONCE,
+## so this reads the boot-time window size (a resize after boot re-runs
+## _update_layout for margins/fonts, but dropdown item text stays as built).
+func _is_narrow() -> bool:
+	return get_viewport_rect().size.x < 560.0
+
+## Detail labels keep their desktop minimum width on wide screens but get
+## out of the container's way below 560px so the VBox can shrink with the
+## window (combined minimum width of the menu column is what makes or
+## breaks portrait; measured 700px -> must fall under ~400px).
+func _register_detail_label(label: Label) -> void:
+	_small_labels.append(label)
+	if get_viewport_rect().size.x < 560.0:
+		label.custom_minimum_size.x = 0
+
+func _register_small_label(label: Label) -> void:
+	_small_labels.append(label)
+	label.add_theme_font_size_override("font_size", 12)
 
 func _build_menu_theme() -> void:
 	title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))

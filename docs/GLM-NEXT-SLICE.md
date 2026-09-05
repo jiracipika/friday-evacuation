@@ -1,91 +1,96 @@
-# Next Development Slice — Friday 5PM: Evacuation
+# GLM-NEXT-SLICE — for GPT-6 Astra
 
-Status: implementation-ready handoff
-Branch: `main` (Phase 8C LAN avatar identity sync — this session)
-Godot: `/usr/local/bin/godot` 4.7.1
+Repo: jiracipika/friday-evacuation (private). Base: the graphics pass
+(435fa66) + this menu/UI slice. Read SKILL-level handoff at the bottom of
+this doc; it lists every trap hit so you start ahead.
 
-## Current verified baseline
+## Where the base stands
 
-Phases 1–7 complete in software. Phase 8A (chair skins) and Phase 8B
-(accessibility) shipped:
+- Rendering: Godot 4.7.1, GL Compatibility renderer, 100% procedural
+  geometry/materials (no external assets, and that's a feature — mobile
+  download size is tiny). Filmic tonemap, per-floor material caches with
+  normal maps, floor culling, quality presets LOW/MED/HIGH all exist.
+- Architecture is now enclosed: 5.98m walls, real ceilings, troffer light
+  panels at ceiling height, columns, elevator portals with EXIT signage,
+  contact blob shadows under every prop (no SSAO in compat — discs are the
+  SSAO substitute; don't add more real-time shadow casters, see traps).
+- Players: riders have neck/hem/arms/mug; chairs have rounded backrests
+  with an emissive player-color halo ring. All collision untouched.
+- Menu is fully responsive: 390px portrait fits (menu min width 305px),
+  desktop unchanged. PortraitHint gates in-match portrait play.
+- Ladder: scripts/run_ladder.sh, 43 suites, all green.
 
-- Phase 8A: 6 chair skins (`scripts/ChairSkins.gd`) unlocked by career
-  wins (0/1/3/5/10/25), stat multipliers applied in `PlayerChair._ready()`;
-  variant chassis; Throne flush sfx; menu CHAIR dropdown; unlock
-  announcements; `ChairSkinSmokeTest.gd`.
-- Phase 8B colorblind shape cues: `SabotageTrap.gd` now builds a name
-  label ("BANANA PEEL" etc.) + a 32x32 glyph billboard per trap type via
-  `_build_shape_cue()` (idempotent, wired into `_apply_visual()`, so all
-  spawn paths — random, forced, remote-dropped — get cues). Silhouettes
-  are pairwise-distinct: water waves / banana arc / staple U / spill
-  droplet. PowerUps already had cues (`_build_label` + `_build_icon_sprite`).
-- Phase 8B game speed: `Accessibility.apply_time_scale()` /
-  `reset_time_scale()` now DRIVE `Engine.time_scale`. Applied in all four
-  mode `_ready()`s (Evacuation, Hauled, ShopSeek, PizzaColony), reset in
-  each `_exit_tree()`, and live-applied from Settings `_apply_settings()`
-  (pause-menu change works mid-race, no restart). `get_time_scale()`
-  returns 1.0 with a network peer, so LAN stays desync-safe; race clock
-  ticks on `_process(delta)` so it auto-scales.
-- `--test-mode` flag: `Accessibility.TEST_MODE` gates `apply_time_scale()`
-  off under the flag (a dev's real 0.75x save can't skew ladder runs);
-  `run_ladder.sh` passes `-- --test-mode` to every suite + boot. Test
-  suites that exercise the real wiring override `TEST_MODE = false` and
-  use an isolated `CFG_PATH`.
-- `CheckpointBot.gd`: the traversal harness extracted out of
-  CheckpointBotTest (single source of truth). Base bot and per-skin runs
-  drive identical steering/assert logic. Bot finishes in ~12s sim.
-- `SkinBotSanityTest.gd`: full traversal per skin id (GameManager stub
-  with pinned `selected_skin_id` — the real player-pick path) + a
-  median-spread check (>2.5x median = regression).
-- `Phase8BAccessTest.gd` (40 checks): trap cue presence/labels/32x32
-  glyph, pairwise glyph distinctness from the RENDERED texture alpha,
-  time-scale round trip + corrupt snap + reset + TEST_MODE guard,
-  dead-wiring detectors (mode + Settings call-site greps).
-- Keyboard steering follow-up (`7503673`): default turn-in scale 0.35,
-  slider floor 0.15, v3 save migration, and the dead brake branch fixed.
-- Phase 8C LAN avatar identity sync: `Network.gd` roster payload now carries
-  validated rider-character and chair-skin ids beside name/color. Socket
-  placeholders stay host-local and are NOT announced/spawned until the
-  complete identity RPC lands (prevents permanent default-chair remotes).
-  `Evacuation._on_network_player_connected()` pins both ids and disables
-  both global-selection flags BEFORE `add_child()` constructs the remote
-  procedural model. Lobby rows visibly name each rider/chair selection.
-  Backward-compatible missing fields fall back to Dana / Office Standard.
-- `LanAvatarSyncTest.gd` (21 checks): placeholder lifecycle, atomic identity
-  announcement, RPC float-key normalization, invalid-id fallback, lobby
-  label, and a REAL Evacuation remote model (Remote Ron + Throne).
-- Ladder now 38 suites.
+## Where to polish (suggested order, biggest win first)
 
-## Remaining software slices
+1. IN-GAME 3D FOLLOW-THROUGH — the menu got the design pass; the HUD is
+   next: give HUD.gd the same treatment as UITheme (shared StyleBoxFlat
+   tokens, consistent radii, the orange identity). ResultsPanel in
+   Evacuation.tscn is still fixed 600x400 — make it shrink-to-fit
+   (anchors + max size) and restyle with UITheme.
+2. LIGHTING ART DIRECTION — omni intensity/range is uniform today. Try:
+   warm pools near exit signage and power-ups (add small range OmniLights
+   ONLY where culling already keeps them: same floor group), a slightly
+   cooler tint on the stairwell floor, one flickering troffer per floor
+   with a matched OmniLight pulse (currently flicker is emissive-only).
+   Verify with movie frames, keep LOW profile identical (quality gate in
+   Settings._apply_graphics_quality).
+3. PROP VARIETY — OfficeDressing.monitor() has 3 screen variants; add a
+   few more desk/lounge props (printer, box stacks, wall clock via
+   Label3D, whiteboard in conference area). Keep them non-colliding or
+   validate against checkpoint waypoints (CheckpointBotTest will catch
+   blockers). PropMaterials.gd has wood/brushed-metal/plastic to reuse.
+4. FLOOR 2/4 DRESSING PARITY — floor 1 has partitions + plants; floors
+   2/4 are sparse (tables + coolers). Add water cooler props near
+   conference tables, plants by windows (they read great against the
+   dusk bands), maybe cable trays on the ceiling.
+5. MENUBACKDROP/story — MenuBackdrop.gd draws a static-ish skyline;
+   parallax it with menu_time (2 layers, slight hue drift) — cheap,
+   menu-only.
 
-1. **Real-device/network QA** — run PLAYTEST sessions 2–4: controller,
-   phone touch, and two physical LAN/hotspot peers. Software now covers
-   identity/layout/late-join paths, but radio/firewall behavior and visual
-   interpolation still require real hardware.
-2. **Phase 8D candidates** — findings from those sessions; otherwise
-   content polish (artsy FX, stronger arena landmarks, more props/skins).
+## Traps (all hit the hard way this session)
 
-## Hardware QA (unverified, needs real devices)
+- Container min width: a Control refuses to shrink below
+  get_combined_minimum_size(). Responsive = minimize children min widths
+  (wrap labels, ellipsis clip details, HFlowContainer for button rows,
+  short dropdown items at narrow widths). MenuLayoutSmokeTest pins this.
+- cast_shadow: any thin/ceiling geometry MUST set
+  SHADOW_CASTING_SETTING_OFF or the tilted key light paints long stripes
+  across the floor. Blob shadow discs too (they ARE shadows).
+- Texture sine bands alias to moiré at gameplay distance: no high-freq
+  sines in albedo textures; keep amplitudes <= ~7%. Carpet tile grid +
+  grout normal map is the structure that survives mips — don't reintroduce
+  per-pixel streaks.
+- Shared cached materials: NEVER tween material_override directly on a
+  node that shares a cached material — duplicate() first
+  (_tick_light_flicker pattern).
+- canvas_items stretch divides by content_scale_size; if you resize the
+  window in a test, set win.content_scale_size to match or anchors
+  resolve against a stale design size (LayoutProbe/MenuLayoutSmokeTest
+  show the dance).
+- --write-movie forces the PROJECT window resolution; to QA a phone
+  portrait frame, temporarily edit project.godot viewport_width/height,
+  capture, restore (never commit the temporary edit).
+- GL Compatibility has no SSAO/vignette on some paths — guard
+  environment props with `"prop" in env` checks like _setup_environment
+  does.
+- GDScript: untyped load() results need explicit types (`var x: GDScript
+  = load(...)`), int params are pass-by-value (use Array accumulators),
+  heredoc-inserted GDScript tends to mangle indentation — use write_file.
+- Movie-mode vision QA can mislead: verify artifacts with pixel stats
+  (strip luminance stdev) before changing rendering code. The stripe bug
+  was in the textures, not the shadowmap — only the shadow-off A/B proved
+  it.
 
-- PLAYTEST.md session 1: chair-skins feel checklist + NEW: game-speed
-  slider sanity (0.75x should feel slower across physics AND the race
-  clock; 1.25x faster), trap name labels readable at race distance.
-- Session 2 controller QA, session 3 phone touch via Vercel build,
-  session 4 two-machine LAN + hotspot (layout sync + remote-trap cues
-  in the match payload).
+## Verification ladder (run before you claim anything)
 
-## Guardrails
+bash scripts/run_ladder.sh   # 43 suites, must be all green
+godot --headless --path . --quit-after 3   # boot: 0 script errors
+For visual changes: --write-movie frames + look at them (see skill for
+the harness pattern), desktop AND 390-wide portrait (edit project.godot
+temporarily). Commit + push only after the ladder is green.
 
-- `git pull --ff-only` before work; commit directly to `main` only
-  after the full serial ladder passes (`bash scripts/run_ladder.sh`).
-- Never run two implementation sessions against this working tree.
-- Keep `FLOOR3_LANDINGS` synchronized across Evacuation, LevelClearTest,
-  and Hazards.
-- Skins/characters apply in `PlayerChair._ready()` — remote avatar ids MUST
-  be pinned with both `use_global_* = false` before `add_child()`.
-- `CheckpointBotTest.gd` must stay in the ladder; keep traversal logic
-  in `CheckpointBot.gd` (both suites import it — no copy drift).
-- `SkinBotSanityTest` runs 6 full traversals (~2–4 min wall). Keep it
-  AFTER the base bot in the ladder order.
-- Ladder now 38 suites; `LanAvatarSyncTest`, `Phase8BAccessTest`, and `AccessibilitySmokeTest`
-  must all stay in `scripts/run_ladder.sh`.
+## Out of scope for you (user-owned)
+
+- Do not touch pitch-therapy/pitchforge (excluded project).
+- Real-device QA (Android/iPhone touch feel) needs the user's hardware.
+- Two-machine LAN QA same.
