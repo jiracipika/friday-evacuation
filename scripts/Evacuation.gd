@@ -903,6 +903,11 @@ func _spawn_floor_blob_shadows() -> void:
 		var radius := 0.0
 		if shape is BoxShape3D:
 			var b := shape as BoxShape3D
+			# REVIEW FIX: skip cubicle partitions (5.4m long) — their blob
+			# would be a 6.7m dark streak across the floor. Only props with
+			# a compact footprint get contact shadows.
+			if b.size.x > 4.0:
+				continue
 			radius = max(b.size.x, b.size.z) * 0.62
 		elif shape is CylinderShape3D:
 			radius = (shape as CylinderShape3D).radius * 1.25
@@ -918,8 +923,11 @@ func _spawn_floor_blob_shadows() -> void:
 		var floor_index := clampi(int(round(pos.y / 6.0)), 0, 3)
 		if not floors.has(floor_index):
 			floors[floor_index] = [] as Array[Node3D]
-		var blob: MeshInstance3D = Dressing.blob_shadow(radius * 2.0, 0.34)
-		blob.position = Vector3(pos.x, float(floor_index) * 6.0 + 0.025, pos.z)
+		var blob: MeshInstance3D = Dressing.blob_shadow(radius * 2.0, 0.45)
+		# REVIEW FIX: discs were at +0.025 — INSIDE the 0.2-thick floor slab
+		# (top at +0.1), i.e. never rendered. +0.115 clears the slab and
+		# stays under the surface-zone tint sheets.
+		blob.position = Vector3(pos.x, float(floor_index) * 6.0 + 0.115, pos.z)
 		(floors[floor_index] as Array).append(blob)
 	for floor_index in floors.keys():
 		var group := Node3D.new()
@@ -1049,9 +1057,12 @@ func _build_floor_walls(pos: Vector3, color: Color, floor_index: int) -> void:
 		wall_mesh.material_override = wall_mat
 		wall.add_child(wall_mesh)
 
-		# PHASE 2 (rescaled): dusk-sky window band along N/S exterior walls
-		# (i=0 south z+20, i=2 north z-20). Now ~3.4m tall spanning 2.0..5.4m
-		# so the glass fills the tall wall instead of a letterbox strip.
+	# GRAPHICS PASS (REVIEW-FIXED): dusk-sky window band along N/S exterior
+	# walls (i=0 south z+20, i=2 north z-20). The glass is a CHILD of the
+	# wall body (positioned at floor+2.99 spanning 0..5.98 world), so its
+	# local Y is wall-relative: the first cut used +1.7 (world 4.7..8.1,
+	# poking 2m ABOVE the wall into the ceiling). Local −0.39 lands the
+	# 3.4m band at world 0.9..4.3 — inside the wall, 0.9m sill, 1.7m head.
 		if i == 0 or i == 2:
 			var glass = MeshInstance3D.new()
 			var glass_mesh = PlaneMesh.new()
@@ -1062,10 +1073,9 @@ func _build_floor_walls(pos: Vector3, color: Color, floor_index: int) -> void:
 			# wall. South wall (i=0, z+20): face -Z (into the room, rot.x
 			# = +90). North wall (i=2, z-20): face +Z (rot.x = -90).
 			glass.rotation.x = -PI / 2.0 if i == 2 else PI / 2.0
-			# Inner face of the wall (0.3 thick): offset toward the room,
-			# centered on the 2.0..5.4m band.
+			# Inner face of the wall (0.3 thick): offset toward the room.
 			var inward_z := -0.17 if i == 0 else 0.17
-			glass.position = Vector3(0, 1.7, inward_z)
+			glass.position = Vector3(0, -0.39, inward_z)
 			wall.add_child(glass)
 
 	# GRAPHICS PASS: real drop-ceiling slab closing the top of every floor
@@ -1133,8 +1143,10 @@ func _dusk_window_material() -> StandardMaterial3D:
 		# Image y=0 is the TOP of the texture (UV v=0 samples row 0 in
 		# Godot's ImageTexture). Top = warm horizon glow, fading into deep
 		# dusk blue below — windows read as sunset at their brightest up
-		# high. Wide glow: pow curve keeps the orange band readable.
-		var col := Color(0.95, 0.45, 0.12).lerp(Color(0.09, 0.11, 0.22), pow(t, 1.4))
+		# high. REVIEW: gentler pow (1.4 -> 0.9) + warmer start so the
+		# orange band stays readable across the 3.4m band instead of
+		# collapsing to flat navy at gameplay distance.
+		var col := Color(1.0, 0.52, 0.16).lerp(Color(0.09, 0.11, 0.22), pow(t, 0.9))
 		for x in 4:
 			img.set_pixel(x, y, col)
 	var grad_tex := ImageTexture.create_from_image(img)
@@ -1342,7 +1354,7 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 	light_group.name = "CeilingLights_%s" % str(int(floor_pos.y))
 	add_child(light_group)
 	_register_floor_node(floor_index, light_group)
-	_build_ceiling_grid(floor_pos, light_group)
+	_build_ceiling_grid(floor_pos, light_group, floor_index)
 	var Dressing = load("res://scripts/OfficeDressing.gd")
 	for x in [-12.0, 0.0, 12.0]:
 		for z in [-12.0, 0.0, 12.0]:
@@ -1406,11 +1418,18 @@ func _tick_light_flicker(delta: float) -> void:
 ## Drop-ceiling grid: dark T-bar panels between light fixtures.
 ## Bars cast NO shadows — thin geometry at ceiling height smears long
 ## stripes across the floor under the tilted key light.
-func _build_ceiling_grid(floor_pos: Vector3, parent: Node3D) -> void:
+func _build_ceiling_grid(floor_pos: Vector3, parent: Node3D, floor_index: int = -1) -> void:
 	var grid_mat = StandardMaterial3D.new()
 	grid_mat.albedo_color = Color(0.09, 0.09, 0.11)
 	grid_mat.roughness = 0.95
-	for x in [-20.0, -8.0, 8.0, 20.0]:
+	# REVIEW FIX: floor 4's ceiling is OPEN over the parking lot (the two
+	# slabs only cover |z| >= 10) — the z=±8 bars hung in open sky. On
+	# floor 4, keep only the bars that sit over solid ceiling.
+	var zs: Array = [-20.0, -8.0, 8.0, 20.0]
+	var xs: Array = [-20.0, -8.0, 8.0, 20.0]
+	if floor_index == 3:
+		zs = [-20.0, 20.0]
+	for x in xs:
 		var bar_x = MeshInstance3D.new()
 		var bm_x = BoxMesh.new()
 		bm_x.size = Vector3(0.25, 0.08, 40)
@@ -1419,7 +1438,7 @@ func _build_ceiling_grid(floor_pos: Vector3, parent: Node3D) -> void:
 		bar_x.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		bar_x.position = floor_pos + Vector3(x, 5.91, 0)
 		parent.add_child(bar_x)
-	for z in [-20.0, -8.0, 8.0, 20.0]:
+	for z in zs:
 		var bar_z = MeshInstance3D.new()
 		var bm_z = BoxMesh.new()
 		bm_z.size = Vector3(40, 0.08, 0.25)
@@ -1753,9 +1772,12 @@ func _make_desk() -> StaticBody3D:
 	col.shape = shape
 	desk.add_child(col)
 
-	# GRAPHICS PASS: the old solid 2x1.2x1 block becomes a real desk —
-	# 0.06m top slab on two leg panels (same 2x1 footprint, same 1.2m top
-	# height, so collision/gameplay are identical).
+	# GRAPHICS PASS (REVIEW-FIXED): solid 2x1.2x1 block becomes a real desk —
+	# top slab + two leg panels. The original collision box is CENTERED on
+	# the body (local top +0.6, world top floor+1.1); the first cut placed
+	# the slab at local 1.2, floating 0.6m ABOVE the collision top so chairs
+	# sank through the desktop. Visuals now match the original collision
+	# exactly — gameplay footprint byte-identical.
 	var top_mesh_inst = MeshInstance3D.new()
 	var top_mesh = BoxMesh.new()
 	top_mesh.size = Vector3(2, 0.07, 1)
@@ -1767,7 +1789,7 @@ func _make_desk() -> StaticBody3D:
 	if mat == null:
 		mat = _make_wood_material()
 	top_mesh_inst.material_override = mat
-	top_mesh_inst.position = Vector3(0, 1.165, 0)
+	top_mesh_inst.position = Vector3(0, 0.565, 0)
 	desk.add_child(top_mesh_inst)
 	var leg_mat := mat if mat == null else mat.duplicate()
 	if leg_mat:
@@ -1775,9 +1797,9 @@ func _make_desk() -> StaticBody3D:
 	for side in [-1.0, 1.0]:
 		var panel = MeshInstance3D.new()
 		var panel_mesh = BoxMesh.new()
-		panel_mesh.size = Vector3(0.08, 1.13, 0.9)
+		panel_mesh.size = Vector3(0.08, 0.56, 0.9)
 		panel.mesh = panel_mesh
-		panel.position = Vector3(side * 0.9, 0.565, 0)
+		panel.position = Vector3(side * 0.9, 0.28, 0)
 		panel.material_override = leg_mat
 		desk.add_child(panel)
 
@@ -1785,7 +1807,7 @@ func _make_desk() -> StaticBody3D:
 	# non-colliding dressing; footprint unchanged).
 	var Dressing = load("res://scripts/OfficeDressing.gd")
 	if Dressing and Dressing.has_method("desk_dressing"):
-		Dressing.desk_dressing(desk, 1.2)
+		Dressing.desk_dressing(desk, 0.6)
 
 	return desk
 
@@ -2050,9 +2072,11 @@ func _end_race() -> void:
 				if names.size() > 0 and stats_label:
 					stats_label.text += "\nMODIFIERS: " + ", ".join(names)
 
+	# REVIEW FIX: was has_method("confetti_burst") — the function is
+	# `confetti(parent, pos)`, so finish-line confetti never fired.
 	var impact = load("res://scripts/ImpactFX.gd")
-	if impact and impact.has_method("confetti_burst"):
-		impact.confetti_burst(local_player.global_position if local_player else Vector3.ZERO)
+	if impact and impact.has_method("confetti"):
+		impact.confetti(self, local_player.global_position if local_player else Vector3.ZERO)
 	if new_personal_best:
 		var audio_pb = get_node_or_null("/root/AudioManager")
 		if audio_pb:

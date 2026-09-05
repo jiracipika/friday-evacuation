@@ -802,9 +802,29 @@ func _apply_visual_feedback(delta: float) -> void:
 	# GRAPHICS PASS: contact shadow grounds the chair; it hides while
 	# airborne, fades back in on the ground, and keeps a small margin above
 	# the carpet so it never z-fights or intersects floor slabs.
+	# GRAPHICS PASS REVIEW: contact shadow must sit ON THE GROUND, not at
+	# local +0.03 (the chair origin is the capsule CENTER — +0.03 parked
+	# the disc at seat height ~0.77m above the carpet; it only looked
+	# grounded from the default high camera). Raycast down each frame and
+	# place the disc just above whatever is actually beneath: floor slabs,
+	# ramps, ice sheets, elevator pads. Width/opacity fall with height so
+	# jumps read as the shadow detaching.
 	if chair_blob_shadow and is_instance_valid(chair_blob_shadow):
-		chair_blob_shadow.visible = is_on_floor()
-		chair_blob_shadow.position = Vector3(0, 0.03, 0)
+		var query := PhysicsRayQueryParameters3D.create(
+			global_position + Vector3(0, 0.2, 0),
+			global_position + Vector3(0, -4.0, 0))
+		query.exclude = [self]
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if hit.is_empty():
+			chair_blob_shadow.visible = false
+		else:
+			var ground_y: float = hit.position.y
+			chair_blob_shadow.visible = true
+			chair_blob_shadow.global_position = Vector3(
+				global_position.x, ground_y + 0.03, global_position.z)
+			var height_above: float = global_position.y - ground_y
+			var k: float = clampf(1.0 - height_above / 2.0, 0.0, 1.0)
+			chair_blob_shadow.scale = Vector3(0.6 + 0.4 * k, 1.0, 0.6 + 0.4 * k)
 
 	# GRAPHICS PASS: one-shot dust puff on hard landings (visual only).
 	if landed and landing_puff and is_instance_valid(landing_puff):

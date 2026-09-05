@@ -39,7 +39,12 @@ func _ready() -> void:
 		mat.emission = Color(tint.r, tint.g, tint.b, 1.0)
 		mat.emission_energy_multiplier = 0.25
 		_tint_mesh.material_override = mat
-		_tint_mesh.position = Vector3(0, -zone_size.y * 0.5 + 0.05, 0)
+		# REVIEW FIX: the tint sheet rendered at local -0.95 — BELOW the
+		# floor slab (modes position zones at floor+0.15 with a 2m-tall
+		# box). Put it just above the slab top instead: zone origin sits
+		# +0.15 above floor center, so -0.02 lands at +0.13, just over the
+		# +0.1 slab top and under nothing else.
+		_tint_mesh.position = Vector3(0, -0.02, 0)
 		add_child(_tint_mesh)
 
 func _on_entered(body: Node3D) -> void:

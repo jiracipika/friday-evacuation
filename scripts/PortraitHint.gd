@@ -19,7 +19,7 @@ static func mount(parent: Node) -> void:
 	var hint := CanvasLayer.new()
 	hint.set_script(load("res://scripts/PortraitHint.gd"))
 	hint.name = "PortraitHint"
-	hint.layer = 90  # above HUD, below pause menu stack
+	hint.layer = 40  # REVIEW FIX: was 90 — same as PreMatchModal; now under the pre-match modal (90) and pause menu (50)
 	parent.add_child(hint)
 
 func _ready() -> void:
