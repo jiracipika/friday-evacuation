@@ -165,11 +165,23 @@ func _run_tests() -> void:
 	await physics_frame
 	check(pu_energy._body_in_range != null or pu_energy._prompt != null,
 		"proximity shows grab prompt instead of auto-collect")
-	Input.action_press("action")
-	await physics_frame
-	await physics_frame
-	Input.action_release("action")
-	var boosted: bool = chair2.is_boosting
+	# GRAB RACE (bug hunt 2): Input.action_press stamps the press with the
+	# CURRENT process frame; is_action_just_pressed is only true for that
+	# one frame in the pickup's _process. If the coroutine resumes after
+	# this frame's idle phase already ran the pickup, the edge is missed
+	# (measured ~10% flake clean, worse under ladder load). Real keyboard
+	# input queues to the next frame and has no such race — so retry the
+	# press edge a few times instead of asserting on one lucky frame.
+	var boosted: bool = false
+	for attempt in range(6):
+		Input.action_press("action")
+		await physics_frame
+		await physics_frame
+		Input.action_release("action")
+		boosted = chair2.is_boosting
+		if boosted:
+			break
+		await physics_frame
 	check(boosted, "energy drink pickup triggers boost")
 	check(chair2.boost_timer > chair2.boost_duration * 1.5, "energy drink doubles boost duration (%.2f > %.2f)" % [chair2.boost_timer, chair2.boost_duration * 1.5])
 	chair2.queue_free()

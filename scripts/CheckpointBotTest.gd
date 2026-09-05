@@ -33,6 +33,18 @@ func _run() -> void:
 
 	var stats: Dictionary = await bot.run(evac, self)
 
+	# TRAPS-HIT dead-wiring detector (bug hunt 2): results showed
+	# "TRAPS HIT: 0" forever because nothing incremented traps_hit.
+	# The chair's stun signal must be wired to the counter. The bot's
+	# route crosses no traps, so a green run means ZERO stuns — and the
+	# counter must agree (0), proving signal wiring exists without
+	# depending on trap RNG.
+	var chair: Node = evac.get("local_player")
+	check(chair != null and chair.has_signal("stunned"), "local chair exposes stunned signal")
+	if chair != null:
+		var stun_connections: int = chair.stunned.get_connections().size()
+		check(stun_connections >= 2, "stunned signal has counter+announcer wiring (%d)" % stun_connections)
+
 	if evac.is_inside_tree():
 		evac.free()
 	print("")

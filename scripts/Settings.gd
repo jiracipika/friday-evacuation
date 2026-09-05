@@ -461,6 +461,10 @@ func _apply_settings() -> void:
 			bprefs.get_setting(bprefs.KEY_BINDINGS, ""))
 		config.set_value("input", "last_device", bprefs.get_setting(bprefs.KEY_LAST_DEVICE, "keyboard_mouse"))
 	config.save("user://settings.cfg")
+	# Volume math: master is applied ONCE at the bus level by combining it
+	# with each category here. AudioManager.set_*_volume drives ONLY the
+	# bus — it must not also set per-player volume_db, or the combined
+	# value gets squared ((master*sfx)² → 50%+50% played at ~6%).
 	var audio = get_node_or_null("/root/AudioManager")
 	if audio:
 		audio.set_sfx_volume((master_slider.value / 100.0) * (sfx_slider.value / 100.0))
@@ -520,5 +524,5 @@ func _restore_persisted_values() -> void:
 	master_slider.value = float(config.get_value("audio", "master", 1.0)) * 100.0
 	music_slider.value = float(config.get_value("audio", "music", 0.5)) * 100.0
 	sfx_slider.value = float(config.get_value("audio", "sfx", 0.8)) * 100.0
-	shake_toggle.button_pressed = bool(config.get_value("accessibility", "screen_shake", true))
+	shake_toggle.button_pressed = _cfg_bool(config, "accessibility", "screen_shake", true)
 	_restoring = false

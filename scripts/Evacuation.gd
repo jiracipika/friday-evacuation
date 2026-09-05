@@ -99,6 +99,9 @@ func _ready() -> void:
 		local_player.shake_requested.connect(_request_camera_shake)
 	if local_player and local_player.has_signal("stunned"):
 		local_player.stunned.connect(func(): _announcer().say("trap", _const_lines("TRAP_HIT_LINES")))
+		# Results-panel stat was always 0: the counter existed but nothing
+		# incremented it. The stun signal IS the trap/roomba/debris hit.
+		local_player.stunned.connect(func(): traps_hit += 1)
 	_connect_race_triggers()
 	# Panic-cam: PiP of the rider's own face while boosting/stunned.
 	# Mounted onto the HUD CanvasLayer so it inherits HUD layering (above

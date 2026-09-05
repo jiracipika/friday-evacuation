@@ -9,6 +9,11 @@ const MUSIC_BUS := "Music"
 
 func _ready() -> void:
 	_ensure_buses()
+	# Apply the defaults to the actual buses at boot. Without this the
+	# SFX/Music buses sit at Godot's 0 dB default until the player opens
+	# the Settings screen, so saved volume prefs were ignored every session.
+	set_sfx_volume(sfx_volume)
+	set_music_volume(music_volume)
 	for i in range(6):
 		var player = AudioStreamPlayer.new()
 		player.bus = SFX_BUS
@@ -29,7 +34,9 @@ func play_sfx(effect_name: String, intensity: float = 1.0) -> void:
 		return
 	var stream = _make_effect(effect_name, clampf(intensity, 0.2, 2.0))
 	if stream:
-		player.volume_db = linear_to_db(sfx_volume)
+		# Bus-only volume: set_*_volume already carries the master×category
+		# product on the SFX bus. Per-player dB here would square it.
+		player.volume_db = 0.0
 		player.stream = stream
 		player.play()
 
@@ -37,13 +44,15 @@ func set_sfx_volume(value: float) -> void:
 	sfx_volume = clampf(value, 0.0, 1.0)
 	var bus = AudioServer.get_bus_index(SFX_BUS)
 	if bus >= 0:
-		AudioServer.set_bus_volume_db(bus, linear_to_db(sfx_volume))
+		AudioServer.set_bus_volume_db(bus, linear_to_db(maxf(sfx_volume, 0.0001)))
+		AudioServer.set_bus_mute(bus, sfx_volume <= 0.0)
 
 func set_music_volume(value: float) -> void:
 	music_volume = clampf(value, 0.0, 1.0)
 	var bus = AudioServer.get_bus_index(MUSIC_BUS)
 	if bus >= 0:
-		AudioServer.set_bus_volume_db(bus, linear_to_db(music_volume))
+		AudioServer.set_bus_volume_db(bus, linear_to_db(maxf(music_volume, 0.0001)))
+		AudioServer.set_bus_mute(bus, music_volume <= 0.0)
 
 func _next_player() -> AudioStreamPlayer:
 	for player in _players:
