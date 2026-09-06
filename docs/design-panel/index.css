@@ -1,0 +1,66 @@
+/* index.html workbench chrome: masthead, direction cards, preview frame. */
+
+.masthead {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.5rem 1.25rem 1rem;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+.masthead h1 {
+  font-size: clamp(2.2rem, 6vw, 4.2rem);
+  letter-spacing: 0.04em;
+  line-height: 0.95;
+  color: var(--accent);
+}
+.masthead .tagline { color: var(--muted); font-size: 0.9rem; max-width: 60ch; }
+
+.dir-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.9rem;
+  margin: 1rem 0 0.5rem;
+}
+.dir-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  text-align: left;
+  background: var(--surface);
+  color: var(--ink);
+  border: 2px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  padding: 1rem;
+}
+.dir-card .dir-bar { height: 8px; border-radius: 4px; background: var(--accent); }
+.dir-card .dir-name { font-weight: 800; font-size: 1.02rem; }
+.dir-card .dir-desc { font-size: 0.85rem; color: var(--muted); font-weight: 400; }
+.dir-card[aria-checked="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.dir-card:hover { border-color: var(--accent); }
+
+.preview-frame {
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-top: 1rem;
+}
+.preview-frame [data-note] { margin-bottom: 0.75rem; }
+
+.baseline img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--ink) 25%, transparent);
+}
+.baseline figcaption {
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding: 0.5rem 0.2rem;
+}
+
+a { color: var(--accent); }

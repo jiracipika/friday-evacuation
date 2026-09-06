@@ -1,0 +1,35 @@
+{
+  "checks": [
+    {
+      "direction": "dusk",
+      "width": 1440,
+      "checks": "layout, assets, navigation links, boost/reset, copy fallback, real export Blob"
+    },
+    {
+      "direction": "dusk",
+      "width": 390,
+      "checks": "layout, assets, navigation links, boost/reset, copy fallback, real export Blob"
+    },
+    {
+      "direction": "toybox",
+      "width": 1440,
+      "checks": "layout, assets, navigation links, boost/reset, copy fallback, real export Blob"
+    },
+    {
+      "direction": "toybox",
+      "width": 390,
+      "checks": "layout, assets, navigation links, boost/reset, copy fallback, real export Blob"
+    },
+    {
+      "direction": "emergency",
+      "width": 1440,
+      "checks": "layout, assets, navigation links, boost/reset, copy fallback, real export Blob"
+    },
+    {
+      "direction": "emergency",
+      "width": 390,
+      "checks": "layout, assets, navigation links, boost/reset, copy fallback, real export Blob"
+    }
+  ],
+  "runtime_errors": []
+}
