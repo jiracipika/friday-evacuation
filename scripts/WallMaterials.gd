@@ -67,14 +67,19 @@ static func wall_albedo(floor_index: int) -> ImageTexture:
 				col = col.darkened(0.22)
 			# Grunge: faint drip stains under the trim line and dark scuffs
 			# at wainscot level — office decay, structural enough for mips.
+			# ART PASS: softened (0.18/0.22 -> 0.05/0.12) — the brief calls
+			# for quiet premium eggshell, and hard drip edges read as noise
+			# clutter from the chase camera.
 			var u := float(x) / float(TEX_W)
 			var vg := float(y) / float(TEX_H)
 			if not baseboard and sin(u * TAU * 3.0 + float(key) * 2.0) > 0.86 and vg < 0.45:
-				col = col.darkened(0.18)
+				col = col.darkened(0.05)
 			if not baseboard and vg > 0.80 and (x / 45) % 7 == 0:
-				col = col.darkened(0.22)
+				col = col.darkened(0.12)
 			# Fine grain stays modest: noise mostly vanishes under mips.
-			var n := (rng.randf() - 0.5) * (0.16 if wainscot else 0.09)
+			# ART PASS: 0.09/0.16 -> 0.03/0.04 — high-frequency random bump
+			# shattered into shimmer at distance; premium matte wins.
+			var n := (rng.randf() - 0.5) * (0.04 if wainscot else 0.03)
 			col = Color(
 				clampf(col.r + n, 0.0, 1.0),
 				clampf(col.g + n, 0.0, 1.0),
@@ -98,8 +103,6 @@ static func wall_normal(floor_index: int) -> ImageTexture:
 		return _normal_cache[key] as ImageTexture
 	var NormalGen: GDScript = load("res://scripts/NormalMapGen.gd")
 	var height: PackedFloat32Array = NormalGen.height_buffer(TEX_W, TEX_H, 0.5)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7701 + key * 13
 	for y in TEX_H:
 		var v := float(y) / float(TEX_H)
 		var baseboard := v > 0.96
@@ -109,17 +112,18 @@ static func wall_normal(floor_index: int) -> ImageTexture:
 			var stud := (x % 128) < 2
 			var h := 0.5
 			if baseboard:
-				h = 0.62       # skirting steps forward slightly
+				h = 0.56       # skirting steps forward slightly (ART: gentler)
 			elif trim_row:
-				h = 0.40       # trim shadow line
+				h = 0.44       # trim shadow line
 			elif wainscot:
-				h = 0.44
+				h = 0.46
 			if stud and not baseboard:
-				h = 0.34       # panel joint groove
+				h = 0.40       # panel joint groove
 			NormalGen.set_height(height, TEX_W, TEX_H, x, y, h)
-	# Fine plaster grain (subtle — walls are smooth).
-	NormalGen.noise(height, TEX_W, TEX_H, rng, 0.05)
-	var tex: ImageTexture = NormalGen.normal_texture(height, TEX_W, TEX_H, 1.1)
+	# ART PASS: plaster noise REMOVED — per-pixel random bump is
+	# high-frequency shimmer under mips and fought the calm-premium
+	# direction. Only the structural ledges/grooves above remain.
+	var tex: ImageTexture = NormalGen.normal_texture(height, TEX_W, TEX_H, 0.6)
 	_normal_cache[key] = tex
 	return tex
 
@@ -129,7 +133,9 @@ static func make(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
 	mat.albedo_texture = wall_albedo(floor_index)
 	mat.normal_enabled = true
 	mat.normal_texture = wall_normal(floor_index)
-	mat.normal_scale = 0.7
+	# ART PASS: 0.7 -> 0.38 — walls read as broad matte planes; structure
+	# (wainscot/baseboard/joints) comes from the albedo bands.
+	mat.normal_scale = 0.38
 	# Anisotropic filtering keeps the panel joints crisp at grazing angles
 	# down long 40m walls (where mip selection would otherwise smear them).
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC

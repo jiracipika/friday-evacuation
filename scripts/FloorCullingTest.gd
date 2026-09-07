@@ -28,6 +28,7 @@ func _init() -> void:
 
 func _run() -> void:
 	var packed := load("res://scenes/Evacuation.tscn")
+	load("res://scripts/PreMatchModal.gd").suppress_next()
 	var evac = packed.instantiate()
 	root.add_child(evac)
 	await process_frame

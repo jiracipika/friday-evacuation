@@ -1362,9 +1362,13 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 			# GRAPHICS PASS: lighting plane raised to sit just under the new
 			# 5.94m ceiling (was 3.0m, floating mid-room in the tall band).
 			light.position = floor_pos + Vector3(x, 5.6, z)
-			light.light_color = Color(1.0, 0.92, 0.78)
-			light.light_energy = 1.05
-			light.omni_range = 22.0
+			# Dusk: warm perimeter pools against a softer, cooler circulation
+			# lane. Reuse the existing nine lights, but stop every fixture
+			# washing almost the entire 40m floor with its 22m range.
+			var is_lane: bool = x == 0.0
+			light.light_color = Color(0.78, 0.88, 1.0) if is_lane else Color(1.0, 0.82, 0.60)
+			light.light_energy = 0.70 if is_lane else 1.10
+			light.omni_range = 13.5 if is_lane else 15.0
 			light.shadow_enabled = false
 			light.light_bake_mode = OmniLight3D.BAKE_STATIC
 			light_group.add_child(light)
@@ -1497,12 +1501,12 @@ func _setup_environment() -> void:
 	# while ambient stays high enough that GL Compatibility keeps chairs,
 	# hazards and routes readable.
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.74, 0.76, 0.88)
-	env.ambient_light_energy = 0.85
+	env.ambient_light_color = Color(0.67, 0.79, 0.88)
+	env.ambient_light_energy = 0.58
 	var key_light := get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if key_light:
-		key_light.light_energy = 1.05
-		key_light.light_color = Color(1.0, 0.93, 0.82)
+		key_light.light_energy = 0.78
+		key_light.light_color = Color(1.0, 0.89, 0.74)
 		# GRAPHICS PASS: keep dir shadows but soften edges; bias raised so
 		# the normal-mapped carpet doesn't self-shadow into acne stripes.
 		key_light.shadow_blur = 1.1

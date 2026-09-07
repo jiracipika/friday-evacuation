@@ -55,38 +55,71 @@ func _build_hud() -> void:
 
 	var bottom = MarginContainer.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.offset_top = -_px(118)
+	bottom.offset_top = -_px(152)
 	bottom.add_theme_constant_override("margin_left", _px(28))
 	bottom.add_theme_constant_override("margin_right", _px(28))
 	bottom.add_theme_constant_override("margin_bottom", _px(24))
 	add_child(bottom)
 	var row = HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_BEGIN
-	row.add_theme_constant_override("separation", _px(18))
+	row.add_theme_constant_override("separation", _px(24))
 	bottom.add_child(row)
+	# Dusk pass: HUD text sat directly on the world, where the warm/cool
+	# light pools now fight every readout. Opaque card panels (same dark
+	# chrome as the menu) group speed and abilities, with a warm identity
+	# on the meters instead of the engine-default grey fill.
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.045, 0.045, 0.08, 1.0)
+	panel_style.border_color = Color(1, 0.6, 0.1, 0.5)
+	panel_style.border_width_left = 3
+	panel_style.set_corner_radius_all(10)
+	panel_style.content_margin_left = 20.0
+	panel_style.content_margin_right = 20.0
+	panel_style.content_margin_top = 12.0
+	panel_style.content_margin_bottom = 12.0
+	var meter_fill = StyleBoxFlat.new()
+	meter_fill.bg_color = Color("ff9a1a")
+	meter_fill.set_corner_radius_all(4)
+	var meter_bg = StyleBoxFlat.new()
+	meter_bg.bg_color = Color(0.1, 0.1, 0.15, 1.0)
+	meter_bg.set_corner_radius_all(4)
+	var instruments = PanelContainer.new()
+	instruments.name = "Instruments"
+	instruments.add_theme_stylebox_override("panel", panel_style)
+	row.add_child(instruments)
 	var speed_box = VBoxContainer.new()
+	speed_box.add_theme_constant_override("separation", _px(6))
+	instruments.add_child(speed_box)
 	speed_label = _make_label("0 km/h", _px(24), Color.WHITE)
 	speed_box.add_child(speed_label)
 	speed_bar = ProgressBar.new()
-	speed_bar.custom_minimum_size = Vector2(_px(220), _px(18))
+	speed_bar.custom_minimum_size = Vector2(_px(220), _px(14))
 	speed_bar.show_percentage = false
+	speed_bar.add_theme_stylebox_override("fill", meter_fill)
+	speed_bar.add_theme_stylebox_override("background", meter_bg)
 	speed_box.add_child(speed_bar)
-	row.add_child(speed_box)
 	var spacer = Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
-	var abilities = VBoxContainer.new()
-	boost_label = _make_label("☕ BOOST READY [SPACE]", _px(18), Color("ff9a1a"))
-	abilities.add_child(boost_label)
-	boost_bar = ProgressBar.new()
-	boost_bar.custom_minimum_size = Vector2(_px(240), _px(16))
-	boost_bar.show_percentage = false
-	abilities.add_child(boost_bar)
-	sabotage_label = _make_label("Q  SABOTAGE", _px(16), Color(1, 1, 1, 0.72))
-	abilities.add_child(sabotage_label)
-	item_label = _make_label("", _px(16), Color(0.7, 0.9, 1.0))
-	abilities.add_child(item_label)
+	var abilities = PanelContainer.new()
+	abilities.name = "Abilities"
+	abilities.add_theme_stylebox_override("panel", panel_style)
 	row.add_child(abilities)
+	var ability_stack = VBoxContainer.new()
+	ability_stack.add_theme_constant_override("separation", _px(4))
+	abilities.add_child(ability_stack)
+	boost_label = _make_label("☕ BOOST READY [SPACE]", _px(18), Color("ff9a1a"))
+	ability_stack.add_child(boost_label)
+	boost_bar = ProgressBar.new()
+	boost_bar.custom_minimum_size = Vector2(_px(240), _px(12))
+	boost_bar.show_percentage = false
+	boost_bar.add_theme_stylebox_override("fill", meter_fill)
+	boost_bar.add_theme_stylebox_override("background", meter_bg)
+	ability_stack.add_child(boost_bar)
+	sabotage_label = _make_label("Q  SABOTAGE", _px(16), Color(1, 1, 1, 0.72))
+	ability_stack.add_child(sabotage_label)
+	item_label = _make_label("", _px(16), Color(0.7, 0.9, 1.0))
+	ability_stack.add_child(item_label)
 
 func _make_label(text: String, size: int, color: Color) -> Label:
 	var label = Label.new()

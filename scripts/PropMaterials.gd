@@ -25,6 +25,8 @@ static func _build_material(height: PackedFloat32Array, albedo: Image,
 		tex_size: int, normal_strength: float) -> StandardMaterial3D:
 	var NormalGen: GDScript = load("res://scripts/NormalMapGen.gd")
 	var ntex: ImageTexture = NormalGen.normal_texture(height, tex_size, tex_size, normal_strength)
+	# A mipmapped sampler cannot invent mip levels on ImageTexture.
+	albedo.generate_mipmaps()
 	var atex := ImageTexture.create_from_image(albedo)
 	var mat := StandardMaterial3D.new()
 	mat.albedo_texture = atex
@@ -63,8 +65,11 @@ static func wood_planks() -> StandardMaterial3D:
 				h = 0.34  # seam groove
 			albedo.set_pixel(x, y, Color(c, c * 0.82, c * 0.6))
 			NormalGen.set_height(height, TEX, TEX, x, y, h)
-	var mat := _build_material(height, albedo, TEX, 1.2)
-	mat.roughness = 0.68
+	# NormalMapGen multiplies strength by texture resolution. At 256px,
+	# 1.2 saturated wood ridges sideways; use shallow physical relief.
+	var mat := _build_material(height, albedo, TEX, 0.018)
+	mat.normal_scale = 0.25
+	mat.roughness = 0.78
 	_cache["wood"] = mat
 	return mat
 

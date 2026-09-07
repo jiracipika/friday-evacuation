@@ -54,9 +54,9 @@ static func floor_albedo(base_color: Color, floor_index: int) -> ImageTexture:
 			var edge_x := x % TILE_PX
 			var edge_y := y % TILE_PX
 			if edge_x < 3 or edge_y < 3:
-				col = col.darkened(0.55)
+				col = col.darkened(0.18)
 			elif edge_x == 3 or edge_y == 3:
-				col = col.darkened(0.25)
+				col = col.darkened(0.08)
 			else:
 				# Per-quarter luminance jitter: tiles subtly differ, like real
 				# worn carpet. GRAPHICS PASS: amplitude halved (0.28->0.14) —
@@ -103,15 +103,17 @@ static func make(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
 				var edge_y := y % TILE_PX
 				var h := 0.5
 				if edge_x < 3 or edge_y < 3:
-					h = 0.36  # grout recess
+					h = 0.42  # grout recess (ART: shallower)
 				elif edge_x == 3 or edge_y == 3:
-					h = 0.44  # bevel shoulder
+					h = 0.46  # bevel shoulder
 				NormalGen.set_height(height, TEX, TEX, x, y, h)
-		var ntex: ImageTexture = NormalGen.normal_texture(height, TEX, TEX, 1.3)
+		var ntex: ImageTexture = NormalGen.normal_texture(height, TEX, TEX, 0.01)
 		_normal_cache[key] = ntex
 	mat.normal_enabled = true
 	mat.normal_texture = _normal_cache[key]
-	mat.normal_scale = 0.9
+	# ART PASS: 0.9 -> 0.5 — seams read as fine low-contrast relief, not
+	# black grid lines carved into the slab.
+	mat.normal_scale = 0.5
 	mat.uv1_scale = Vector3(4, 4, 1)
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	mat.albedo_color = Color(1, 1, 1)
