@@ -45,6 +45,14 @@ func _build_visual() -> void:
 			_build_spill()
 
 func _build_cooler() -> void:
+	# Dusk + toybox art pass: Blender-authored chunky water cooler
+	# (models/water_cooler.glb) replaces the two-cylinder stand-in.
+	# Collision lives on this StaticBody3D already — the model is dressing.
+	var BlenderProps: GDScript = load("res://scripts/BlenderProps.gd")
+	var model: Node3D = BlenderProps.spawn(self, BlenderProps.water_cooler(), Vector3.ZERO, 0.0)
+	if model != null:
+		return
+	# Fallback: original procedural cooler when the model is unavailable.
 	var body_mat := StandardMaterial3D.new()
 	body_mat.albedo_color = Color(0.88, 0.92, 0.96)
 	body_mat.roughness = 0.35

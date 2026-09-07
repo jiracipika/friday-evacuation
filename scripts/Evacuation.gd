@@ -573,6 +573,11 @@ func _theme_floor2_open_office() -> void:
 		var cooler := _make_stun_fixture(0)  # WATER_COOLER
 		cooler.position = cooler_pos
 		add_child(cooler)
+	# Dusk + toybox: Blender vending machines as warm-glow landmarks in the
+	# open-plan corners (decorative, non-colliding — chairs pass freely).
+	var BlenderProps: GDScript = load("res://scripts/BlenderProps.gd")
+	for vm_pos in [Vector3(-17, y, -17), Vector3(17, y, 17)]:
+		BlenderProps.spawn(self, BlenderProps.vending_machine(), vm_pos, PI * 0.25)
 	# Speed zones: tile strip (fast, slick) vs carpet patch (grippy)
 	var tile := _make_surface_zone(0.55, Vector3(10, 2.0, 6), Color(0.55, 0.75, 1.0, 0.10))
 	tile.position = Vector3(0, y + 0.15, 8)
