@@ -584,6 +584,9 @@ func _theme_floor2_open_office() -> void:
 	var BlenderProps: GDScript = load("res://scripts/BlenderProps.gd")
 	for vm_pos in [Vector3(-17, y, -17), Vector3(17, y, 17)]:
 		BlenderProps.spawn(self, BlenderProps.vending_machine(), vm_pos, PI * 0.25)
+	# Wall clock pinned at 5:00 on the north wall — the whole game's reason
+	# to race, readable from the conference tables.
+	BlenderProps.spawn(self, BlenderProps.wall_clock(), Vector3(0, y + 3.6, -19.7), 0.0)
 	# Speed zones: tile strip (fast, slick) vs carpet patch (grippy)
 	var tile := _make_surface_zone(0.55, Vector3(10, 2.0, 6), Color(0.55, 0.75, 1.0, 0.10))
 	tile.position = Vector3(0, y + 0.15, 8)
@@ -706,13 +709,17 @@ func _make_crate() -> StaticBody3D:
 	var mesh_node := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(1.4, 1.4, 1.4)
-	mesh_node.mesh = mesh
 	mesh_node.position = Vector3(0, 0.7, 0)
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.45, 0.34, 0.2)
 	mat.roughness = 0.9
 	mesh_node.material_override = mat
-	crate.add_child(mesh_node)
+	# Dusk + toybox: prefer the Blender crate (lid/strap/tape silhouette);
+	# the collision body above is untouched either way.
+	var BlenderProps: GDScript = load("res://scripts/BlenderProps.gd")
+	if not (BlenderProps and BlenderProps.spawn(crate, BlenderProps.crate(), Vector3.ZERO, 0.0) != null):
+		mesh_node.mesh = mesh
+		crate.add_child(mesh_node)
 	return crate
 
 ## Floor 4 — Cafeteria + Parking Lot: ice-slick floor, round tables, spill

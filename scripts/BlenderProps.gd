@@ -52,5 +52,11 @@ static func potted_plant() -> String:
 static func desk_printer() -> String:
 	return "res://models/desk_printer.glb"
 
+static func wall_clock() -> String:
+	return "res://models/wall_clock.glb"
+
+static func crate() -> String:
+	return "res://models/crate.glb"
+
 static func clear_cache() -> void:
 	_cache.clear()
