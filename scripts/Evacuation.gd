@@ -1366,9 +1366,9 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 			# lane. Reuse the existing nine lights, but stop every fixture
 			# washing almost the entire 40m floor with its 22m range.
 			var is_lane: bool = x == 0.0
-			light.light_color = Color(0.78, 0.88, 1.0) if is_lane else Color(1.0, 0.82, 0.60)
-			light.light_energy = 0.70 if is_lane else 1.10
-			light.omni_range = 13.5 if is_lane else 15.0
+			light.light_color = Color(0.72, 0.84, 1.0) if is_lane else Color(1.0, 0.78, 0.55)
+			light.light_energy = 0.58 if is_lane else 1.25
+			light.omni_range = 12.0 if is_lane else 15.0
 			light.shadow_enabled = false
 			light.light_bake_mode = OmniLight3D.BAKE_STATIC
 			light_group.add_child(light)
@@ -1424,7 +1424,9 @@ func _tick_light_flicker(delta: float) -> void:
 ## stripes across the floor under the tilted key light.
 func _build_ceiling_grid(floor_pos: Vector3, parent: Node3D, floor_index: int = -1) -> void:
 	var grid_mat = StandardMaterial3D.new()
-	grid_mat.albedo_color = Color(0.09, 0.09, 0.11)
+	# Dusk pass: near-black bars read as trenches from the chase camera;
+	# lifted to a painted-T-bar tone that still separates the panels.
+	grid_mat.albedo_color = Color(0.16, 0.16, 0.19)
 	grid_mat.roughness = 0.95
 	# REVIEW FIX: floor 4's ceiling is OPEN over the parking lot (the two
 	# slabs only cover |z| >= 10) — the z=±8 bars hung in open sky. On
@@ -1501,8 +1503,8 @@ func _setup_environment() -> void:
 	# while ambient stays high enough that GL Compatibility keeps chairs,
 	# hazards and routes readable.
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.67, 0.79, 0.88)
-	env.ambient_light_energy = 0.58
+	env.ambient_light_color = Color(0.62, 0.74, 0.90)
+	env.ambient_light_energy = 0.50
 	var key_light := get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if key_light:
 		key_light.light_energy = 0.78

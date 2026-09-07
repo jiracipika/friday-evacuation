@@ -29,16 +29,16 @@ func _build_hud() -> void:
 	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	top.offset_bottom = _px(76)
 	var top_style = StyleBoxFlat.new()
-	top_style.bg_color = Color(0.03, 0.03, 0.06, 0.88)
-	top_style.border_color = Color(1, 0.6, 0.1, 0.7)
-	top_style.border_width_bottom = 2
+	top_style.bg_color = Color(0.045, 0.045, 0.08, 1.0)
+	top_style.border_color = Color(1, 0.6, 0.1, 0.5)
+	top_style.border_width_bottom = 3
 	top.add_theme_stylebox_override("panel", top_style)
 	add_child(top)
 	var top_row = HBoxContainer.new()
 	top_row.add_theme_constant_override("separation", _px(26))
 	top_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	top.add_child(top_row)
-	floor_label = _make_label("FLOOR 1", _px(18), Color(1, 1, 1, 0.75))
+	floor_label = _make_label("FLOOR 1", _px(20), Color(1, 1, 1, 0.92))
 	top_row.add_child(floor_label)
 	timer_label = _make_label("2:00", _px(34), Color("ffb52e"))
 	top_row.add_child(timer_label)
@@ -152,7 +152,13 @@ func set_speed(value: float, max_speed: float = 12.0) -> void:
 		speed_label.text = "%d km/h" % roundi(value * 3.6)
 	if speed_bar:
 		speed_bar.value = clampf(value / max_speed * 100.0, 0.0, 100.0)
-		speed_bar.modulate = Color(0.35, 1.0, 0.55).lerp(Color(1.0, 0.25, 0.15), clampf(value / max_speed, 0.0, 1.0))
+		# Dusk identity: warm meter fill scaled by speed (amber -> coral);
+		# the old green->red ramp clashed with the orange UI and read as
+		# an engine-default progress bar at 0 km/h.
+		var fill: StyleBoxFlat = speed_bar.get_theme_stylebox("fill")
+		if fill is StyleBoxFlat:
+			var warm := Color("ffb52e").lerp(Color(1.0, 0.42, 0.20), clampf(value / max_speed, 0.0, 1.0))
+			fill.bg_color = warm
 
 func set_boost(cooldown: float, duration: float, active: bool, cooldown_max := 3.0) -> void:
 	if boost_bar:

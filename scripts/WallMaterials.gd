@@ -164,12 +164,13 @@ static func fabric_albedo(variant: int) -> ImageTexture:
 	rng.seed = 5500 + variant * 7
 	for y in TEX_H:
 		for x in TEX_W:
-			# Weave: strong vertical rib every 4px + faint horizontal beat,
-			# plus speckle. Ribbing survives mips because it is structural.
-			var rib := 0.10 if (x % 4) < 2 else -0.06
-			if y % 6 == 0:
-				rib -= 0.03
-			var n := (rng.randf() - 0.5) * 0.10
+			# Weave: broad felt ribbing — ribs every 16px (2 at 512px = ~1.4m on a
+	# 2.7m tile) survive mips; the old 4px ribs shattered into moiré at
+	# gameplay distance (highest-frequency surface in the office).
+			var rib := 0.03 if (x % 16) < 8 else -0.015
+			if y % 24 == 0:
+				rib -= 0.015
+			var n := (rng.randf() - 0.5) * 0.04
 			var d := rib + n
 			img.set_pixel(x, y, Color(
 				clampf(base.r + d, 0.0, 1.0),
@@ -192,16 +193,16 @@ static func make_partition(variant: int = 0) -> StandardMaterial3D:
 		for y in TEX_H:
 			for x in TEX_W:
 				var h := 0.5
-				if (x % 4) < 2:
-					h = 0.58  # rib
-				if y % 6 == 0:
+				if (x % 16) < 8:
+					h = 0.54  # broad felt rib
+				if y % 24 == 0:
 					h = 0.46  # weave beat
 				NormalGen.set_height(height, TEX_W, TEX_H, x, y, h)
-		var ntex: ImageTexture = NormalGen.normal_texture(height, TEX_W, TEX_H, 1.4)
+		var ntex: ImageTexture = NormalGen.normal_texture(height, TEX_W, TEX_H, 0.012)
 		_normal_cache[key] = ntex
 	mat.normal_enabled = true
 	mat.normal_texture = _normal_cache[key]
-	mat.normal_scale = 1.0
+	mat.normal_scale = 0.35
 	mat.uv1_scale = Vector3(2, 1, 1)
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	mat.roughness = 0.95
