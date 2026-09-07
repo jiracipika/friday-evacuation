@@ -520,8 +520,25 @@ static func desk_clutter(accent: Color) -> Array[MeshInstance3D]:
 
 ## Full desk dressing: monitor + clutter placed on the desk-top surface.
 ## desk_top_y is LOCAL to the desk body. Deterministic per desk instance.
+static var dressing_count := 0
+
 static func desk_dressing(desk: StaticBody3D, desk_top_y: float) -> void:
 	var seed_int := int(absi(desk.get_instance_id()) % 97)
+	# Dusk + toybox: roughly one desk in three carries the Blender printer
+	# instead of a monitor — desk variety without new collision or cost.
+	# Instance ids cluster on small modulos and desk.position is not yet set
+	# here (callers position after _make_desk) — rotate by creation order,
+	# which is deterministic and identical on every LAN peer.
+	dressing_count += 1
+	var variety: int = dressing_count % 3
+	if variety == 0:
+		var BlenderProps: GDScript = load("res://scripts/BlenderProps.gd")
+		if BlenderProps and BlenderProps.spawn(desk, BlenderProps.desk_printer(), Vector3(0, desk_top_y, -0.05), -0.4 + float(seed_int % 5) * 0.15) != null:
+			var clutter0 := desk_clutter(Color(1.0, 0.6, 0.1))
+			var mug0: MeshInstance3D = clutter0[1]
+			mug0.position = Vector3(0.62, desk_top_y + 0.07, 0.1)
+			desk.add_child(mug0)
+			return
 	var mon := monitor(seed_int % 3)
 	mon.position = Vector3(-0.45 + float(seed_int % 5) * 0.05, desk_top_y, -0.12)
 	mon.rotation.y = -0.5 + float(seed_int % 7) * 0.15

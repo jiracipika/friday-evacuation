@@ -14,6 +14,8 @@ func _run() -> void:
 	check(vending != null, "vending machine glb loads")
 	var cooler: PackedScene = props.get_model(props.water_cooler())
 	check(cooler != null, "water cooler glb loads")
+	check(props.get_model(props.potted_plant()) != null, "potted plant glb loads")
+	check(props.get_model(props.desk_printer()) != null, "desk printer glb loads")
 	var root_node := Node3D.new()
 	root.add_child(root_node)
 	for packed: PackedScene in [vending, cooler]:

@@ -46,5 +46,11 @@ static func vending_machine() -> String:
 static func water_cooler() -> String:
 	return "res://models/water_cooler.glb"
 
+static func potted_plant() -> String:
+	return "res://models/potted_plant.glb"
+
+static func desk_printer() -> String:
+	return "res://models/desk_printer.glb"
+
 static func clear_cache() -> void:
 	_cache.clear()

@@ -98,14 +98,18 @@ func _run() -> void:
 			blob_total += (child as Node).get_child_count()
 	check(blob_total >= 20, "blob shadows under props (got %d)" % blob_total)
 
-	# --- 7. Desk dressing: monitors etc. on desks ------------------------
-	var dressing: Array = [0, 0]  # [monitors, keyboards] — array = by-ref
+	# --- 7. Desk dressing: monitors/printers etc. on desks ---------------
+	# (1-in-3 desks carries the Blender printer instead of a monitor —
+	# assert dressing >= desks and at least one printer present.)
+	var dressing: Array = [0, 0, 0]  # [monitors, keyboards, printers]
 	_count_dressing(evac, dressing)
 	var monitors: int = dressing[0]
 	var keyboards: int = dressing[1]
+	var printers: int = dressing[2]
 	var desk_count := _count_desks(evac)
-	check(monitors >= desk_count, "a monitor per desk (%d desks, %d monitors)" % [desk_count, monitors])
-	check(keyboards >= desk_count, "a keyboard per desk (%d got %d)" % [desk_count, keyboards])
+	check(monitors + printers >= desk_count, "a screen or printer per desk (%d desks, %d monitors, %d printers)" % [desk_count, monitors, printers])
+	check(printers > 0, "Blender printer variety present (%d)" % printers)
+	check(keyboards >= monitors, "a keyboard per monitor desk (%d got %d)" % [monitors, keyboards])
 
 	# --- 8. PlayerChair extras -------------------------------------------
 	var chair_scene := load("res://scenes/PlayerChair.tscn")
@@ -168,6 +172,8 @@ func _count_dressing(node: Node, acc: Array) -> void:
 			acc[0] += 1
 		elif String(child.name) == "Keyboard":
 			acc[1] += 1
+		elif String(child.name).begins_with("desk_printer"):
+			acc[2] += 1
 		_count_dressing(child, acc)
 
 func _count_desks(node: Node) -> int:

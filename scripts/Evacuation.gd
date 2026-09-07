@@ -522,6 +522,12 @@ func _make_plant() -> StaticBody3D:
 	pot_col.position = Vector3(0, 0.6, 0)
 	plant.add_child(pot_col)
 
+	# Dusk + toybox: Blender-authored potted plant replaces the sphere-blob
+	# stand-in (collision above is untouched — model is dressing only).
+	var BlenderProps: GDScript = load("res://scripts/BlenderProps.gd")
+	if BlenderProps and BlenderProps.spawn(plant, BlenderProps.potted_plant(), Vector3.ZERO, 0.0) != null:
+		return plant
+
 	var trunk := MeshInstance3D.new()
 	var trunk_mesh := CylinderMesh.new()
 	trunk_mesh.top_radius = 0.09
