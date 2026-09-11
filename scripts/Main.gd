@@ -169,6 +169,12 @@ func _ready() -> void:
 	host_button.pressed.connect(_open_lobby)
 	join_button.visible = false
 	back_button.visible = false
+	# CLICK-TO-START SPLASH: dims the menu behind a scrim until the first
+	# click / tap / Enter / pad A. Doubles as the browser audio-unlock
+	# gesture (web builds block sound until a user input event).
+	var splash = load("res://scripts/SplashScreen.gd")
+	if splash and splash.has_method("mount"):
+		splash.mount(self)
 
 func _build_mode_buttons() -> void:
 	for i in range(MODE_INFO.size()):
@@ -177,7 +183,9 @@ func _build_mode_buttons() -> void:
 		var card_script = load("res://scripts/ModeCard.gd")
 		btn.set_script(card_script)
 		btn.configure(info.title, info.subtitle, MODE_STATUS[i], info.color)
-		btn.custom_minimum_size = Vector2(0, 34)
+		# OVERHAUL: compact primary cards — two-line cards drive the list
+		# height; 30px keeps subtitles readable while the column fits 720p.
+		btn.custom_minimum_size = Vector2(0, 30)
 		btn.focus_mode = Control.FOCUS_ALL
 		btn.pressed.connect(_select_mode.bind(i))
 		mode_list.add_child(btn)
@@ -423,8 +431,10 @@ func _on_skin_selected(index: int) -> void:
 func _select_mode(idx: int) -> void:
 	selected_index = idx
 	var info = MODE_INFO[idx]
-	title_label.text = info.title
-	subtitle_label.text = info.subtitle
+	# OVERHAUL: the brand title stays static (big display type); the mode
+	# name rides the kicker line instead of resizing the header per card
+	# (42px mode titles blew the VBox's vertical budget and clipped).
+	subtitle_label.text = "%s — %s" % [info.subtitle, info.title.to_upper()]
 	subtitle_label.modulate = info.color
 	desc_label.text = info.desc
 	if modifier_menu:
@@ -518,7 +528,9 @@ func _open_credits() -> void:
 func _process(delta: float) -> void:
 	menu_time += delta
 	if title_label:
-		title_label.modulate.a = 0.96 + sin(menu_time * 2.0) * 0.04
+		# OVERHAUL: slow brand breathing on the display title (was a flat
+		# alpha flutter on the old 22px label — invisible at that size).
+		title_label.modulate = Color(1, 1, 1, 1.0).lerp(Color(1.08, 0.95, 0.85), 0.5 + sin(menu_time * 1.6) * 0.5)
 	_update_layout()
 
 ## UI SLICE: single deterministic responsive layout for the main menu.
@@ -551,6 +563,17 @@ func _update_layout() -> void:
 		margin = 12.0
 	vbox.offset_left = margin
 	vbox.offset_right = -420.0 if wide else -margin
+	# OVERHAUL: content now exceeds the 720p height (modifier chips etc).
+	# Shrink-on-overflow: a top+bottom anchored VBox whose minimum exceeds
+	# the viewport renders ABOVE y=0 (title clipped off-screen). Keep the
+	# bottom offset negative only when it fits; otherwise grow downward and
+	# let the title stay pinned inside the viewport.
+	var needed := vbox.get_combined_minimum_size().y
+	var view_h := get_viewport_rect().size.y
+	if needed > view_h - 34.0:
+		vbox.grow_vertical = Control.GROW_DIRECTION_END
+		vbox.anchor_bottom = 0.0
+		vbox.offset_bottom = needed
 	var center_header := w >= 700.0
 	var small := w < 560.0
 	if utility_row and utility_row is HBoxContainer:
@@ -589,9 +612,17 @@ func _register_small_label(label: Label) -> void:
 	label.add_theme_font_size_override("font_size", 12)
 
 func _build_menu_theme() -> void:
+	# OVERHAUL: the title was a quiet 22px label. Big display treatment —
+	# oversized kicker over the brand title, tight leading, slow breathing
+	# glow. Same responsive contract (MenuLayoutSmokeTest).
 	title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
-	title_label.add_theme_font_size_override("font_size", 22)
-	subtitle_label.add_theme_font_size_override("font_size", 13)
+	var w := get_viewport_rect().size.x
+	title_label.add_theme_font_size_override("font_size", 34 if w >= 700.0 else 26)
+	subtitle_label.add_theme_font_size_override("font_size", 14)
+	subtitle_label.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35))
+	if title_label.text.length() > 0 and not title_label.text.contains("\n"):
+		title_label.text = "FRIDAY 5PM\nEVACUATION"
+		title_label.add_theme_constant_override("line_spacing", -6)
 	desc_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	desc_label.add_theme_font_size_override("font_size", 13)
 	UI_THEME.apply_primary(play_button)

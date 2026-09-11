@@ -59,6 +59,8 @@ func _init() -> void:
 		"res://scripts/OfficeDressing.gd",
 		"res://scripts/PortraitHint.gd",
 		"res://scripts/JumpForgivenessTest.gd",
+		"res://scripts/SplashScreen.gd",
+		"res://scripts/SplashGateTest.gd",
 		]
 	
 	var all_pass = true

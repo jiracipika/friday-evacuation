@@ -125,7 +125,9 @@ func _build_chips() -> void:
 		# chips force-shrunk to one per row at narrow menu widths, shredding
 		# their labels (caught in 720p vision QA). Chips now take a fixed
 		# minimum and flow 5/4/3-up as space allows.
-		chip.custom_minimum_size = Vector2(150, 62)
+		# OVERHAUL: 62px chips made the panel 208px tall and pushed the
+		# whole menu past 720p; two-line chips at 48px keep hints readable.
+		chip.custom_minimum_size = Vector2(150, 48)
 		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		chip.add_theme_stylebox_override("normal", _chip_style(UI_THEME.color(UI_THEME.SURFACE), Color(accent.r, accent.g, accent.b, 0.25), 1))
 		chip.add_theme_stylebox_override("hover", _chip_style(UI_THEME.color(UI_THEME.SURFACE_HOVER), Color(accent.r, accent.g, accent.b, 0.55), 1))

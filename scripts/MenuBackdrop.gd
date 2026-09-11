@@ -1,10 +1,11 @@
 # MenuBackdrop.gd — animated hero backdrop for the main menu.
 #
-# Draws the after-hours office skyline: an opaque deep-space gradient,
-# a big low sun disc (orange, brand accent), silhouetted skyline blocks
-# with lit windows, and drifting clouds — multi-axis parallax driven by
-# menu time (design language: dramatic, artsy, fully opaque fills; the
-# moving layers sell depth without 3D cost).
+# OVERHAUL: replaces the 3 hard sky bands with a smooth 11-stop dusk
+# gradient, adds an interior-office foreground (floor line + window
+# mullions + a warm ceiling light band) so the menu backdrop matches the
+# in-game after-hours office instead of a generic skyline, keeps the
+# parallax skyline + sun. Design language: fully opaque fills, dramatic
+# multi-axis motion, no alpha-blended landmasses.
 extends Control
 
 const UI_THEME = preload("res://scripts/UITheme.gd")
@@ -18,10 +19,20 @@ const BUILDINGS := [
 	[0.68, 0.12, 0.30, 7], [0.82, 0.09, 0.48, 8], [0.92, 0.07, 0.26, 9],
 ]
 
+# Smooth dusk sky: top deep-night -> mid plum -> horizon amber. Drawn as
+# many thin opaque bands = smooth gradient without shader cost.
+const SKY_STOPS := [
+	[0.00, Color(0.045, 0.035, 0.085)],
+	[0.16, Color(0.075, 0.055, 0.13)],
+	[0.32, Color(0.14, 0.075, 0.14)],
+	[0.48, Color(0.24, 0.11, 0.13)],
+	[0.62, Color(0.40, 0.16, 0.12)],
+	[0.74, Color(0.62, 0.26, 0.13)],
+	[0.84, Color(0.82, 0.38, 0.15)],
+	[1.00, Color(0.94, 0.50, 0.18)],
+]
+
 func _ready() -> void:
-	# Offsets AND anchors — plain set_anchors_preset left runtime-built
-	# offsets at (0,0,0,0) which collapsed the control (backdrop rendered
-	# nothing; caught by probe + vision QA).
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip_contents = true
@@ -34,61 +45,82 @@ func _draw() -> void:
 	var size_vec := size
 	if size_vec.x < 2.0 or size_vec.y < 2.0:
 		return
-	# Deep dusk gradient — opaque, no alpha blending between sky bands.
-	# Brighter than the UI surface tones so the art reads BEHIND the dark
-	# panels (first capture was invisible: too-dark bands + sun hidden
-	# behind the hero panel at 0.78 width).
-	var sky_top := Color(0.05, 0.04, 0.09)
-	var sky_mid := Color(0.16, 0.09, 0.14)
-	var sky_low := Color(0.34, 0.14, 0.12)
-	draw_rect(Rect2(Vector2.ZERO, size_vec), sky_top, true)
-	draw_rect(Rect2(Vector2(0, size_vec.y * 0.55), Vector2(size_vec.x, size_vec.y * 0.25)), sky_mid, true)
-	draw_rect(Rect2(Vector2(0, size_vec.y * 0.80), Vector2(size_vec.x, size_vec.y * 0.20)), sky_low, true)
+	_draw_sky(size_vec)
+	_draw_sun(size_vec)
+	_draw_clouds(size_vec)
+	_draw_skyline(size_vec)
+	_draw_office_foreground(size_vec)
 
-	# Low sun disc with a wide haze ring (both opaque) — placed LEFT of
-	# center so the hero panel doesn't cover it at wide aspect ratios.
-	var sun_center := Vector2(size_vec.x * 0.30, size_vec.y * 0.66)
-	var sun_r := minf(size_vec.x, size_vec.y) * 0.16
-	draw_circle(Vector2(sun_center.x, sun_center.y + sun_r * 1.7), sun_r * 3.4, Color(0.32, 0.16, 0.10), true, -1, true)
-	draw_circle(sun_center, sun_r * 1.35, Color(0.85, 0.38, 0.16), true, -1, true)
-	draw_circle(sun_center, sun_r, Color(1.0, 0.60, 0.22), true, -1, true)
+func _draw_sky(sz: Vector2) -> void:
+	var bands := 56
+	for i in bands:
+		var t0 := float(i) / float(bands)
+		var t1 := float(i + 1) / float(bands)
+		var c0 := _sky_color(t0)
+		var c1 := _sky_color(t1)
+		var c := c0.lerp(c1, 0.5)
+		var y0 := floorf(t0 * sz.y * 0.92)
+		var y1 := ceilf(t1 * sz.y * 0.92) + 1.0
+		draw_rect(Rect2(Vector2(0, y0), Vector2(sz.x, y1 - y0)), c, true)
 
-	# Clouds: three soft bands drifting at different speeds (parallax).
+func _sky_color(t: float) -> Color:
+	for i in range(SKY_STOPS.size() - 1):
+		var a: Array = SKY_STOPS[i]
+		var b: Array = SKY_STOPS[i + 1]
+		var ta: float = a[0]
+		var tb: float = b[0]
+		if t >= ta and t <= tb:
+			var f := (t - ta) / maxf(tb - ta, 0.0001)
+			f = f * f * (3.0 - 2.0 * f)  # smoothstep between stops
+			var ca: Color = a[1]
+			var cb: Color = b[1]
+			return ca.lerp(cb, f)
+	return SKY_STOPS[SKY_STOPS.size() - 1][1]
+
+func _draw_sun(sz: Vector2) -> void:
+	var sun_center := Vector2(sz.x * 0.30, sz.y * 0.66)
+	var sun_r := minf(sz.x, sz.y) * 0.16
+	# Sun slowly SINKS as menu time passes (it's 4:59 forever, but barely).
+	var sink := sin(time * 0.05) * sun_r * 0.35
+	var cy := sun_center.y + sink
+	draw_circle(Vector2(sun_center.x, cy + sun_r * 1.7), sun_r * 3.4, Color(0.42, 0.20, 0.11), true, -1, true)
+	draw_circle(Vector2(sun_center.x, cy), sun_r * 1.35, Color(0.85, 0.38, 0.16), true, -1, true)
+	draw_circle(Vector2(sun_center.x, cy), sun_r, Color(1.0, 0.60, 0.22), true, -1, true)
+	draw_circle(Vector2(sun_center.x, cy), sun_r * 0.72, Color(1.0, 0.78, 0.42), true, -1, true)
+
+func _draw_clouds(sz: Vector2) -> void:
 	for layer in 3:
 		var speed := 12.0 + float(layer) * 10.0
-		var y := size_vec.y * (0.18 + 0.10 * float(layer))
-		var cloud_h := size_vec.y * (0.045 + 0.015 * float(layer))
-		var offset := fmod(time * speed * (0.35 + 0.25 * float(layer)), size_vec.x * 2.0) - size_vec.x * 0.5
+		var y := sz.y * (0.16 + 0.10 * float(layer))
+		var cloud_h := sz.y * (0.045 + 0.015 * float(layer))
+		var offset := fmod(time * speed * (0.35 + 0.25 * float(layer)), sz.x * 2.0) - sz.x * 0.5
 		for k in 5:
-			var cx := fmod(offset + float(k) * size_vec.x * 0.42, size_vec.x * 2.0) - size_vec.x * 0.25
-			var alpha := 0.05 + 0.03 * float(layer)
-			var cloud_col := Color(0.9, 0.55, 0.4, alpha)
-			# Filled ellipse via scaled circle (filled, antialiased edge off
-			# for crisp art direction).
+			var cx := fmod(offset + float(k) * sz.x * 0.42, sz.x * 2.0) - sz.x * 0.25
+			# Opaque dusk clouds (alpha against the gradient muddied the
+			# sky on the first pass): darker plum silhouettes, backlit.
+			var cloud_col := Color(0.16, 0.09, 0.13) if layer < 2 else Color(0.10, 0.06, 0.10)
 			draw_set_transform(Vector2(cx, y), 0.0, Vector2(2.4, 0.5))
 			draw_circle(Vector2.ZERO, cloud_h, cloud_col, true)
 			draw_set_transform(Vector2.ZERO)
 
-	# Skyline: far row (darker, slower), near row (blacker, faster parallax
-	# sway). Windows lit deterministically; a slow "wave" lights sweep.
+func _draw_skyline(sz: Vector2) -> void:
 	for row in 2:
 		var far := row == 0
 		var sway := sin(time * (0.05 if far else 0.09) + float(row)) * (2.0 if far else 5.0)
-		var base_y := size_vec.y * (0.86 if far else 0.92)
-		var max_h := size_vec.y * (0.52 if far else 0.40)
+		var base_y := sz.y * (0.86 if far else 0.92)
+		var max_h := sz.y * (0.52 if far else 0.40)
 		for b in BUILDINGS:
 			var x_n: float = b[0]
 			var w_n: float = b[1]
 			var h_n: float = b[2]
 			var seed_n: int = b[3]
-			var parity_shift := 0.5 if far else 0.0  # near row staggered
-			var bx := (x_n * size_vec.x) + sway + (parity_shift * size_vec.x * 0.05)
-			var bw := w_n * size_vec.x * (1.0 if far else 0.85)
+			var parity_shift := 0.5 if far else 0.0
+			var bx := (x_n * sz.x) + sway + (parity_shift * sz.x * 0.05)
+			var bw := w_n * sz.x * (1.0 if far else 0.85)
 			var bh := h_n * max_h * (1.0 if far else 1.18)
 			var rect := Rect2(Vector2(bx, base_y - bh), Vector2(bw, bh))
 			var block_col := Color(0.045, 0.045, 0.075) if far else Color(0.02, 0.02, 0.04)
 			draw_rect(rect, block_col, true)
-			# Lit windows: deterministic grid, wave sweep via time.
 			var cols := maxi(2, int(bw / 26.0))
 			var rows := maxi(2, int(bh / 34.0))
 			for wy in rows:
@@ -102,5 +134,28 @@ func _draw() -> void:
 							Vector2(maxf(4.0, (bw - 12.0) / float(cols) * 0.4), maxf(5.0, (bh - 16.0) / float(rows) * 0.42)))
 						draw_rect(wrect, wcol, true)
 
-	# Foreground street glow line at the very bottom.
-	draw_rect(Rect2(Vector2(0, size_vec.y - 4.0), Vector2(size_vec.x, 4.0)), Color(1.0, 0.60, 0.22, 0.35), true)
+## Interior-office foreground: the menu sits INSIDE the office looking out.
+## Ceiling light band at top, warm floor pool at bottom, and tall window
+## mullions over the skyline (ties the menu to the in-game dusk windows).
+func _draw_office_foreground(sz: Vector2) -> void:
+	# Window mullions: dark verticals across the skyline view, subtle sway.
+	var mull_count := maxi(4, int(sz.x / 220.0))
+	var mull_w := maxf(6.0, sz.x * 0.006)
+	for i in mull_count:
+		var mx := sz.x * (float(i) + 0.5) / float(mull_count)
+		mx += sin(time * 0.11 + float(i)) * 2.0
+		draw_rect(Rect2(Vector2(mx - mull_w * 0.5, sz.y * 0.10), Vector2(mull_w, sz.y * 0.78)), Color(0.03, 0.03, 0.05), true)
+	# Transom bar (horizontal mullion).
+	draw_rect(Rect2(Vector2(0, sz.y * 0.12), Vector2(sz.x, maxf(6.0, sz.y * 0.012))), Color(0.03, 0.03, 0.05), true)
+	# Ceiling: dark band + a warm troffer light strip that gently pulses.
+	draw_rect(Rect2(Vector2(0, 0), Vector2(sz.x, sz.y * 0.10)), Color(0.028, 0.028, 0.045), true)
+	var pulse := 0.85 + sin(time * 1.3) * 0.15
+	var strip_c := Color(1.0, 0.82, 0.55, 0.5 * pulse)
+	draw_rect(Rect2(Vector2(sz.x * 0.32, sz.y * 0.028), Vector2(sz.x * 0.36, maxf(4.0, sz.y * 0.010))), strip_c, true)
+	# Interior floor: warm pool sweeping a desk-lamp hue across the bottom.
+	draw_rect(Rect2(Vector2(0, sz.y * 0.90), Vector2(sz.x, sz.y * 0.10)), Color(0.05, 0.04, 0.06), true)
+	var sweep := fmod(time * 0.03, 1.0)
+	var pool_x := sz.x * (0.15 + 0.7 * sweep)
+	draw_rect(Rect2(Vector2(pool_x - sz.x * 0.08, sz.y * 0.90), Vector2(sz.x * 0.16, sz.y * 0.035)), Color(0.55, 0.30, 0.12), true)
+	# Brand floor line.
+	draw_rect(Rect2(Vector2(0, sz.y - 4.0), Vector2(sz.x, 4.0)), Color(1.0, 0.60, 0.22, 0.35), true)

@@ -10,6 +10,19 @@ var speed_bar: ProgressBar
 var boost_bar: ProgressBar
 var minimap: Control
 var item_label: Label
+var objective_label: Label
+var _last_objective_floor := -1
+
+# GOAL/CHECKPOINT LABELING: what the player must do on each floor. The
+# floor index IS the checkpoint count (respawn checkpoints advance on
+# elevator teleport). Shown as a persistent strip under the top bar so
+# the goal is always legible, not just in the round-start recap.
+const FLOOR_GOALS := [
+	"GOAL 1/4 — FIND THE ELEVATOR • GLASS TUBE AT THE EDGE",
+	"GOAL 2/4 — UP TO FLOOR 3 • RIDE THE ELEVATOR",
+	"GOAL 3/4 — TOP FLOOR LOT • LAST ELEVATOR",
+	"FINAL GOAL — CROSS THE GREEN EXIT GATE!",
+]
 
 func _ready() -> void:
 	_build_hud()
@@ -44,6 +57,18 @@ func _build_hud() -> void:
 	top_row.add_child(timer_label)
 	status_label = _make_label("RACE", _px(18), Color(0.4, 1, 0.65))
 	top_row.add_child(status_label)
+
+	# Objective strip: persistent goal line under the top bar.
+	objective_label = _make_label(
+		FLOOR_GOALS[0], _px(14), Color(1.0, 0.72, 0.30))
+	objective_label.name = "ObjectiveStrip"
+	objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	objective_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	objective_label.offset_top = _px(80)
+	objective_label.offset_bottom = _px(102)
+	objective_label.add_theme_constant_override("outline_size", 4)
+	objective_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.65))
+	add_child(objective_label)
 	var minimap_script = load("res://scripts/Minimap.gd")
 	minimap = Control.new()
 	minimap.set_script(minimap_script)
@@ -135,8 +160,21 @@ func set_timer_text(value: String) -> void:
 func set_floor(value: int) -> void:
 	if floor_label:
 		floor_label.text = "FLOOR %d" % value
+	# Goal strip tracks the checkpoint: elevator teleports advance the
+	# floor, which IS the checkpoint. Brief flash on change.
+	if objective_label:
+		var idx := clampi(value - 1, 0, FLOOR_GOALS.size() - 1)
+		if idx != _last_objective_floor:
+			_last_objective_floor = idx
+			objective_label.text = FLOOR_GOALS[idx]
+			objective_label.modulate.a = 1.6  # over-bright, decays to 1
 	if minimap and minimap.has_method("set_player"):
 		minimap.set_player(Vector3.ZERO, value - 1)
+
+func _process(_delta: float) -> void:
+	# Decay the over-bright flash from a goal change back to 1.0.
+	if objective_label and objective_label.modulate.a > 1.0:
+		objective_label.modulate.a = maxf(1.0, objective_label.modulate.a - _delta * 2.0)
 
 func set_player_position(world_position: Vector3, floor_index: int) -> void:
 	if minimap and minimap.has_method("set_player"):
