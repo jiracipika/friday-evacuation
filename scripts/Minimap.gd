@@ -1,5 +1,11 @@
 extends Control
 
+var _pulse_time := 0.0
+
+func _process(delta: float) -> void:
+	_pulse_time += delta
+	queue_redraw()
+
 var player_position := Vector2.ZERO
 var player_floor := 0
 var exit_position := Vector2(0.5, 0.92)
@@ -25,6 +31,9 @@ func _draw() -> void:
 		draw_line(Vector2(inset.position.x, y), Vector2(inset.end.x, y), Color(1, 1, 1, 0.08), 1.0)
 	var exit = inset.position + Vector2(exit_position.x, exit_position.y) * inset.size
 	draw_circle(exit, 5.0, Color("63e68a"))
+	# D4: slow pulsing ring so the exit is findable at a glance.
+	var ring_r := 9.0 + 3.0 * (0.5 + 0.5 * sin(_pulse_time * TAU / 1.6))
+	draw_arc(exit, ring_r, 0.0, TAU, 20, Color(0.39, 0.9, 0.54, 0.45), 2.0)
 	var player = inset.position + player_position * inset.size
 	draw_circle(player, 6.0, Color("70b7ff"))
 	draw_arc(player, 10.0, 0.0, TAU, 16, Color(0.44, 0.72, 1.0, 0.35), 2.0)

@@ -53,22 +53,38 @@ func _build_hud() -> void:
 	top.add_child(top_row)
 	floor_label = _make_label("FLOOR 1", _px(20), Color(1, 1, 1, 0.92))
 	top_row.add_child(floor_label)
-	timer_label = _make_label("2:00", _px(34), Color("ffb52e"))
+	timer_label = _make_label("2:00", _px(34), Color("ff9a1a"))
 	top_row.add_child(timer_label)
 	status_label = _make_label("RACE", _px(18), Color(0.4, 1, 0.65))
 	top_row.add_child(status_label)
 
 	# Objective strip: persistent goal line under the top bar.
+	# D4: the strip gets its own dark panel bg so the goal text never sits
+	# on raw 3D ceiling lights.
+	var objective_panel := PanelContainer.new()
+	objective_panel.name = "ObjectivePanel"
+	var obj_style := StyleBoxFlat.new()
+	obj_style.bg_color = Color(0.02, 0.02, 0.04, 0.72)
+	obj_style.set_corner_radius_all(8)
+	obj_style.content_margin_left = 12.0
+	obj_style.content_margin_right = 12.0
+	obj_style.content_margin_top = 2.0
+	obj_style.content_margin_bottom = 2.0
+	objective_panel.add_theme_stylebox_override("panel", obj_style)
+	objective_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	objective_panel.offset_left = _px(180)
+	objective_panel.offset_right = -_px(180)
+	objective_panel.offset_top = _px(78)
+	objective_panel.offset_bottom = _px(104)
+	objective_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(objective_panel)
 	objective_label = _make_label(
 		FLOOR_GOALS[0], _px(14), Color(1.0, 0.72, 0.30))
 	objective_label.name = "ObjectiveStrip"
 	objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	objective_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	objective_label.offset_top = _px(80)
-	objective_label.offset_bottom = _px(102)
 	objective_label.add_theme_constant_override("outline_size", 4)
 	objective_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.65))
-	add_child(objective_label)
+	objective_panel.add_child(objective_label)
 	var minimap_script = load("res://scripts/Minimap.gd")
 	minimap = Control.new()
 	minimap.set_script(minimap_script)
@@ -115,8 +131,12 @@ func _build_hud() -> void:
 	var speed_box = VBoxContainer.new()
 	speed_box.add_theme_constant_override("separation", _px(6))
 	instruments.add_child(speed_box)
-	speed_label = _make_label("0 km/h", _px(24), Color.WHITE)
+	speed_label = _make_label("0", _px(24), Color.WHITE)
 	speed_box.add_child(speed_label)
+	# D4: separate muted unit label next to the readout.
+	var unit_label = _make_label("km/h", _px(11), Color("9b9baa"))
+	unit_label.name = "SpeedUnit"
+	speed_box.add_child(unit_label)
 	speed_bar = ProgressBar.new()
 	speed_bar.custom_minimum_size = Vector2(_px(220), _px(14))
 	speed_bar.show_percentage = false
@@ -153,9 +173,14 @@ func _make_label(text: String, size: int, color: Color) -> Label:
 	label.add_theme_color_override("font_color", color)
 	return label
 
-func set_timer_text(value: String) -> void:
+func set_timer_text(value: String, remaining: float = -1.0) -> void:
 	if timer_label:
 		timer_label.text = value
+	# D4: hero timer goes CORAL + pulses when critical (<15s).
+	_timer_remaining = remaining
+
+var _timer_remaining := -1.0
+var _pulse_time := 0.0
 
 func set_floor(value: int) -> void:
 	if floor_label:
@@ -171,10 +196,26 @@ func set_floor(value: int) -> void:
 	if minimap and minimap.has_method("set_player"):
 		minimap.set_player(Vector3.ZERO, value - 1)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	# Decay the over-bright flash from a goal change back to 1.0.
 	if objective_label and objective_label.modulate.a > 1.0:
-		objective_label.modulate.a = maxf(1.0, objective_label.modulate.a - _delta * 2.0)
+		objective_label.modulate.a = maxf(1.0, objective_label.modulate.a - delta * 2.0)
+	# D4: critical-timer pulse (CORAL, alpha 0.6-1.0 at 0.5s cycle).
+	if timer_label and _timer_remaining >= 0.0:
+		var reduced := false
+		var a11y = load("res://scripts/Accessibility.gd")
+		if a11y and a11y.has_method("reduced_motion"):
+			reduced = a11y.reduced_motion()
+		if _timer_remaining < 15.0:
+			timer_label.add_theme_color_override("font_color", Color("ff6f61"))
+			var pulse := 1.0
+			if not reduced:
+				_pulse_time += delta
+				pulse = 0.6 + 0.4 * (0.5 + 0.5 * sin(_pulse_time * TAU / 0.5))
+			timer_label.modulate.a = pulse
+		else:
+			timer_label.add_theme_color_override("font_color", Color("ff9a1a"))
+			timer_label.modulate.a = 1.0
 
 func set_player_position(world_position: Vector3, floor_index: int) -> void:
 	if minimap and minimap.has_method("set_player"):
@@ -187,7 +228,7 @@ func set_status(value: String, color: Color = Color.WHITE) -> void:
 
 func set_speed(value: float, max_speed: float = 12.0) -> void:
 	if speed_label:
-		speed_label.text = "%d km/h" % roundi(value * 3.6)
+		speed_label.text = "%d" % roundi(value * 3.6)
 	if speed_bar:
 		speed_bar.value = clampf(value / max_speed * 100.0, 0.0, 100.0)
 		# Dusk identity: warm meter fill scaled by speed (amber -> coral);

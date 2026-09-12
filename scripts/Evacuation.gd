@@ -1918,6 +1918,17 @@ func _start_countdown() -> void:
 	if countdown_label:
 		countdown_label.text = str(int(countdown_seconds))
 		countdown_label.visible = true
+	# D4: big 2D countdown moment (3-2-1-GO) for readability.
+	var overlay_script = load("res://scripts/CountdownOverlay.gd")
+	if overlay_script:
+		var overlay = overlay_script.mount(self)
+		var seq: Array = []
+		var n := int(countdown_seconds)
+		while n > 0:
+			seq.append(str(n))
+			n -= 1
+		seq.append("GO!")
+		overlay.play_sequence(seq)
 
 func _update_countdown_display() -> void:
 	if countdown_label:
@@ -2004,7 +2015,7 @@ func _update_timer_display() -> void:
 	if timer_label:
 		timer_label.text = timer_text
 	if hud_ext and is_instance_valid(hud_ext) and hud_ext.has_method("set_timer_text"):
-		hud_ext.set_timer_text(timer_text)
+		hud_ext.set_timer_text(timer_text, remaining)
 
 func _update_hud() -> void:
 	if hud_ext == null or not is_instance_valid(hud_ext):
