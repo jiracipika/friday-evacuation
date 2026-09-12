@@ -25,6 +25,7 @@ var _remap_buttons: Dictionary = {}  # action -> {"key": Button, "pad": Button}
 var _remap_action := ""  # non-empty while listening for a key or pad button
 var _remap_kind := ""  # "kb" or "pad" — which column is armed
 var _restoring := false  # blocks reentrant _apply_settings during value restore
+const UI_THEME = preload("res://scripts/UITheme.gd")
 
 const TIME_SCALE_LABELS := ["0.75x (SLOWER)", "1.0x (NORMAL)", "1.25x (FASTER)"]
 
@@ -93,6 +94,7 @@ func _build_ui() -> void:
 	box.add_theme_constant_override("separation", 16)
 	scroll.add_child(box)
 
+	box.add_child(UI_THEME.make_section_header("VIDEO"))
 	quality_option = OptionButton.new()
 	quality_option.add_item("LOW")
 	quality_option.add_item("MEDIUM")
@@ -100,6 +102,7 @@ func _build_ui() -> void:
 	_add_setting(box, "GRAPHICS QUALITY", quality_option)
 	quality_option.item_selected.connect(func(_index): _apply_settings())
 
+	box.add_child(UI_THEME.make_section_header("AUDIO"))
 	master_slider = _make_slider()
 	_add_setting(box, "MASTER VOLUME", master_slider)
 	master_slider.value_changed.connect(func(_value): _apply_settings())
@@ -110,39 +113,46 @@ func _build_ui() -> void:
 	_add_setting(box, "SFX VOLUME", sfx_slider)
 	sfx_slider.value_changed.connect(func(_value): _apply_settings())
 
+	box.add_child(UI_THEME.make_section_header("ACCESSIBILITY"))
 	shake_toggle = CheckButton.new()
 	shake_toggle.text = "ENABLE SCREEN SHAKE"
 	shake_toggle.button_pressed = _cfg_bool(config, "accessibility", "screen_shake", true)
+	UI_THEME.styled_checkbutton(shake_toggle)
 	box.add_child(shake_toggle)
 	shake_toggle.toggled.connect(func(_value): _apply_settings())
 
 	flash_toggle = CheckButton.new()
 	flash_toggle.text = "ENABLE FLASH EFFECTS"
 	flash_toggle.button_pressed = _cfg_bool(config, "accessibility", "flash_effects", true)
+	UI_THEME.styled_checkbutton(flash_toggle)
 	box.add_child(flash_toggle)
 	flash_toggle.toggled.connect(func(_value): _apply_settings())
 
 	ghost_toggle = CheckButton.new()
 	ghost_toggle.text = "SINGLE-PLAYER GHOST PACER"
 	ghost_toggle.button_pressed = _cfg_bool(config, "race", "ghost_enabled", true)
+	UI_THEME.styled_checkbutton(ghost_toggle)
 	box.add_child(ghost_toggle)
 	ghost_toggle.toggled.connect(func(_value): _apply_settings())
 
 	reduced_motion_toggle = CheckButton.new()
 	reduced_motion_toggle.text = "REDUCED MOTION"
 	reduced_motion_toggle.button_pressed = _cfg_bool(config, "accessibility", "reduced_motion", false)
+	UI_THEME.styled_checkbutton(reduced_motion_toggle)
 	box.add_child(reduced_motion_toggle)
 	reduced_motion_toggle.toggled.connect(func(_value): _apply_settings())
 
 	high_contrast_toggle = CheckButton.new()
 	high_contrast_toggle.text = "HIGH CONTRAST HUD"
 	high_contrast_toggle.button_pressed = _cfg_bool(config, "accessibility", "high_contrast", false)
+	UI_THEME.styled_checkbutton(high_contrast_toggle)
 	box.add_child(high_contrast_toggle)
 	high_contrast_toggle.toggled.connect(func(_value): _apply_settings())
 
 	subtitles_toggle = CheckButton.new()
 	subtitles_toggle.text = "AUDIO CUE SUBTITLES"
 	subtitles_toggle.button_pressed = _cfg_bool(config, "accessibility", "subtitles", false)
+	UI_THEME.styled_checkbutton(subtitles_toggle)
 	box.add_child(subtitles_toggle)
 	subtitles_toggle.toggled.connect(func(_value): _apply_settings())
 
@@ -155,11 +165,7 @@ func _build_ui() -> void:
 	time_scale_option.item_selected.connect(func(_index): _apply_settings())
 
 	# --- INPUT: scheme, sensitivity, mouse look, controller prefs --------
-	var kb_sens_label = Label.new()
-	kb_sens_label.text = "INPUT"
-	kb_sens_label.add_theme_font_size_override("font_size", 13)
-	kb_sens_label.add_theme_color_override("font_color", Color("ff9a1a"))
-	box.add_child(kb_sens_label)
+	box.add_child(UI_THEME.make_section_header("INPUT"))
 
 	# Control scheme: AUTO follows whichever device was touched last
 	# (persisted); manual entries pin one scheme. This is the "easy switch".
@@ -178,6 +184,7 @@ func _build_ui() -> void:
 	keyboard_sens_slider.step = 0.05
 	keyboard_sens_slider.custom_minimum_size = Vector2(0, 28)
 	keyboard_sens_slider.value = float(config.get_value("input", "keyboard_sensitivity", 0.35))
+	UI_THEME.styled_slider(keyboard_sens_slider)
 	_add_setting(box, "KEYBOARD SENSITIVITY (LOW = GENTLER STEERING)", keyboard_sens_slider)
 
 	camera_sens_slider = HSlider.new()
@@ -186,29 +193,34 @@ func _build_ui() -> void:
 	camera_sens_slider.step = 0.05
 	camera_sens_slider.custom_minimum_size = Vector2(0, 28)
 	camera_sens_slider.value = float(config.get_value("input", "mouse_sensitivity", 0.8))
+	UI_THEME.styled_slider(camera_sens_slider)
 	_add_setting(box, "CAMERA SENSITIVITY (MOUSE + RIGHT STICK)", camera_sens_slider)
 
 	invert_toggle = CheckButton.new()
 	invert_toggle.text = "INVERT CAMERA PAN"
 	invert_toggle.button_pressed = bool(config.get_value("input", "invert_camera_x", false))
+	UI_THEME.styled_checkbutton(invert_toggle)
 	box.add_child(invert_toggle)
 	invert_toggle.toggled.connect(func(_value): _apply_settings())
 
 	var mouse_look_toggle = CheckButton.new()
 	mouse_look_toggle.text = "MOUSE CAMERA LOOK (MOVE MOUSE TO ORBIT)"
 	mouse_look_toggle.button_pressed = bool(config.get_value("input", "mouse_look_enabled", true))
+	UI_THEME.styled_checkbutton(mouse_look_toggle)
 	box.add_child(mouse_look_toggle)
 	_input_toggles["mouse_look_enabled"] = mouse_look_toggle
 
 	var stick_look_toggle = CheckButton.new()
 	stick_look_toggle.text = "RIGHT-STICK CAMERA LOOK"
 	stick_look_toggle.button_pressed = bool(config.get_value("input", "stick_look_enabled", true))
+	UI_THEME.styled_checkbutton(stick_look_toggle)
 	box.add_child(stick_look_toggle)
 	_input_toggles["stick_look_enabled"] = stick_look_toggle
 
 	var vibration_toggle = CheckButton.new()
 	vibration_toggle.text = "CONTROLLER VIBRATION"
 	vibration_toggle.button_pressed = bool(config.get_value("input", "vibration_enabled", true))
+	UI_THEME.styled_checkbutton(vibration_toggle)
 	box.add_child(vibration_toggle)
 	_input_toggles["vibration_enabled"] = vibration_toggle
 
@@ -386,6 +398,7 @@ func _make_slider() -> HSlider:
 	slider.max_value = 100.0
 	slider.step = 1.0
 	slider.custom_minimum_size = Vector2(0, 28)
+	UI_THEME.styled_slider(slider)
 	return slider
 
 func _apply_settings() -> void:

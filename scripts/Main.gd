@@ -57,6 +57,7 @@ var menu_time: float = 0.0
 var hero_panel: Control
 var hero: Control
 var backdrop: Control
+var tagline_scrim: Control
 
 # UI nodes
 @onready var title_label: Label = $VBox/Title
@@ -70,16 +71,9 @@ var backdrop: Control
 
 func _ready() -> void:
 	get_window().title = "Friday 5PM: Evacuation"
-	# Apply saved input prefs once at menu boot: re-arms the persisted
-	# bindings remap, refreshes sensitivity caches, and syncs scheme
-	# memory. Modes used to do this per-_ready, so launching Hauled/Shop
-	# & Seek/Pizza Colony paths that skip Evacuation still need it HERE.
 	var prefs_boot = load("res://scripts/InputPrefs.gd")
 	if prefs_boot and prefs_boot.has_method("refresh_cache"):
 		prefs_boot.refresh_cache()
-	# Debug virtual gamepad (--virtual-pad or FE_VIRTUAL_PAD=1): pumps real
-	# joypad events for pad-play QA without hardware. Lives on the root so
-	# it survives scene changes into the race.
 	if "virtual-pad" in OS.get_cmdline_user_args() or OS.get_environment("FE_VIRTUAL_PAD") == "1":
 		var vpad = load("res://scripts/VirtualPad.gd")
 		if vpad:
@@ -91,14 +85,15 @@ func _ready() -> void:
 	_build_hero_panel()
 	_build_character_selector()
 	_build_skin_selector()
-	
+
 	play_button.pressed.connect(_on_play)
 	play_button.pressed.connect(_play_click_sound)
 	_build_modifier_row()
-	# UI SLICE: utility row becomes a wrapping flow at narrow widths — four
-	# side-by-side buttons had a 449px combined minimum (sum of text widths,
-	# the last thing keeping the menu column wider than a phone viewport).
-	# A flow row wraps to 2x2 with a minimum of just the widest button.
+	# D3 regroup order: mode cards > RIDER/CHAIR > TODAY'S OFFICE CHAOS > PLAY > MULTIPLAYER.
+	# Build order produces: mode list, char_row, skin_row, modifier_menu, play, host, utility, stats.
+	# That matches the spec — char/skin rows were moved before play in their build functions.
+
+	# Utility row — D2: utility buttons use apply_utility() for hover + focus.
 	if _is_narrow():
 		utility_row = HFlowContainer.new()
 	else:
@@ -110,6 +105,7 @@ func _ready() -> void:
 	settings_button.custom_minimum_size = Vector2(0, 28)
 	settings_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_button.add_theme_font_size_override("font_size", 12)
+	UI_THEME.apply_utility(settings_button, UI_THEME.color(UI_THEME.CYAN))
 	utility_row.add_child(settings_button)
 	settings_button.pressed.connect(_open_settings)
 	credits_button = Button.new()
@@ -117,12 +113,10 @@ func _ready() -> void:
 	credits_button.custom_minimum_size = Vector2(0, 28)
 	credits_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	credits_button.add_theme_font_size_override("font_size", 12)
+	UI_THEME.apply_utility(credits_button, UI_THEME.color(UI_THEME.VIOLET))
 	utility_row.add_child(credits_button)
 	credits_button.pressed.connect(_open_credits)
-	# PHASE 4: map layout picker (single-player + host authority).
 	layout_option = OptionButton.new()
-	# UI SLICE: short map names at narrow widths (the utility row's 520px
-	# combined minimum was the last floor above the 390px viewport).
 	var narrow := _is_narrow()
 	layout_option.add_item("MAP: OPEN PLAN" if not narrow else "OPEN PLAN", 0)
 	layout_option.add_item("MAP: CUBICLE MAZE" if not narrow else "CUBICLES", 1)
@@ -134,17 +128,14 @@ func _ready() -> void:
 	var saved_layout := str(_load_saved_layout())
 	layout_option.select({"open_plan": 0, "cubicle_maze": 1, "executive": 2}.get(saved_layout, 0))
 	layout_option.item_selected.connect(_on_layout_selected)
-	# Apply the persisted pick so a menu-skip (LAN auto-start) still gets it.
 	var LayoutsScript = load("res://scripts/LevelLayouts.gd")
 	if LayoutsScript:
 		LayoutsScript.set_current(saved_layout)
-	# PHASE WEB: touch controls cycle button — AUTO (web+touchscreen
-	# auto-on) / ON / OFF. Persisted; lets desktop players preview and
-	# web players force the overlay regardless of detection.
 	touch_button = Button.new()
 	touch_button.custom_minimum_size = Vector2(0, 28)
 	touch_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	touch_button.add_theme_font_size_override("font_size", 12)
+	UI_THEME.apply_utility(touch_button, UI_THEME.color(UI_THEME.ORANGE))
 	utility_row.add_child(touch_button)
 	var prefs_touch = load("res://scripts/InputPrefs.gd")
 	var touch_pref := "auto"
@@ -169,9 +160,6 @@ func _ready() -> void:
 	host_button.pressed.connect(_open_lobby)
 	join_button.visible = false
 	back_button.visible = false
-	# CLICK-TO-START SPLASH: dims the menu behind a scrim until the first
-	# click / tap / Enter / pad A. Doubles as the browser audio-unlock
-	# gesture (web builds block sound until a user input event).
 	var splash = load("res://scripts/SplashScreen.gd")
 	if splash and splash.has_method("mount"):
 		splash.mount(self)
@@ -182,21 +170,18 @@ func _build_mode_buttons() -> void:
 		var btn = Button.new()
 		var card_script = load("res://scripts/ModeCard.gd")
 		btn.set_script(card_script)
-		btn.configure(info.title, info.subtitle, MODE_STATUS[i], info.color)
-		# OVERHAUL: compact primary cards — two-line cards drive the list
-		# height; 30px keeps subtitles readable while the column fits 720p.
-		btn.custom_minimum_size = Vector2(0, 30)
+		var is_hero := (i == 0)
+		btn.configure(info.title, info.subtitle, MODE_STATUS[i], info.color, is_hero)
+		# D2: hero card 84px min height; others 56px.
+		btn.custom_minimum_size = Vector2(0, 84 if is_hero else 56)
 		btn.focus_mode = Control.FOCUS_ALL
 		btn.pressed.connect(_select_mode.bind(i))
 		mode_list.add_child(btn)
 		buttons.append(btn)
 
-## HERO PANEL: rotating chair preview + identity pickers, docked right.
-## Two-column layout at >= 1080px wide; collapses (hides hero) below that
-## so small viewports keep the single-column scroll.
+## HERO PANEL: D2 — YOUR RIDE panel in right column grid (340px), shares
+## vertical rhythm with mode list; not a floating card. Hidden <1080px.
 func _build_hero_panel() -> void:
-	# Animated skyline backdrop behind everything (child of BG so it stays
-	# behind the VBox contents; Control draw order follows tree order).
 	backdrop = Control.new()
 	backdrop.set_script(load("res://scripts/MenuBackdrop.gd"))
 	backdrop.name = "MenuBackdrop"
@@ -210,13 +195,14 @@ func _build_hero_panel() -> void:
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(16)
 	hero_panel.add_theme_stylebox_override("panel", style)
-	# Dock right: full-height column at 28% width on wide screens.
 	hero_panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
 	hero_panel.anchor_left = 0.70
 	hero_panel.offset_left = 12
 	hero_panel.offset_top = 10
 	hero_panel.offset_right = -12
 	hero_panel.offset_bottom = -10
+	# D2: 340px right column.
+	hero_panel.custom_minimum_size = Vector2(340, 0)
 	var hero_vb := VBoxContainer.new()
 	hero_vb.add_theme_constant_override("separation", 10)
 	hero_panel.add_child(hero_vb)
@@ -243,15 +229,10 @@ func _refresh_hero() -> void:
 		hero.refresh_for_pick()
 
 func _build_modifier_row() -> void:
-	# Race-modifier picker panel — single-player Evacuation only.
-	# Sits ABOVE the play button (rules are chosen before you launch, like a
-	# real game's pre-match options), not below it like a debug row.
 	var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
 	if not RaceModifiersScript:
 		return
 	RaceModifiersScript.load_from_cfg()
-	# load()-based mount (file convention): keeps Main.gd parse-safe even when
-	# the global class_name cache is stale (fresh checkout before --import).
 	var menu_script = load("res://scripts/ModifierMenu.gd")
 	if not menu_script:
 		return
@@ -279,14 +260,12 @@ func _build_character_selector() -> void:
 	character_select.add_theme_font_size_override("font_size", 14)
 	character_row.add_child(character_select)
 	character_detail = Label.new()
-	# UI SLICE: clip (ellipsis) instead of forcing a 250px+ minimum width —
-	# the unwrapped tagline was the single biggest contributor to the menu
-	# column's 700px minimum width (probe-measured), which made the whole
-	# VBox refuse to shrink below 700px in portrait windows.
-	character_detail.custom_minimum_size.x = 0
+	# D3: detail labels autowrap, min height 44px — no clip_text/ellipsis.
+	character_detail.custom_minimum_size = Vector2(0, 44)
 	character_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	character_detail.clip_text = true
-	character_detail.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	character_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	character_detail.clip_text = false
+	character_detail.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	character_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	character_detail.add_theme_font_size_override("font_size", 11)
 	character_detail.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
@@ -294,8 +273,6 @@ func _build_character_selector() -> void:
 	_register_detail_label(character_detail)
 	var selected := 0
 	var characters: Array[Dictionary] = roster.all()
-	# UI SLICE: drop the role suffix in narrow windows — the full
-	# "Name — ROLE" strings forced a 361px dropdown minimum width.
 	var short_items := _is_narrow()
 	for i in range(characters.size()):
 		var character: Dictionary = characters[i]
@@ -336,8 +313,6 @@ func _build_skin_selector() -> void:
 	skin_row.custom_minimum_size = Vector2(0, 28)
 	skin_row.add_theme_constant_override("separation", 10)
 	$VBox.add_child(skin_row)
-	# Park it right under the character row so the two pickers read as one
-	# identity block.
 	$VBox.move_child(skin_row, character_row.get_index() + 1)
 
 	var label := Label.new()
@@ -352,12 +327,12 @@ func _build_skin_selector() -> void:
 	skin_row.add_child(skin_select)
 
 	skin_detail = Label.new()
-	# UI SLICE: same ellipsis treatment as the rider tagline (probe: this
-	# label alone carried a 341px minimum into the column's min width).
-	skin_detail.custom_minimum_size.x = 0
+	# D3: detail labels autowrap, min height 44px — no clip_text/ellipsis.
+	skin_detail.custom_minimum_size = Vector2(0, 44)
 	skin_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	skin_detail.clip_text = true
-	skin_detail.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	skin_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	skin_detail.clip_text = false
+	skin_detail.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	skin_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	skin_detail.add_theme_font_size_override("font_size", 11)
 	skin_detail.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
@@ -379,9 +354,6 @@ func _build_skin_selector() -> void:
 		else:
 			locked_count += 1
 			var need := int(skin["unlock_wins"])
-			# UI SLICE: compact lock tag at narrow widths (the long form
-			# forced a 300px dropdown minimum; the unlock progress already
-			# lives in the detail line beside it).
 			if _is_narrow():
 				skin_select.add_item("%s 🔒%d" % [skin["name"], need])
 			else:
@@ -389,8 +361,6 @@ func _build_skin_selector() -> void:
 			skin_select.set_item_metadata(skin_select.item_count - 1, "")
 			skin_select.set_item_disabled(skin_select.item_count - 1, true)
 			if id == GameManager.selected_skin_id:
-				# Saved pick got locked?? Can't happen (unlocks never re-lock)
-				# but stay honest and fall back to default.
 				selected = 0
 	var _next = skins.next_unlock(wins)
 	if _next.is_empty():
@@ -408,7 +378,7 @@ func _on_skin_selected(index: int) -> void:
 		return
 	var id := String(skin_select.get_item_metadata(index))
 	if id == "":
-		return  # locked placeholder row
+		return
 	var skin: Dictionary = skins.get_skin(id)
 	GameManager.selected_skin_id = id
 	GameManager.save_identity()
@@ -431,9 +401,6 @@ func _on_skin_selected(index: int) -> void:
 func _select_mode(idx: int) -> void:
 	selected_index = idx
 	var info = MODE_INFO[idx]
-	# OVERHAUL: the brand title stays static (big display type); the mode
-	# name rides the kicker line instead of resizing the header per card
-	# (42px mode titles blew the VBox's vertical budget and clipped).
 	subtitle_label.text = "%s — %s" % [info.subtitle, info.title.to_upper()]
 	subtitle_label.modulate = info.color
 	desc_label.text = info.desc
@@ -443,9 +410,6 @@ func _select_mode(idx: int) -> void:
 	for i in range(buttons.size()):
 		if buttons[i].has_method("set_selected"):
 			buttons[i].set_selected(i == idx)
-			# Card label: title + subtitle for secondary modes (honest status
-			# tags); the primary card is title-only — the page header above it
-			# already says what it is, so repeating it reads as duplication.
 			if i == 0:
 				buttons[i].text = MODE_INFO[i].title
 			else:
@@ -465,8 +429,6 @@ func _on_play() -> void:
 	else:
 		get_tree().change_scene_to_file(scene_path)
 
-## PHASE 4: layout selection — persisted to the game cfg, applied via
-## LevelLayouts.set_current so the next match builds the picked variant.
 const LAYOUT_CFG_PATH := "user://settings.cfg"
 
 func _load_saved_layout() -> String:
@@ -488,11 +450,8 @@ func _on_layout_selected(index: int) -> void:
 	if audio and audio.has_method("play_sfx"):
 		audio.play_sfx("ui_click", 1.0)
 
-## WEB TOUCH: label shows the resolved state so "AUTO" reads honestly —
-## e.g. "TOUCH: AUTO (ON)" on a phone, "TOUCH: AUTO (OFF)" on desktop.
 func _touch_button_label(mode: String) -> String:
 	var prefs = load("res://scripts/InputPrefs.gd")
-	# UI SLICE: compact labels at narrow widths (utility-row min width).
 	var short := _is_narrow()
 	match mode:
 		"on":
@@ -528,22 +487,9 @@ func _open_credits() -> void:
 func _process(delta: float) -> void:
 	menu_time += delta
 	if title_label:
-		# OVERHAUL: slow brand breathing on the display title (was a flat
-		# alpha flutter on the old 22px label — invisible at that size).
 		title_label.modulate = Color(1, 1, 1, 1.0).lerp(Color(1.08, 0.95, 0.85), 0.5 + sin(menu_time * 1.6) * 0.5)
 	_update_layout()
 
-## UI SLICE: single deterministic responsive layout for the main menu.
-## Runs every frame (cheap — a compare + occasional assignment). Handles:
-##   - hero column: visible + reserved 420px margin only at >= 1080px
-##   - margins: fixed desktop 80px shrinks progressively down to 12px so
-##     portrait windows never get a negative content rect (the old
-##     "title clipped off the left edge" bug)
-##   - header rows: left-aligned edge-to-edge on narrow screens, centered
-##     inside the margins on wide screens (centered text in a shrunken
-##     rect is what sliced the title in half in portrait)
-##   - utility/stats rows: one-liners get a 10px minimum font at 390px
-##     where the fixed 12px wraps; full size >= 560px
 func _update_layout() -> void:
 	var w := get_viewport_rect().size.x
 	var wide := w >= 1080.0
@@ -563,11 +509,6 @@ func _update_layout() -> void:
 		margin = 12.0
 	vbox.offset_left = margin
 	vbox.offset_right = -420.0 if wide else -margin
-	# OVERHAUL: content now exceeds the 720p height (modifier chips etc).
-	# Shrink-on-overflow: a top+bottom anchored VBox whose minimum exceeds
-	# the viewport renders ABOVE y=0 (title clipped off-screen). Keep the
-	# bottom offset negative only when it fits; otherwise grow downward and
-	# let the title stay pinned inside the viewport.
 	var needed := vbox.get_combined_minimum_size().y
 	var view_h := get_viewport_rect().size.y
 	if needed > view_h - 34.0:
@@ -589,19 +530,21 @@ func _update_layout() -> void:
 	for label in _small_labels:
 		if is_instance_valid(label):
 			label.add_theme_font_size_override("font_size", 10 if small else 12)
+	# D2: tagline scrim — bottom-up gradient black 0.0->0.55 behind subtitle+desc.
+	if tagline_scrim:
+		tagline_scrim.visible = backdrop != null and backdrop.visible
+		if tagline_scrim.visible and subtitle_label and desc_label:
+			var sub_y := subtitle_label.global_position.y
+			var desc_bottom := desc_label.global_position.y + desc_label.size.y
+			if desc_bottom > sub_y:
+				tagline_scrim.position = Vector2(margin, sub_y - 4.0)
+				tagline_scrim.size = Vector2(w - margin * 2.0, desc_bottom - sub_y + 8.0)
 
 var _small_labels: Array[Label] = []
 
-## UI SLICE: narrow-window test used at build time; the menu builds ONCE,
-## so this reads the boot-time window size (a resize after boot re-runs
-## _update_layout for margins/fonts, but dropdown item text stays as built).
 func _is_narrow() -> bool:
 	return get_viewport_rect().size.x < 560.0
 
-## Detail labels keep their desktop minimum width on wide screens but get
-## out of the container's way below 560px so the VBox can shrink with the
-## window (combined minimum width of the menu column is what makes or
-## breaks portrait; measured 700px -> must fall under ~400px).
 func _register_detail_label(label: Label) -> void:
 	_small_labels.append(label)
 	if get_viewport_rect().size.x < 560.0:
@@ -612,9 +555,6 @@ func _register_small_label(label: Label) -> void:
 	label.add_theme_font_size_override("font_size", 12)
 
 func _build_menu_theme() -> void:
-	# OVERHAUL: the title was a quiet 22px label. Big display treatment —
-	# oversized kicker over the brand title, tight leading, slow breathing
-	# glow. Same responsive contract (MenuLayoutSmokeTest).
 	title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
 	var w := get_viewport_rect().size.x
 	title_label.add_theme_font_size_override("font_size", 34 if w >= 700.0 else 26)
@@ -625,17 +565,21 @@ func _build_menu_theme() -> void:
 		title_label.add_theme_constant_override("line_spacing", -6)
 	desc_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	desc_label.add_theme_font_size_override("font_size", 13)
+	# D2: tagline scrim panel — bottom-up gradient black 0.0->0.55 so text
+	# reads over the skyline backdrop. ColorRect can't gradient; use a
+	# custom Control that draws vertical bands.
+	tagline_scrim = Control.new()
+	tagline_scrim.name = "TaglineScrim"
+	tagline_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tagline_scrim.set_script(load("res://scripts/TaglineScrim.gd"))
+	# Insert behind the VBox (draw order = tree order; BG is child 0).
+	add_child(tagline_scrim)
+	move_child(tagline_scrim, 0)
 	UI_THEME.apply_primary(play_button)
-	# Controller-friendly menu: focus PLAY so dpad/left-stick + A navigates
-	# the main menu out of the box (mouse still works as before).
 	play_button.grab_focus()
 	UI_THEME.apply_secondary(host_button, UI_THEME.color(UI_THEME.CYAN))
 	UI_THEME.apply_secondary(join_button, UI_THEME.color(UI_THEME.LIME))
 	UI_THEME.apply_secondary(back_button, UI_THEME.color(UI_THEME.CORAL))
-	if settings_button:
-		UI_THEME.apply_secondary(settings_button, UI_THEME.color(UI_THEME.CYAN))
-	if credits_button:
-		UI_THEME.apply_secondary(credits_button, UI_THEME.color(UI_THEME.VIOLET))
 
 func _open_lobby() -> void:
 	if lobby_overlay:

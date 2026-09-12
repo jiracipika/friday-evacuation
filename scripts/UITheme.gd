@@ -78,3 +78,43 @@ static func apply_secondary(button: Button, accent: Color = color(CYAN)) -> void
 	button.add_theme_stylebox_override("hover", button_style(color(SURFACE_HOVER), accent, 2))
 	button.add_theme_color_override("font_color", color(TEXT, 0.86))
 	button.add_theme_color_override("font_hover_color", color(TEXT))
+
+## D6: styled slider — 8px ORANGE grabber, 4px SURFACE_HOVER groove, radius 2
+static func styled_slider(slider: HSlider) -> void:
+	var grabber := StyleBoxFlat.new()
+	grabber.bg_color = color(ORANGE)
+	grabber.set_corner_radius_all(4)
+	grabber.content_margin_left = 3.0
+	grabber.content_margin_right = 3.0
+	grabber.content_margin_top = 3.0
+	grabber.content_margin_bottom = 3.0
+	slider.add_theme_stylebox_override("grabber_area", grabber)
+	slider.add_theme_stylebox_override("grabber_area_highlight", grabber)
+	var groove := StyleBoxFlat.new()
+	groove.bg_color = color(SURFACE_HOVER)
+	groove.set_corner_radius_all(2)
+	slider.add_theme_stylebox_override("slider", groove)
+
+## D6: CheckButton — 14px text, matches panel identity
+static func styled_checkbutton(cb: CheckButton) -> void:
+	cb.add_theme_font_size_override("font_size", 14)
+
+## D6: section header — 13px ORANGE, returns a Label with +10px top margin
+static func make_section_header(text: String) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 13)
+	label.add_theme_color_override("font_color", color(ORANGE))
+	# +10px top margin: the Label's own rect includes the gap so the
+	# following row sits 10px below the header text.
+	label.custom_minimum_size.y = 23
+	label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	return label
+
+## D2: utility button — 28px pill with hover brighten + ORANGE focus outline
+static func apply_utility(button: Button, accent: Color = color(CYAN)) -> void:
+	button.add_theme_stylebox_override("normal", button_style(color(SURFACE), Color(accent.r, accent.g, accent.b, 0.2), 1, 10))
+	button.add_theme_stylebox_override("hover", button_style(color(SURFACE_HOVER), accent, 2, 10))
+	button.add_theme_stylebox_override("focus", button_style(color(SURFACE), accent, 2, 10))
+	button.add_theme_color_override("font_color", color(TEXT, 0.82))
+	button.add_theme_color_override("font_hover_color", color(TEXT))

@@ -92,12 +92,12 @@ func _build_header() -> HBoxContainer:
 	headings.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_label = Label.new()
 	title_label.text = TITLE_TEXT
-	title_label.add_theme_font_size_override("font_size", 12)
+	title_label.add_theme_font_size_override("font_size", 14)
 	title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
 	headings.add_child(title_label)
 	sub_label = Label.new()
 	sub_label.text = SUB_TEXT
-	sub_label.add_theme_font_size_override("font_size", 10)
+	sub_label.add_theme_font_size_override("font_size", 11)
 	sub_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	headings.add_child(sub_label)
 	header.add_child(headings)
@@ -129,10 +129,10 @@ func _build_chips() -> void:
 		# whole menu past 720p; two-line chips at 48px keep hints readable.
 		chip.custom_minimum_size = Vector2(150, 48)
 		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		chip.add_theme_stylebox_override("normal", _chip_style(UI_THEME.color(UI_THEME.SURFACE), Color(accent.r, accent.g, accent.b, 0.25), 1))
-		chip.add_theme_stylebox_override("hover", _chip_style(UI_THEME.color(UI_THEME.SURFACE_HOVER), Color(accent.r, accent.g, accent.b, 0.55), 1))
-		chip.add_theme_stylebox_override("pressed", _chip_style(accent.darkened(0.78), accent, 2))
-		chip.add_theme_stylebox_override("hover_pressed", _chip_style(accent.darkened(0.7), accent, 2))
+		chip.add_theme_stylebox_override("normal", _chip_style(UI_THEME.color(UI_THEME.SURFACE), UI_THEME.color(UI_THEME.TEXT_MUTED, 0.3), 1))
+		chip.add_theme_stylebox_override("hover", _chip_style(UI_THEME.color(UI_THEME.SURFACE_HOVER), UI_THEME.color(UI_THEME.TEXT_MUTED, 0.5), 1))
+		chip.add_theme_stylebox_override("pressed", _chip_style(Color(accent.r, accent.g, accent.b, 0.12), accent, 2))
+		chip.add_theme_stylebox_override("hover_pressed", _chip_style(Color(accent.r, accent.g, accent.b, 0.18), accent, 2))
 		chip.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		chip.tooltip_text = RaceModifiers.LABELS[mod]
 		chip.toggled.connect(_on_chip_toggled.bind(mod))

@@ -7,6 +7,7 @@ signal resumed
 
 const ACCENT := Color("ff9a1a")
 const BG_PANEL := Color("1c1c2e")
+const UI_THEME = preload("res://scripts/UITheme.gd")
 
 var _root: Control
 var _panel: Control
@@ -49,10 +50,8 @@ func _build_ui() -> void:
 	_panel.name = "PausePanel"
 	_panel.custom_minimum_size = Vector2(420, 0)
 	_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	var style := StyleBoxFlat.new()
-	style.bg_color = BG_PANEL
-	style.border_color = ACCENT
-	style.set_border_width_all(2)
+	var style := UI_THEME.panel_style(UI_THEME.color(UI_THEME.ORANGE), true)
+	style.border_color = UI_THEME.color(UI_THEME.ORANGE)
 	style.set_corner_radius_all(16)
 	style.content_margin_left = 28.0
 	style.content_margin_right = 28.0

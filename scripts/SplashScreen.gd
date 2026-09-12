@@ -74,39 +74,48 @@ func _build_ui() -> void:
 	# Touch phrasing only on real touch platforms — headless/desktop must
 	# not claim taps (DisplayServer.is_touchscreen_available() lies in
 	# headless runs and with emulate_touch_from_mouse).
+	# D1: brand lockup — kicker + two-line title with ORANGE outline + tagline
+	# + pulsing prompt. scrim_splash (0.965 alpha) over the REAL menu backdrop
+	# — never a flat fill. The backdrop's skyline bleeds through faintly.
 	var pad := OS.get_name() in ["Android", "iOS"] or (
 		OS.get_name() == "Web" and DisplayServer.is_touchscreen_available())
+
 	var kicker := Label.new()
 	kicker.text = "4:59 PM FRIDAY"
 	kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	kicker.add_theme_font_size_override("font_size", 16)
-	kicker.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
+	kicker.add_theme_font_size_override("font_size", 13)
+	kicker.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
+	# +8% tracking approximation (Godot has no letter_spacing on Labels in
+	# GL Compatibility; uppercase + small size reads as tracked).
 	center.add_child(kicker)
 
 	_title_label = Label.new()
 	_title_label.text = "FRIDAY 5PM\nEVACUATION"
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title_label.add_theme_font_size_override("font_size", 56)
-	_title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
-	_title_label.add_theme_constant_override("line_spacing", -8)
+	_title_label.add_theme_font_size_override("font_size", 42)
+	_title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT))
+	# D1: 3px ORANGE outline on the title text
+	_title_label.add_theme_constant_override("outline_size", 3)
+	_title_label.add_theme_color_override("font_outline_color", UI_THEME.color(UI_THEME.ORANGE))
+	_title_label.add_theme_constant_override("line_spacing", -4)
 	center.add_child(_title_label)
 
 	_sub_label = Label.new()
 	_sub_label.text = "IT'S 4:59. ONE MINUTE TO FREEDOM."
 	_sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_sub_label.add_theme_font_size_override("font_size", 15)
-	_sub_label.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35))
+	_sub_label.add_theme_font_size_override("font_size", 16)
+	_sub_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	center.add_child(_sub_label)
 
 	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(0, 26)
+	spacer.custom_minimum_size = Vector2(0, 20)
 	center.add_child(spacer)
 
 	_prompt_label = Label.new()
-	_prompt_label.text = "TAP TO START" if pad else "CLICK TO START"
+	_prompt_label.text = "TAP / PRESS A TO START" if pad else "CLICK / PRESS A TO START"
 	_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_prompt_label.add_theme_font_size_override("font_size", 20)
-	_prompt_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT))
+	_prompt_label.add_theme_font_size_override("font_size", 22)
+	_prompt_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
 	center.add_child(_prompt_label)
 
 	var hint := Label.new()
@@ -135,6 +144,12 @@ func _build_ui() -> void:
 	var menu := get_parent()
 	if menu and menu.has_node("VBox"):
 		(menu.get_node("VBox") as Control).modulate.a = 0.0
+	# D2 layout: hero panel (YOUR RIDE) is a VBox sibling now — hide it too,
+	# or its labels ghost through the splash scrim.
+	if menu:
+		for child in menu.get_children():
+			if child is Control and String(child.name).begins_with("HeroPanel"):
+				child.modulate.a = 0.0
 
 func _process(delta: float) -> void:
 	_time += delta
@@ -176,6 +191,10 @@ func _dismiss() -> void:
 	var menu := get_parent()
 	if menu and menu.has_node("VBox"):
 		(menu.get_node("VBox") as Control).modulate.a = 1.0
+	if menu:
+		for child in menu.get_children():
+			if child is Control and String(child.name).begins_with("HeroPanel"):
+				child.modulate.a = 1.0
 	var tween := create_tween()
 	tween.tween_property(_root, "modulate:a", 0.0, FADE_TIME)
 	tween.tween_callback(func():

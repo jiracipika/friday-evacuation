@@ -67,7 +67,10 @@ func _run() -> void:
 	var skin_detail: Label = main.skin_detail
 	check(char_detail.custom_minimum_size.x == 0.0, "rider tagline min width suppressed")
 	check(skin_detail.custom_minimum_size.x == 0.0, "chair tagline min width suppressed")
-	check(char_detail.clip_text and skin_detail.clip_text, "detail labels clip instead of expanding")
+	# D3: detail labels now autowrap (never clip mid-word) with 44px min height.
+	check(char_detail.autowrap_mode != TextServer.AUTOWRAP_OFF
+		and skin_detail.autowrap_mode != TextServer.AUTOWRAP_OFF,
+		"detail labels autowrap instead of clipping")
 
 	var utility: Container = main.utility_row
 	check(utility is HFlowContainer, "utility row wraps (flow container) at narrow width")

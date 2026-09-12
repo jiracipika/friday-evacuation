@@ -7,18 +7,20 @@ var mode_subtitle := ""
 var mode_status := "PROTOTYPE"
 var accent := Color("ff9a1a")
 
-# OVERHAUL: accent bar + status pill drawn in _draw over the themed card.
-# No child Controls — children of a Button escape its rounded stylebox and
-# overlapped neighboring rows before the first layout pass (vision QA).
+# D2: hero flag — Evacuation card gets 84px height, 20px title, ORANGE pill.
+var _hero := false
 var _selected := false
 var _bar_w := 4.0
 
-func configure(title: String, subtitle: String, status: String, color: Color) -> void:
+func configure(title: String, subtitle: String, status: String, color: Color, hero: bool = false) -> void:
 	mode_title = title
 	mode_subtitle = subtitle
 	mode_status = status
 	accent = color
+	_hero = hero
 	UI_THEME.apply_mode_card(self, accent)
+	# D2: hero cards get 20px title font; others 18px.
+	add_theme_font_size_override("font_size", 20 if _hero else 18)
 	queue_redraw()
 
 func set_selected(selected: bool) -> void:
@@ -37,25 +39,36 @@ func _draw() -> void:
 	if sz.x < 8.0 or sz.y < 8.0:
 		return
 	# Left accent bar: color identity strip, vertically centered.
-	var bar_h := minf(sz.y - 6.0, 42.0)
+	var bar_h := minf(sz.y - 6.0, 72.0 if _hero else 42.0)
 	draw_rect(Rect2(Vector2(3, sz.y * 0.5 - bar_h * 0.5), Vector2(_bar_w, bar_h)),
 		accent.lightened(0.25) if _selected else accent, true)
 	# Status pill: top-right chip. Text width via a cached font.
 	var font := get_theme_default_font()
 	var fs := 9
 	if font:
-		var text_w := font.get_string_size(mode_status, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		# D2: hero pill shows subtitle ("PRIMARY MODE") with ORANGE fill + dark text.
+		# Others show status with muted styling.
+		var pill_text := mode_subtitle if _hero else mode_status
+		var text_w := font.get_string_size(pill_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 		var pad := 7.0
 		var pill_w := text_w + pad * 2.0
 		var pill_h := 15.0
 		var pill_pos := Vector2(sz.x - pill_w - 8.0, 6.0)
-		var playable := not "PROTOTYPE" in mode_status
-		var pill_bg := Color(0.055, 0.055, 0.09, 0.95)
-		draw_rect_rect_style(pill_pos, Vector2(pill_w, pill_h), pill_bg,
-			Color(accent.r, accent.g, accent.b, 0.65 if playable else 0.35))
-		var txt_col := Color(0.55, 1.0, 0.65) if playable else Color(0.95, 0.75, 0.35)
-		draw_string(font, pill_pos + Vector2(pad, pill_h - 4.0), mode_status,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, txt_col)
+		if _hero:
+			# PRIMARY MODE pill: ORANGE fill, dark text.
+			var pill_bg := accent
+			draw_rect_rect_style(pill_pos, Vector2(pill_w, pill_h), pill_bg, pill_bg)
+			var txt_col := Color(0.04, 0.04, 0.06)
+			draw_string(font, pill_pos + Vector2(pad, pill_h - 4.0), pill_text,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, fs, txt_col)
+		else:
+			var playable := not "PROTOTYPE" in mode_status
+			var pill_bg := Color(0.055, 0.055, 0.09, 0.95)
+			draw_rect_rect_style(pill_pos, Vector2(pill_w, pill_h), pill_bg,
+				Color(accent.r, accent.g, accent.b, 0.65 if playable else 0.35))
+			var txt_col := Color(0.55, 1.0, 0.65) if playable else Color(0.95, 0.75, 0.35)
+			draw_string(font, pill_pos + Vector2(pad, pill_h - 4.0), pill_text,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, fs, txt_col)
 
 ## Rounded-rect pill via 4 quads + 4 corner circles (StyleBox drawing on a
 ## Button subclass isn't available; plain rects keep it crisp and opaque).
