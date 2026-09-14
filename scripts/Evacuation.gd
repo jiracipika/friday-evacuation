@@ -63,6 +63,7 @@ const CULL_LIGHT_DISTANCE_FLOORS := 1
 
 func _ready() -> void:
 	_setup_arena()
+	_style_results_panel()
 	# UI SLICE: portrait in-match hint (rotate your phone / tap to continue).
 	# Desktop-wide viewports never see it; headless tests never render it.
 	load("res://scripts/PortraitHint.gd").mount(self)
@@ -2047,6 +2048,47 @@ func _on_player_reached_exit(body: Node3D) -> void:
 			a11y.caption("FINISH!", 2.0)
 		_announcer().say("misc", _const_lines("WIN_LINES"), true)
 		_end_race()
+
+## D1 restyle (UI-LAYOUTS §7): UITheme panel + responsive shrink-to-fit.
+## Base 560x480; caps at 92% of viewport so 390px portrait never clips;
+## buttons REMATCH (primary orange) / MAIN MENU (secondary).
+func _style_results_panel() -> void:
+	if not results_panel:
+		return
+	var UIT = load("res://scripts/UITheme.gd")
+	if UIT:
+		results_panel.add_theme_stylebox_override("panel", UIT.panel_style(UIT.color(UIT.ORANGE), true))
+	var vbox = results_panel.get_node_or_null("VBox")
+	if vbox:
+		var winner = vbox.get_node_or_null("WinnerLabel")
+		if winner:
+			winner.add_theme_color_override("font_color", UIT.color("F2C66D") if UIT else Color("F2C66D"))
+			winner.add_theme_color_override("font_outline_color", UIT.color(UIT.BG) if UIT else Color("0A0A0F"))
+			winner.add_theme_constant_override("outline_size", 4)
+		var rematch = vbox.get_node_or_null("RematchButton")
+		if rematch and UIT:
+			UIT.apply_primary(rematch)
+		var menu = vbox.get_node_or_null("MenuButton")
+		if menu and UIT:
+			UIT.apply_secondary(menu, UIT.color(UIT.VIOLET))
+		var stats = vbox.get_node_or_null("StatsLabel")
+		if stats:
+			stats.add_theme_color_override("font_color", UIT.color(UIT.TEXT) if UIT else Color.WHITE)
+	# Responsive: clamp panel to 92% of the visible rect every resize.
+	_clamp_results_panel()
+	results_panel.resized.connect(_clamp_results_panel)
+
+func _clamp_results_panel() -> void:
+	if not results_panel:
+		return
+	var vp := results_panel.get_viewport_rect().size
+	var max_size := vp * 0.92
+	var w := minf(560.0, max_size.x)
+	var h := minf(480.0, max_size.y)
+	results_panel.offset_left = -w / 2.0
+	results_panel.offset_right = w / 2.0
+	results_panel.offset_top = -h / 2.0
+	results_panel.offset_bottom = h / 2.0
 
 func _end_race() -> void:
 	if match_state == &"finished":
