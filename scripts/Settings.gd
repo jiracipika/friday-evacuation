@@ -96,9 +96,8 @@ func _build_ui() -> void:
 
 	box.add_child(UI_THEME.make_section_header("VIDEO"))
 	quality_option = OptionButton.new()
-	quality_option.add_item("LOW")
-	quality_option.add_item("MEDIUM")
-	quality_option.add_item("HIGH")
+	quality_option.add_item("STANDARD")
+	quality_option.add_item("ENHANCED")
 	_add_setting(box, "GRAPHICS QUALITY", quality_option)
 	quality_option.item_selected.connect(func(_index): _apply_settings())
 
@@ -501,23 +500,31 @@ func _time_scale_value(index: int) -> float:
 		2: return 1.25
 		_: return 1.0
 
+## A2 preset remap (PRESETS.md §2-§4): Standard/Enhanced differ only in
+## resolution cap, frame cap, filtering, and shadow sharpness — NEVER in
+## effects. Fog/glow/vignette are off on every preset; omni shadows are off
+## on every preset; the decorative mote pool is fixed, not quality-gated.
+## Quality never removes hiding cover (fairness invariant §9).
 func _apply_graphics_quality(quality: int) -> void:
 	var root = get_tree().current_scene
 	if not root:
 		return
+	var enhanced := quality >= 1
 	var environment = root.get_node_or_null("WorldEnvironment")
 	if environment and environment.environment:
 		var env = environment.environment
-		env.fog_enabled = quality > 0
-		env.glow_enabled = quality > 0
-		env.vignette_enabled = quality > 0
-	var lights = root.find_children("*", "OmniLight3D", true, false)
-	for light in lights:
-		light.shadow_enabled = quality >= 2
-	# Dust motes: hide (not free) so re-raising quality restores them.
-	for motes in root.find_children("DustMotes*", "GPUParticles3D", true, false):
-		motes.emitting = quality > 0
-		motes.visible = quality > 0
+		env.fog_enabled = false
+		env.glow_enabled = false
+		if "vignette_enabled" in env:
+			env.vignette_enabled = false
+	var key = root.get_node_or_null("DirectionalLight3D") as DirectionalLight3D
+	if key:
+		key.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+		key.directional_shadow_max_distance = 28.0
+		key.shadow_blur = 1.0 if enhanced else 2.0
+		key.directional_shadow_blend_splits = true
+		key.shadow_bias = 0.05
+		key.shadow_normal_bias = 1.0
 
 func _close() -> void:
 	closed.emit()
@@ -533,7 +540,12 @@ func _restore_persisted_values() -> void:
 	if quality_option == null:
 		return
 	_restoring = true
-	quality_option.select(int(config.get_value("graphics", "quality", 1)))
+	var raw_q := int(config.get_value("graphics", "quality", 0))
+	# Migration: LOW/MEDIUM/HIGH era values (0/1/2) collapse to Standard(0);
+	# Enhanced(1) is opt-in under the new two-preset model (PRESETS.md §1).
+	if raw_q > 1:
+		raw_q = 0
+	quality_option.select(raw_q)
 	master_slider.value = float(config.get_value("audio", "master", 1.0)) * 100.0
 	music_slider.value = float(config.get_value("audio", "music", 0.5)) * 100.0
 	sfx_slider.value = float(config.get_value("audio", "sfx", 0.8)) * 100.0

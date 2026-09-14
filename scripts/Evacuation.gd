@@ -904,7 +904,7 @@ func _spawn_columns() -> void:
 ## coolers) — dressing and future props stay in sync automatically.
 func _spawn_floor_blob_shadows() -> void:
 	var Dressing = load("res://scripts/OfficeDressing.gd")
-	if not Dressing or not _quality_allows_post():
+	if not Dressing:
 		return
 	var floors: Dictionary = {}  # floor_index -> Array[Transform3D footprint]
 	for sb in get_children():
@@ -1516,23 +1516,30 @@ func _setup_environment() -> void:
 	if not world or not world.environment:
 		return
 	var env = world.environment
-	# Moody-but-readable office night: slightly cooler and dimmer than the
-	# old flat-bright wash so emissive fixtures and warm pools of light pop,
-	# while ambient stays high enough that GL Compatibility keeps chairs,
-	# hazards and routes readable.
+	# A2 preset remap (PRESETS.md §3): procedural ambient fallback is
+	# #B8CDD2 @ 0.45; key is #F2C66D @ 1.0 for Evacuation/Hauled/Pizza.
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.62, 0.74, 0.90)
-	env.ambient_light_energy = 0.50
+	env.ambient_light_color = Color("B8CDD2")
+	env.ambient_light_energy = 0.45
 	var key_light := get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if key_light:
-		key_light.light_energy = 0.78
-		key_light.light_color = Color(1.0, 0.89, 0.74)
-		# GRAPHICS PASS: keep dir shadows but soften edges; bias raised so
-		# the normal-mapped carpet doesn't self-shadow into acne stripes.
-		key_light.shadow_blur = 1.1
-		key_light.shadow_bias = 0.35
-	# Fog+glow default OFF here (Settings quality gate decides at runtime;
-	# LOW profile never pays for them), but configured when enabled.
+		key_light.light_energy = 1.0
+		key_light.light_color = Color("F2C66D")
+		# Key geometry per §3: elevation 30°, travel (+0.75,-0.50,-0.43).
+		var dir := Vector3(0.75, -0.50, -0.43).normalized()
+		key_light.look_at_from_position(key_light.global_position, key_light.global_position + dir)
+		# Shadow numbers per §4 (Standard): 2048, 2 cascades, 28 m, blend,
+		# fade 0.80; bias 0.05 / normal 1.0. Enhanced sharpness overrides in
+		# Settings._apply_graphics_quality (blur 1.0 vs 2.0, 4096 map).
+		key_light.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+		key_light.directional_shadow_max_distance = 28.0
+		key_light.directional_shadow_blend_splits = true
+		key_light.directional_shadow_fade_start = 0.80
+		key_light.shadow_blur = 2.0
+		key_light.shadow_bias = 0.05
+		key_light.shadow_normal_bias = 1.0
+	# Fog+glow are OFF on every preset (PRESETS.md §2 matrix — "off means
+	# disabled, not hidden behind a quality heuristic").
 	env.fog_enabled = false
 	env.fog_mode = Environment.FOG_MODE_DEPTH
 	env.fog_depth_begin = 18.0
@@ -1542,36 +1549,22 @@ func _setup_environment() -> void:
 	env.glow_enabled = false
 	env.glow_strength = 0.9
 	env.glow_hdr_threshold = 1.1
-	# Filmic tonemap: free contrast/rollover improvement that keeps emissive
-	# fixtures from clipping while deepening shadows — the "office at night"
-	# grade without any post-process pass cost.
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_white = 6.0
-	# Vignette: cheap post-process edge darkening that focuses the read on
-	# the arena center; gated by quality (LOW keeps it off for mobile GPUs).
-	# NOTE: `vignette_enabled` doesn't exist on Environment in GL Compatibility
-	# (movie-maker/compat renderer) — guard the property's existence.
-	var vignette := GradientTexture1D.new()
-	var grad := Gradient.new()
-	grad.set_color(0, Color(1, 1, 1, 1))
-	grad.set_color(1, Color(0.42, 0.44, 0.52, 1))
-	vignette.gradient = grad
-	if _quality_allows_post() and "vignette_enabled" in env:
-		env.vignette_enabled = true
-		env.vignette = vignette
+	# Tonemap LINEAR, exposure 1.0 fixed on every preset (PRESETS.md §2);
+	# the old filmic "office at night" grade is retired by the redesign.
+	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	# Vignette OFF on every preset (PRESETS.md §2).
 	_spawn_dust_motes()
 
-func _quality_allows_post() -> bool:
-	var cfg := ConfigFile.new()
-	var q := 1
-	if cfg.load("user://settings.cfg") == OK:
-		q = int(cfg.get_value("graphics", "quality", 1))
-	return q > 0
+## Dust motes are a fixed desktop decorative pool (PRESETS.md §8),
+## not a quality gate — present on Standard and Enhanced alike.
+func _motes_pool_capped() -> bool:
+	# Decorative motes are desktop-only in the §8 pool table (Android 0).
+	return OS.has_feature("android")
 
 ## Ambient dust motes drifting through light pools — two cheap quads-per-
 ## particle emitters per floor group area are skipped at LOW quality.
 func _spawn_dust_motes() -> void:
-	if not _quality_allows_post():
+	if _motes_pool_capped():
 		return
 	for floor_index in range(4):
 		var motes := GPUParticles3D.new()
