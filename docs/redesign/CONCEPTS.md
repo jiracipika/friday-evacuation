@@ -25,6 +25,13 @@ chunky silhouettes, late-afternoon amber sunlight + cool teal fill, palette
 - Concept 6 racers read slightly adult/realistic vs the chunkier character sheet
   (concept 1) — reconcile when locking the character style in Step 2.
 
+## Plan v2 status
+
+REDESIGN-PLAN-v2.md re-decided the engine (Godot 4.7 **Forward+** desktop,
+Compatibility = Android-only) under the RX 580 8GB + i5-8400 / 720p30 floor.
+**All six concept prompts stand unchanged** per Astra — these images remain the
+approved visual direction.
+
 ## Usage
 
 These are **reference/concept** images. Per the plan's texture strategy, production

@@ -1,3 +1,5 @@
+> **SUPERSEDED by REDESIGN-PLAN-v2.md** (2026-09-14): minimum spec changed to RX 580 8GB + i5-8400 (720p/30 floor), all performance-measurement steps removed, engine re-decided as Godot 4.7 **Forward+** for desktop (Compatibility now Android-only). Kept for history.
+
 # Friday 5PM: Evacuation — Full Visual Redesign Plan
 
 **Choose Godot 4 with the Compatibility renderer.** Retain the existing gameplay and LAN systems, and replace the procedural prototype presentation with authored models, carefully budgeted HD materials, and deliberately composed lighting.
