@@ -17,14 +17,14 @@ func _run() -> void:
 		await process_frame
 		await process_frame
 		var instrument: PanelContainer = hud.find_child("Instruments", true, false)
-		var abilities: PanelContainer = hud.find_child("Abilities", true, false)
+		# D2: player state is one panel; "Abilities" is the boost/item
+		# sub-stack inside it (name kept addressable per migration contract).
+		var abilities: Control = hud.find_child("Abilities", true, false)
 		check(instrument != null and abilities != null, "speed/abilities grouped on readable panels at %s" % viewport_size)
-		for panel: PanelContainer in [instrument, abilities]:
-			if panel == null:
-				continue
-			var style: StyleBoxFlat = panel.get_theme_stylebox("panel")
+		if instrument != null:
+			var style: StyleBoxFlat = instrument.get_theme_stylebox("panel")
 			check(is_equal_approx(style.bg_color.a, 1.0), "opaque panel isolates text from noisy world")
-			var rect: Rect2 = panel.get_global_rect()
+			var rect: Rect2 = instrument.get_global_rect()
 			check(rect.position.x >= 0 and rect.end.x <= viewport_size.x+1 and rect.position.y >= 0 and rect.end.y <= viewport_size.y+1,
 				"HUD panel remains within %s: %s" % [viewport_size,rect])
 		hud.set_speed(10.0, 12.0)
