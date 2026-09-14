@@ -128,6 +128,19 @@ pointing/emulate_touch_from_mouse=true
 
 3d/default_gravity=20.0
 
+[importer_defaults]
+
+texture={
+"compress/mode": 2,
+"compress/high_quality": false,
+"mipmaps/generate": true
+}
+
+texture_etc2_astc={
+"compress/mode": 2,
+"mipmaps/generate": true
+}
+
 [rendering]
 
 renderer/rendering_method="forward_plus"
