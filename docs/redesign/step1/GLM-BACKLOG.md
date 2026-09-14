@@ -52,8 +52,12 @@ Order matters; each item blocks the next in its lane. Appearance decisions
   fallback for future Android), run full ladder, fix fallout (shadow bias,
   material conversions, environment props that were Compatibility-gated).
 - A2. Preset remap: LOW/MED/HIGH → Standard/Enhanced (+ Android export
-  preset). Standard = SDFGI/SSR/volumetric fog/SSAO/SSIL off, FXAA on,
-  4x aniso; Enhanced = those enabled per Astra PRESETS.md.
+  preset). Per Astra PRESETS.md section 2: SDFGI/SSR/volumetric fog/SSAO/
+  SSIL stay OFF on BOTH Standard and Enhanced — Enhanced differs only in
+  resolution/FPShigher caps, 8x filtering, sharper (not more) shadows.
+  Android is binding on Compatibility (NOT mobile fallback). Shop & Seek
+  disables dynamic directional shadows on ALL presets for stock/disguise
+  parity.
 - A3. Texture import pipeline: 2K hero / shared tiling sets, VRCompressed,
   mip + aniso defaults; document allocation per plan v2 section 5.
 
@@ -68,9 +72,10 @@ Order matters; each item blocks the next in its lane. Appearance decisions
 - B4. Room kit + stair kit + atrium shell pieces (Step 3 scope).
 
 ### Lane C — Lighting composition (blocked by A1; design by Astra)
-- C1. Lightmap bake path: fixed layouts bake per-layout in editor
-  (Forward+); procedural layouts get authored ambient + vertex shading.
-  Needs a "fixed vs procedural layout" decision per mode from Astra.
+- C1. Lightmap bake path: resolved by Astra (PRESETS section 11) — fixed
+  layouts bake per-layout in editor (Forward+); until exact bake data
+  exists use the approved ambient/vertex/contact-shadow fallback. See
+  open question 1: pick first static layout signatures to make bakeable.
 - C2. Directional key: one shadowed sun, shadows restricted to nearby
   playable area (plan construction rule); remove per-omni shadows on
   Standard.
@@ -86,8 +91,12 @@ Order matters; each item blocks the next in its lane. Appearance decisions
 - E2. Movie-frame QA harness reuse (UISurveyCapture pattern) for visual
   acceptance evidence at 720p; pixel-stat verification before render changes.
 
-## 3. Open questions for Astra (answer in step1/STATUS.md)
+## 3. Questions for Astra — ANSWERED in step1/STATUS.md (2026-09-14)
 
-1. Which mode layouts are "fixed" (lightmap-bakeable) vs procedural?
-2. Confirm triangle budgets per prop family for B4 kits.
-3. Android texture ceiling confirm (512-1K) vs shared 2K sources.
+1. Fixed vs procedural layouts -> PRESETS section 11 (fallback until bake data).
+2. Prop triangle budgets -> MODEL-SHEETS section 11.
+3. Android texture ceiling -> confirmed 512-1024 for 3D, from shared 2K sources.
+New open items are GLM-side repo/toolchain facts (see STATUS.md "Open
+implementation questions"): bakeable layout signatures, actor collision
+envelope scale, culling registry split, ModeHUD/touch hook gaps, Godot
+shadow/filter property mapping.
