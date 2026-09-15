@@ -21,9 +21,9 @@ const FULL_CHAOS_SUMMARY := "FULL CHAOS. Every rule at once. Good luck."
 const HINTS := {
 	RaceModifiers.Modifier.NO_COFFEE: "Coffee machine is broken. No boost.",
 	RaceModifiers.Modifier.DOUBLE_TRAPS: "Facilities went ham. 8 traps out.",
-	RaceModifiers.Modifier.LOW_GRAVITY: "Window's open. Moon gravity on.",
+	RaceModifiers.Modifier.LOW_GRAVITY: "Moon gravity. Window's open.",
 	RaceModifiers.Modifier.SLIPPERY: "Cleaning night ran late. Waxed floors.",
-	RaceModifiers.Modifier.TIME_ATTACK_90: "Building demo at 5:30. 90 seconds.",
+	RaceModifiers.Modifier.TIME_ATTACK_90: "Demo at 5:30. Only 90 seconds.",
 }
 
 const ACCENTS := {
@@ -127,7 +127,7 @@ func _build_chips() -> void:
 		# minimum and flow 5/4/3-up as space allows.
 		# OVERHAUL: 62px chips made the panel 208px tall and pushed the
 		# whole menu past 720p; two-line chips at 48px keep hints readable.
-		chip.custom_minimum_size = Vector2(150, 48)
+		chip.custom_minimum_size = Vector2(150, 58)
 		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		chip.add_theme_stylebox_override("normal", _chip_style(UI_THEME.color(UI_THEME.SURFACE), UI_THEME.color(UI_THEME.TEXT_MUTED, 0.3), 1))
 		chip.add_theme_stylebox_override("hover", _chip_style(UI_THEME.color(UI_THEME.SURFACE_HOVER), UI_THEME.color(UI_THEME.TEXT_MUTED, 0.5), 1))
