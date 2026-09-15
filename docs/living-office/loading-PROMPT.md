@@ -1,0 +1,21 @@
+You are GLM 5.3 Flash implementing Astra's precise game design. Work ONLY in /Users/rs-mac/projects/fe-loading-lane. Task: implement and exercise this whole bounded slice, not a plan. Ownership ONLY scripts/LoadingScreen.gd, scripts/LoadingFlowSmokeTest.gd, tests/loading/ fixtures if needed, plus generated .uid for your new scripts. Read relevant callers/tests and docs/redesign/step1/UI-LAYOUTS.md, ART-BIBLE.md for context. This new design supersedes conflicting menu/loading section. Do not modify other project files, PLAN.md, other checkouts, global settings, or other projects. automated-newsletter and pitchforge explicitly excluded. No git commits/push.
+## Phase 1B — truthful loading
+
+Files: scripts/LoadingScreen.gd; new scripts/LoadingFlowSmokeTest.gd and small fixture scenes only if necessary.
+Existing issue established from source: MIN_SHOW_TIME=0.8, elapsed-derived progress, synchronous change_scene_to_file, timed dismissal regardless of readiness; no failure handling.
+
+Keep static show_loading(path) compatible with all callers. Mount one root-owned loader, block duplicate requests while active. Render overlay before work. ResourceLoader.load_threaded_request/get_status/get handles resource loading; never get until status LOADED. Percentage is only actual resource-load fraction. Distinct `PREPARING OFFICE` stage after resource load, with no fake percentage. Scene change via loaded PackedScene; dismiss only after target scene exists and readiness is established. No minimum dwell or mandatory fade. Small optional cosmetic fade must not gate input. Invalid paths/type/request/scene errors leave readable error with BACK, release lock and preserve/restore menu. Lifecycle must not free the new scene or leak overlays. Prevent input from double-triggering scene transitions.
+
+Opaque BG #0A0A0F; ivory title 24px; orange progress width320 height12; centered constrained container fits 640x360. Status `LOADING RESOURCES`, `PREPARING OFFICE`, or actionable error. No random obsolete control tips or claims about green arrows. Keyboard/gamepad back action must work on failure. LAN countdown must not be altered.
+
+TDD: nonexistent target, non-PackedScene target, duplicate request, successful transition, overlay cleanup, real progress source/no MIN_SHOW_TIME, failed-then-valid retry. Test actual SceneTree transitions, not source checks alone. Capture stderr and enforce timeout.
+
+
+
+
+Use explicit `hermes chat --provider zai --model glm-5.3-flash --ignore-rules --toolsets terminal,file --oneshot --max-turns 28 --run-budget 1200 --query-file <absolute prompt>` only after a successful routing probe. Never silently substitute glm-5.3 or glm-5.2 if requested id fails. No persistent profile/model changes. Up to four CLI workers permitted by user; start two independent implementation lanes, then use available lanes for review/vision. Stop on 429, preserve work and report. Vision worker may use vision toolset; record actual auxiliary model used, do not mislabel vision as Flash if provider uses another model.
+
+Isolated git worktrees per writer. Do not work on automated-newsletter or pitchforge. No worker commits/pushes, no shared-working-tree edits, no edits outside explicit ownership. Report changed files, commands, failures and limitations. Tests run serially per checkout; integration runs serially after workers stop. Parent reviews spec compliance then code quality, exercises final artifact, commits only owned changes to main and pushes; verify origin/main exact hash. No fabricated PASS output. Read combined stdout/stderr and time out hung Godot processes; exit code alone is insufficient.
+
+
+Run Godot import first if global classes not cached. Use subprocess timeout=90 and inspect combined stderr/stdout for SCRIPT ERROR/Parse Error; tests must actually finish. Do not run full ladder, only focused tests and real boot. Do not render screenshots now; parent handles captures. On failure record exact evidence. Write final report outside repo at /Users/rs-mac/projects/friday-evacuation/docs/living-office/loading-RESULT.md with changed paths, test output, unresolved gaps. Do not claim visual acceptance. No more than 28 turns: prioritize working implemented behavior and tests. 
