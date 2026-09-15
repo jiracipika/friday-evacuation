@@ -1,0 +1,59 @@
+$ /usr/local/bin/godot --headless --path /Users/rs-mac/projects/friday-evacuation --script scripts/LoadingFlowSmokeTest.gd -- --test-mode
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+
+[PASS] LoadingScreen.gd compiles
+[PASS] MIN_SHOW_TIME removed (no minimum dwell)
+[PASS] DISMISS_FADE_TIME removed (no cosmetic fade)
+[PASS] one overlay mounted for bad path
+[PASS] status shows LOAD FAILED
+[PASS] readable error names the bad path
+[PASS] error text uses real newlines
+[PASS] error text has no literal double-escaped backslash-n
+[PASS] BACK button shown on failure
+[PASS] menu scene preserved on failure
+[PASS] real Escape key dismisses failed overlay (lock released)
+[PASS] menu still current after BACK
+[PASS] overlay mounted for non-PackedScene target
+[PASS] BACK shown for non-PackedScene error
+[PASS] menu preserved for non-PackedScene error
+[PASS] BACK releases lock after non-PackedScene failure
+[PASS] duplicate requests blocked while active
+[PASS] current_scene swapped to loaded PackedScene
+[PASS] target scene exists and is ready
+[PASS] dismissal not gated by MIN_SHOW_TIME (swapped in 10 ms)
+[PASS] group removed immediately on success (no stale lock)
+[PASS] overlay cleaned up after successful transition (no leak)
+[PASS] progress bar mirrors actual ResourceLoader fraction
+[PASS] failed-then-valid retry works
+[PASS] async-readiness target swapped in
+[PASS] overlay waits for is_loading_complete, then dismisses
+[PASS] target scene fully complete before overlay left
+[PASS] async target needed multiple frames of waiting (waited 4)
+[PASS] overlay active for input-suppression test
+[PASS] sentinel received ZERO leaked events while overlay active (got 0)
+[PASS] Escape while loading does NOT dismiss overlay (no premature back)
+[PASS] successful transition after input barrage
+[PASS] no opaque overlay or stale lock after success
+[PASS] sentinel still at zero after transition (suppression held throughout)
+[PASS] overlay mounted for GUI-BACK regression
+[PASS] BACK visible before GUI click
+[PASS] REAL parsed mouse click on BACK rect dismisses overlay
+[PASS] BACK via click keeps the underlying menu scene intact
+[PASS] REAL parsed Enter key dismisses failed overlay (ui_accept BACK)
+[PASS] menu scene still current after Enter BACK
+[PASS] paused-tree target swapped in while tree paused
+[PASS] tree still paused while loader waits for readiness
+[PASS] overlay dismisses only after actual completion (not because paused)
+[PASS] pause remains intact through the whole readiness wait
+[PASS] paused target fully complete before overlay left
+[PASS] paused ALWAYS target needed multiple real frames (waited 6)
+[PASS] overlay mounted for post-swap timeout regression
+[PASS] error occurred AFTER the scene was already replaced
+[PASS] BACK releases lock after post-swap timeout
+[PASS] BACK after post-swap timeout restores the real Main menu
+[PASS] post-swap BACK recovery unpauses the tree
+[PASS] CountdownOverlay.gd untouched and loads
+[PASS] no failures
+LoadingFlowSmokeTest: 53/53 checks passed
+
+[runner] rc=0 timed_out=False duration=2.5s timeout=120s

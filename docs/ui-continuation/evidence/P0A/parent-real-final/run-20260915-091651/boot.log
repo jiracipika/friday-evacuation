@@ -1,0 +1,5 @@
+$ /usr/local/bin/godot --headless --path /Users/rs-mac/projects/friday-evacuation --quit-after 3 -- --test-mode
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+
+
+[runner] rc=0 timed_out=False duration=0.9s timeout=120s

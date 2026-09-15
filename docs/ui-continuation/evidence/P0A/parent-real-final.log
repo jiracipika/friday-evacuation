@@ -1,0 +1,9 @@
+command=['bash', 'scripts/run_ladder.sh', '--suites', 'MenuDepartureSmokeTest', 'LoadingFlowSmokeTest', '--timeout', '120', '--log-dir', 'docs/ui-continuation/evidence/P0A/parent-real-final']
+git diff --check: clean
+=== MenuDepartureSmokeTest PASS ===
+=== LoadingFlowSmokeTest PASS ===
+=== BOOT PASS ===
+
+SUBSET RESULT: PASS (2 of 52 suites executed; 3/3 phases passed; boot=yes; logs in docs/ui-continuation/evidence/P0A/parent-real-final/run-20260915-091651)
+
+exit_code=0

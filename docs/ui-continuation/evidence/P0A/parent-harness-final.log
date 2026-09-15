@@ -1,0 +1,34 @@
+command=['python3', 'scripts/test_ladder_runner.py', '-v']
+test_banner_numeric_patterns_semantically_validated (__main__.LadderRunnerHarness) ... ok
+test_benign_teardown_warning_not_fatal (__main__.LadderRunnerHarness) ... ok
+test_boot_script_error_fails_despite_zero_exit (__main__.LadderRunnerHarness) ... ok
+test_diff_check_gate_restored_in_wrapper (__main__.LadderRunnerHarness) ... ok
+test_diff_check_gate_runs_in_real_checkout (__main__.LadderRunnerHarness) ... ok
+test_empty_suite_selection_rejected (__main__.LadderRunnerHarness) ... ok
+test_env_subset_labelled_subset_not_full (__main__.LadderRunnerHarness) ... ok
+test_failure_banner_fails (__main__.LadderRunnerHarness) ... ok
+test_hero_assembly_fail_marker_fails_despite_rc0 (__main__.LadderRunnerHarness) ... ok
+test_invalid_suite_identifier_rejected (__main__.LadderRunnerHarness) ... ok
+test_log_contains_command_rc_and_timeout (__main__.LadderRunnerHarness) ... ok
+test_missing_required_suite_fails_not_skips (__main__.LadderRunnerHarness) ... ok
+test_nonpositive_timeout_rejected (__main__.LadderRunnerHarness) ... ok
+test_nonzero_exit_fails_even_with_pass_banner (__main__.LadderRunnerHarness) ... ok
+test_numeric_success_requires_equal_positive_passed_total (__main__.LadderRunnerHarness) ... ok
+test_pass_banner_with_late_script_error_fails (__main__.LadderRunnerHarness) ... ok
+test_production_manifest_includes_new_suites (__main__.LadderRunnerHarness) ... ok
+test_rc0_without_success_evidence_fails (__main__.LadderRunnerHarness) ... ok
+test_run_ladder_sh_wrapper_delegates_to_python (__main__.LadderRunnerHarness) ... ok
+test_stale_pass_log_never_satisfies_new_run (__main__.LadderRunnerHarness) ... ok
+test_subset_run_labelled_not_full_pass (__main__.LadderRunnerHarness) ... ok
+test_success_passes (__main__.LadderRunnerHarness) ... ok
+test_timeout_fails (__main__.LadderRunnerHarness) ... ok
+test_warning_containing_script_error_is_hard_error (__main__.LadderRunnerHarness) ... ok
+test_zero_executed_phases_rejected (__main__.LadderRunnerHarness) ... ok
+test_zero_exit_script_error_fails (__main__.LadderRunnerHarness) ... ok
+
+----------------------------------------------------------------------
+Ran 26 tests in 13.002s
+
+OK
+
+exit_code=0

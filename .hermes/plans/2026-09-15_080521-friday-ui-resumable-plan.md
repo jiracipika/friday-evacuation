@@ -8,6 +8,16 @@
 
 **Tech stack:** Godot / GDScript, existing Noto Sans design specification, Git, Hermes CLI with explicit zai / glm-5.3-flash routing.
 
+## Current execution override — two coding agents
+
+User subsequently authorized two GLM-5.3 Flash coding agents. This overrides the one-worker/no-parallel-worktree policy below, but NOT serial Godot execution or independent review.
+
+- P0A: existing worker PID 4483, active main checkout `/Users/rs-mac/projects/friday-evacuation`; owns runner files and shared STATUS only.
+- P1A: worker PID 10027, isolated `/Users/rs-mac/projects/fe-ui-p1a-flash`, branch `work/ui-p1a-flash`, base `65c9dae`; owns Main.gd, MenuDepartureSmokeTest.gd, P1A-specific status/results/evidence only.
+- These PIDs are historical dispatch identifiers: verify live commands before treating either as active. Never start duplicate workers from this record alone.
+- P1A may inspect/write tests concurrently but cannot start Godot/import while P0A or any other Godot is running. If the slot is unavailable, save WAITING_FOR_TEST_SLOT; do not invent test results.
+- Worker briefs: `docs/ui-continuation/tasks/P0A.md` in main and `docs/ui-continuation/tasks/P1A.md` in the P1A worktree. Neither worker commits/pushes. Parent reviews then integrates only owned files.
+
 ## 1. Current evidence and authority
 
 Discovery timestamp: 2026-09-15 08:05 EDT.
@@ -77,7 +87,7 @@ Not in this UI cycle: engine migration, new network protocol, office NPC/trades,
 
 | Phase | Deliverable | Initial state |
 |---|---|---|
-| P0 | Reliable test/checkpoint foundation and fresh screen audit | NOT STARTED |
+| P0 | Reliable test/checkpoint foundation and fresh screen audit | P0A VERIFIED: 26 harness tests + real menu/loading/boot pass; P0B pending |
 | P1 | Home navigation, focus, and short-height layout acceptance | NOT STARTED |
 | P2 | Customization, modes, office setup, and utility consistency | NOT STARTED |
 | P3 | LAN lobby, loading, briefing, pause transition clarity | NOT STARTED |

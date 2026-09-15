@@ -1,0 +1,107 @@
+$ /usr/local/bin/godot --headless --path /Users/rs-mac/projects/friday-evacuation --script scripts/MenuDepartureSmokeTest.gd -- --test-mode
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+
+[PASS] no splash mounted on entry
+[PASS] EVACUATE has primary focus from first entry
+[PASS] main CTA reads EVACUATE
+[PASS] EVACUATE is a 52px primary target
+[PASS] EVACUATE uses the orange primary fill
+[PASS] PLAY WITH FRIENDS is a 52px secondary
+[PASS] home description copy hidden per design
+[PASS] brand label present
+[PASS] secondary action visible + >=48px: OTHER MODES
+[PASS] secondary action visible + >=48px: CUSTOMIZE RIDE
+[PASS] secondary action visible + >=48px: OFFICE SETUP
+[PASS] secondary action visible + >=48px: SETTINGS
+[PASS] secondary action visible + >=48px: CREDITS
+[PASS] no duplicate bottom ActionTray CTAs
+[PASS] ink nav field covers ~x0-512 (w=512)
+[PASS] nav column left margin present
+[PASS] nav column stays inside the ink field (right=480)
+[PASS] nav column within viewport height
+[PASS] MenuBackdrop present
+[PASS] YOUR RIDE panel visible on desktop
+[PASS] YOUR RIDE panel is opaque
+[PASS] hero panel inside right field + viewport ([P: (904.0, 36.0), S: (340.0, 260.0)])
+[PASS] EVACUATE always selects Evacuation
+[PASS] CTA did not navigate away under the test seam
+[PASS] OTHER MODES opens the in-menu subview
+[PASS] home column hidden while a subview is open
+[PASS] modes subview paints an opaque ink field
+[PASS] subview ink field covers the nav width (w=512 vs 512)
+[PASS] subview lists the existing four modes
+[PASS] selected mode title/description visible inside the subview
+[PASS] PLAY SELECTED is a visible pinned action
+[PASS] mode 0 card shows selected style
+[PASS] mode 0 playable via PLAY SELECTED Button.pressed
+[PASS] mode 1 card shows selected style
+[PASS] mode 1 playable via PLAY SELECTED Button.pressed
+[PASS] mode 2 card shows selected style
+[PASS] mode 2 playable via PLAY SELECTED Button.pressed
+[PASS] mode 3 card shows selected style
+[PASS] mode 3 playable via PLAY SELECTED Button.pressed
+[PASS] selected readout follows the chosen mode
+[PASS] repeated subview opens do not duplicate signal connections
+[PASS] BACK closes the modes subview
+[PASS] home column restored after BACK
+[PASS] focus restored to the opening control
+[PASS] CUSTOMIZE RIDE opens rider/chair subview
+[PASS] rider + chair selectors present
+[PASS] Escape closes one subview layer
+[PASS] root Escape does not quit
+[PASS] Escape restores focus to the opening control
+[PASS] OFFICE SETUP exposes all map variants
+[PASS] OFFICE SETUP has modifier + touch controls
+[PASS] Escape closes the office subview
+[PASS] map layout selection persists via LevelLayouts
+[PASS] layout write lands in settings.cfg
+[PASS] PLAY WITH FRIENDS opens the existing LAN lobby
+[PASS] lobby BACK closes cleanly
+[PASS] SETTINGS opens the real settings overlay
+[PASS] settings overlay closes to null
+[PASS] CREDITS opens a real CanvasLayer credits overlay
+[PASS] credits dedupes to a single layer
+[PASS] credits close clears the handle
+[PASS] credits close restores focus
+[PASS] lazy OFFICE SETUP not built on boot
+[PASS] saved map layout applied in _ready without the office subview
+[PASS] lazy-built office subview reflects the saved layout
+[PASS] all visible buttons within horizontal bounds (1280, 720)
+[PASS] all action targets >= 48px at (1280, 720)
+[PASS] below-the-fold actions reachable via scroll at (1280, 720)
+[PASS] nav inside 40% field at (1280, 720) (right=480)
+[PASS] hero preview visibility correct at (1280, 720)
+[PASS] nav buttons >= 14px text at (1280, 720)
+[PASS] modes subview within viewport height at (1280, 720)
+[PASS] modes readout reachable (scrolled) at (1280, 720)
+[PASS] all visible buttons within horizontal bounds (960, 540)
+[PASS] all action targets >= 48px at (960, 540)
+[PASS] below-the-fold actions reachable via scroll at (960, 540)
+[PASS] nav inside 40% field at (960, 540) (right=360)
+[PASS] hero preview visibility correct at (960, 540)
+[PASS] nav buttons >= 14px text at (960, 540)
+[PASS] modes subview within viewport height at (960, 540)
+[PASS] modes readout reachable (scrolled) at (960, 540)
+[PASS] all visible buttons within horizontal bounds (640, 360)
+[PASS] all action targets >= 48px at (640, 360)
+[PASS] below-the-fold actions reachable via scroll at (640, 360)
+[PASS] compact nav is full-width minus margins at (640, 360)
+[PASS] ink field is full viewport minus margins at (640, 360) (w=608)
+[PASS] nonessential preview hidden at (640, 360)
+[PASS] nav buttons >= 14px text at (640, 360)
+[PASS] modes subview full-width minus margins at (640, 360) (w=608)
+[PASS] modes subview within viewport height at (640, 360)
+[PASS] modes readout reachable (scrolled) at (640, 360)
+[PASS] all visible buttons within horizontal bounds (390, 844)
+[PASS] all action targets >= 48px at (390, 844)
+[PASS] below-the-fold actions reachable via scroll at (390, 844)
+[PASS] compact nav is full-width minus margins at (390, 844)
+[PASS] ink field is full viewport minus margins at (390, 844) (w=358)
+[PASS] nonessential preview hidden at (390, 844)
+[PASS] nav buttons >= 14px text at (390, 844)
+[PASS] modes subview full-width minus margins at (390, 844) (w=358)
+[PASS] modes subview within viewport height at (390, 844)
+[PASS] modes readout reachable (scrolled) at (390, 844)
+=== MENU DEPARTURE SMOKE TEST PASS (101/101) ===
+
+[runner] rc=0 timed_out=False duration=2.3s timeout=120s
