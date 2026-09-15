@@ -10,7 +10,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.039, 0.039, 0.058, 1)
-
 script = ExtResource("1_main")
 
 [node name="BG" type="ColorRect" parent="."]
@@ -20,77 +19,95 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0.039, 0.039, 0.058, 1)
 
-[node name="VBox" type="VBoxContainer" parent="."]
+[node name="NavField" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 0.4
+anchor_bottom = 1.0
+grow_vertical = 2
+color = Color(0.039216, 0.039216, 0.058824, 1)
+
+[node name="Scroll" type="ScrollContainer" parent="NavField"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 80.0
-offset_top = 20.0
-offset_right = -420.0
-offset_bottom = -14.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 3
-[node name="Spacer" type="Control" parent="VBox"]
-layout_mode = 2
-custom_minimum_size = Vector2(0, 10)
+horizontal_scroll_mode = 0
 
-[node name="Title" type="Label" parent="VBox"]
+[node name="NavColumn" type="VBoxContainer" parent="NavField/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="Kicker" type="Label" parent="NavField/Scroll/NavColumn"]
+layout_mode = 2
+text = "YOUR SHIFT IS OVER."
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(1, 0.603922, 0.101961, 1)
+
+[node name="Title" type="Label" parent="NavField/Scroll/NavColumn"]
 layout_mode = 2
 text = "FRIDAY 5PM
 EVACUATION"
 horizontal_alignment = 0
+theme_override_constants/line_spacing = -6
 theme_override_font_sizes/font_size = 42
-theme_override_colors/font_color = Color(1, 0.65, 0.1, 1)
+theme_override_colors/font_color = Color(0.952941, 0.905882, 0.827451, 1)
 
-[node name="Subtitle" type="Label" parent="VBox"]
+[node name="Subtitle" type="Label" parent="NavField/Scroll/NavColumn"]
 layout_mode = 2
 text = "IT'S 4:59. ONE MINUTE TO FREEDOM."
 theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(1, 0.75, 0.35, 1)
+theme_override_colors/font_color = Color(0.722549, 0.709804, 0.682353, 1)
 
-[node name="Description" type="Label" parent="VBox"]
+[node name="Description" type="Label" parent="NavField/Scroll/NavColumn"]
 layout_mode = 2
 text = "Description here"
-theme_override_font_sizes/font_size = 13
-theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1)
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.722549, 0.709804, 0.682353, 1)
 autowrap_mode = 3
 
-[node name="ModeListScroll" type="ScrollContainer" parent="VBox"]
+[node name="PlayButton" type="Button" parent="NavField/Scroll/NavColumn"]
 layout_mode = 2
-size_flags_vertical = 3
-custom_minimum_size = Vector2(0, 168)
-horizontal_scroll_mode = 0
-
-[node name="ModeList" type="VBoxContainer" parent="VBox/ModeListScroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 2
-
-[node name="PlayButton" type="Button" parent="VBox"]
-layout_mode = 2
-custom_minimum_size = Vector2(0, 42)
-text = "PLAY"
+custom_minimum_size = Vector2(0, 52)
+text = "EVACUATE"
 theme_override_font_sizes/font_size = 28
 
-[node name="HostButton" type="Button" parent="VBox"]
+[node name="HostButton" type="Button" parent="NavField/Scroll/NavColumn"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 32)
-text = "MULTIPLAYER"
-visible = false
+custom_minimum_size = Vector2(0, 52)
+text = "PLAY WITH FRIENDS"
 theme_override_font_sizes/font_size = 18
 
-[node name="JoinButton" type="Button" parent="VBox"]
+[node name="OtherModesButton" type="Button" parent="NavField/Scroll/NavColumn"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 32)
-text = "JOIN MULTIPLAYER"
-visible = false
-theme_override_font_sizes/font_size = 18
+custom_minimum_size = Vector2(0, 48)
+text = "OTHER MODES"
+theme_override_font_sizes/font_size = 16
 
-[node name="BackButton" type="Button" parent="VBox"]
+[node name="CustomizeButton" type="Button" parent="NavField/Scroll/NavColumn"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 32)
-text = "BACK"
-visible = false
-theme_override_font_sizes/font_size = 18
+custom_minimum_size = Vector2(0, 48)
+text = "CUSTOMIZE RIDE"
+theme_override_font_sizes/font_size = 16
+
+[node name="OfficeButton" type="Button" parent="NavField/Scroll/NavColumn"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 48)
+text = "OFFICE SETUP"
+theme_override_font_sizes/font_size = 16
+
+[node name="SettingsButton" type="Button" parent="NavField/Scroll/NavColumn"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 48)
+text = "SETTINGS"
+theme_override_font_sizes/font_size = 16
+
+[node name="CreditsButton" type="Button" parent="NavField/Scroll/NavColumn"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 48)
+text = "CREDITS"
+theme_override_font_sizes/font_size = 16

@@ -224,11 +224,55 @@ func _build_chair_model() -> void:
 			_build_office_chair(chair_root)
 
 	_build_rider_model(chair_root)
+	_mount_hero_assembly(chair_root)
 	# seat_rise lifts the rider relative to the chassis (bean bag sinks
 	# in, ball perches up, throne raises). Visual only.
 	rider_y_offset = float(skin.get("seat_rise", 0.0))
 	if rider_root and rider_y_offset != 0.0:
 		rider_root.position.y = rider_y_offset
+
+## B2 hero assembly adapter (MODEL-SHEETS §1): authored GLB replaces the
+## primitive office-chair + rider VISUALS for office_standard; halo ring
+## stays (player identity) and procedural wheels stay in chair_wheels so
+## squash/wheelie/spin animations keep working. Other skins keep full
+## primitive builds until each variant gets its authored chassis.
+func _mount_hero_assembly(chair_root: Node3D) -> void:
+	var kind := String(skin.get("id", "office_standard"))
+	if kind != "office_standard":
+		return
+	var packed: PackedScene = load("res://models/hero_assembly.glb")
+	if packed == null:
+		return
+	var hero: Node3D = packed.instantiate()
+	hero.name = "HeroAssembly"
+	# GLB ground = wheel contact (chair base plane). The procedural build
+	# centers its base at chair_root origin: shift hero so its wheels land
+	# at the same ground line (procedural casters sit at y ~ -0.28+0.105).
+	hero.position = Vector3(0, -0.175, 0)
+	# Player-color accents on the authored cushions (shared atlas policy:
+	# per-instance tint until the 2K atlas + vertex-color pipeline lands).
+	var cushion_mat := StandardMaterial3D.new()
+	cushion_mat.albedo_color = player_color
+	cushion_mat.roughness = 0.9
+	for mi in hero.find_children("*", "MeshInstance3D", true, false):
+		var mesh_name := String((mi as MeshInstance3D).name)
+		if mesh_name.begins_with("seat_cushion") or mesh_name.begins_with("back_cushion"):
+			(mi as MeshInstance3D).material_override = cushion_mat
+		# Repo law: no new real-time shadow casters (tilted key light stripes).
+		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Hide the primitive rider + office chair meshes (keep halo + wheels).
+	if rider_root:
+		rider_root.visible = false
+	for child in chair_root.get_children():
+		if child == hero or child == rider_root:
+			continue
+		var cname := String(child.name)
+		if cname == "BackrestHalo":
+			continue
+		if cname.begins_with("Wheel_"):
+			continue
+		child.visible = false
+	chair_root.add_child(hero)
 
 func _chair_material(color: Color, rough: float, metal: float) -> StandardMaterial3D:
 	var mat = StandardMaterial3D.new()

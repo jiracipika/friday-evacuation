@@ -1,4 +1,10 @@
-# Main.gd — Main menu / mode select screen
+# Main.gd — Friday departure board menu (UI-LAYOUTS.md section 3, Phase 1A).
+#
+# Left 40%: opaque ink nav column with kicker + brand + stacked actions.
+# Right 60%: MenuBackdrop office art + YOUR RIDE hero panel.
+# Subviews (OTHER MODES / CUSTOMIZE RIDE / OFFICE SETUP) open as opaque ink
+# panels sized exactly over the nav field; the home column hides while one is
+# open. Escape pops one layer. No splash on entry; EVACUATE is usable first.
 extends Control
 
 const UI_THEME = preload("res://scripts/UITheme.gd")
@@ -36,15 +42,19 @@ const MODE_INFO = [
 
 const MODE_STATUS := ["PLAYABLE", "DELIVERY PLAYABLE", "SHOPPER PLAYABLE", "SURVIVAL PLAYABLE"]
 
+# Signals re-used by the old flow so callers can detect navigation intent.
+signal mode_chosen(mode: GameManager.GameMode)
+
+# Public surface kept for tests/other callers.
 var selected_index: int = 0
 var buttons: Array[Button] = []
 var settings_overlay: Control
 var lobby_overlay: Control
+var credits_overlay: CanvasLayer
 var settings_button: Button
 var layout_option: OptionButton
 var touch_button: Button
 var credits_button: Button
-var utility_row: Container
 var modifier_menu: Control
 var character_row: HBoxContainer
 var character_select: OptionButton
@@ -57,17 +67,39 @@ var menu_time: float = 0.0
 var hero_panel: Control
 var hero: Control
 var backdrop: Control
-var tagline_scrim: Control
+var modes_subview: Control
+var customize_subview: Control
+var office_subview: Control
+var open_subview: Control
+var last_focused: Control
+var _subview_owner: Control
+var _block_navigation: bool = false  # test seam: run handlers, skip scene change
+# Modes subview selected-mode readout (title/description + PLAY SELECTED).
+var modes_title_label: Label
+var modes_desc_label: Label
 
-# UI nodes
-@onready var title_label: Label = $VBox/Title
-@onready var subtitle_label: Label = $VBox/Subtitle
-@onready var desc_label: Label = $VBox/Description
-@onready var mode_list: VBoxContainer = $VBox/ModeListScroll/ModeList
-@onready var play_button: Button = $VBox/PlayButton
-@onready var host_button: Button = $VBox/HostButton
-@onready var join_button: Button = $VBox/JoinButton
-@onready var back_button: Button = $VBox/BackButton
+# Scene nodes (built in Main.tscn).
+@onready var nav_field: ColorRect = $NavField
+@onready var scroll: ScrollContainer = $NavField/Scroll
+@onready var nav_column: VBoxContainer = $NavField/Scroll/NavColumn
+@onready var kicker_label: Label = $NavField/Scroll/NavColumn/Kicker
+@onready var brand_label: Label = $NavField/Scroll/NavColumn/Title
+@onready var title_label: Label = $NavField/Scroll/NavColumn/Title
+@onready var subtitle_label: Label = $NavField/Scroll/NavColumn/Subtitle
+@onready var desc_label: Label = $NavField/Scroll/NavColumn/Description
+@onready var play_button: Button = $NavField/Scroll/NavColumn/PlayButton
+@onready var host_button: Button = $NavField/Scroll/NavColumn/HostButton
+@onready var other_modes_button: Button = $NavField/Scroll/NavColumn/OtherModesButton
+@onready var customize_button: Button = $NavField/Scroll/NavColumn/CustomizeButton
+@onready var office_button: Button = $NavField/Scroll/NavColumn/OfficeButton
+@onready var settings_button_node: Button = $NavField/Scroll/NavColumn/SettingsButton
+@onready var credits_button_node: Button = $NavField/Scroll/NavColumn/CreditsButton
+
+const LAYOUT_CFG_PATH := "user://settings.cfg"
+const TEXT_MUTED := Color("b8b5ae")
+const IVORY := Color("f3e7d3")
+const ORANGE := Color("ff9a1a")
+const INK := Color("0a0a0f")
 
 func _ready() -> void:
 	get_window().title = "Friday 5PM: Evacuation"
@@ -80,129 +112,93 @@ func _ready() -> void:
 			var vpad_node: Node = vpad.new()
 			vpad_node.name = "VirtualPad"
 			get_tree().root.add_child.call_deferred(vpad_node)
-	_build_mode_buttons()
-	_select_mode(0)
-	_build_hero_panel()
-	_build_character_selector()
-	_build_skin_selector()
 
+	_build_menu_theme()
+	_build_home_column()
+	_build_backdrop_and_hero()
+	_apply_theme_to_home_actions()
+	# Saved office setup must apply on boot, independent of the lazy
+	# OFFICE SETUP subview build — a direct EVACUATE honors the saved config.
+	var mods_script = load("res://scripts/RaceModifiers.gd")
+	if mods_script and mods_script.has_method("load_from_cfg"):
+		mods_script.load_from_cfg()
+	var saved_layout := _load_saved_layout()
+	var layouts_boot = load("res://scripts/LevelLayouts.gd")
+	if layouts_boot and layouts_boot.has_method("set_current"):
+		layouts_boot.set_current(saved_layout)
+	_layout_responsive()
+
+	get_viewport().size_changed.connect(_layout_responsive)
+
+## Ink nav field, ivory brand, orange kicker (UI-LAYOUTS section 1 + 3).
+func _build_menu_theme() -> void:
+	nav_field.color = INK
+	kicker_label.add_theme_color_override("font_color", ORANGE)
+	kicker_label.add_theme_font_size_override("font_size", 14)
+	brand_label.add_theme_color_override("font_color", IVORY)
+	brand_label.add_theme_font_size_override("font_size", 42)
+	brand_label.add_theme_constant_override("line_spacing", -6)
+	subtitle_label.add_theme_color_override("font_color", TEXT_MUTED)
+	desc_label.add_theme_color_override("font_color", TEXT_MUTED)
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+func _apply_theme_to_home_actions() -> void:
+	UI_THEME.apply_primary(play_button)
+	play_button.add_theme_font_size_override("font_size", 28)
+	UI_THEME.apply_secondary(host_button, UI_THEME.color(UI_THEME.ORANGE))
+	host_button.add_theme_font_size_override("font_size", 18)
+	for btn in [other_modes_button, customize_button, office_button,
+			settings_button, credits_button]:
+		if btn == null:
+			continue
+		UI_THEME.apply_secondary(btn, UI_THEME.color(UI_THEME.SURFACE))
+		btn.add_theme_font_size_override("font_size", 16)
+		btn.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT))
+
+func _build_home_column() -> void:
+	settings_button = settings_button_node
+	credits_button = credits_button_node
 	play_button.pressed.connect(_on_play)
 	play_button.pressed.connect(_play_click_sound)
-	_build_modifier_row()
-	# D3 regroup order: mode cards > RIDER/CHAIR > TODAY'S OFFICE CHAOS > PLAY > MULTIPLAYER.
-	# Build order produces: mode list, char_row, skin_row, modifier_menu, play, host, utility, stats.
-	# That matches the spec — char/skin rows were moved before play in their build functions.
-
-	# Utility row — D2: utility buttons use apply_utility() for hover + focus.
-	if _is_narrow():
-		utility_row = HFlowContainer.new()
-	else:
-		utility_row = HBoxContainer.new()
-	utility_row.add_theme_constant_override("separation", 8)
-	$VBox.add_child(utility_row)
-	settings_button = Button.new()
-	settings_button.text = "SETTINGS"
-	settings_button.custom_minimum_size = Vector2(0, 28)
-	settings_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	settings_button.add_theme_font_size_override("font_size", 12)
-	UI_THEME.apply_utility(settings_button, UI_THEME.color(UI_THEME.CYAN))
-	utility_row.add_child(settings_button)
-	settings_button.pressed.connect(_open_settings)
-	credits_button = Button.new()
-	credits_button.text = "CREDITS"
-	credits_button.custom_minimum_size = Vector2(0, 28)
-	credits_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	credits_button.add_theme_font_size_override("font_size", 12)
-	UI_THEME.apply_utility(credits_button, UI_THEME.color(UI_THEME.VIOLET))
-	utility_row.add_child(credits_button)
-	credits_button.pressed.connect(_open_credits)
-	layout_option = OptionButton.new()
-	var narrow := _is_narrow()
-	layout_option.add_item("MAP: OPEN PLAN" if not narrow else "OPEN PLAN", 0)
-	layout_option.add_item("MAP: CUBICLE MAZE" if not narrow else "CUBICLES", 1)
-	layout_option.add_item("MAP: EXECUTIVE" if not narrow else "EXECUTIVE", 2)
-	layout_option.custom_minimum_size = Vector2(0, 28)
-	layout_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	layout_option.add_theme_font_size_override("font_size", 12)
-	utility_row.add_child(layout_option)
-	var saved_layout := str(_load_saved_layout())
-	layout_option.select({"open_plan": 0, "cubicle_maze": 1, "executive": 2}.get(saved_layout, 0))
-	layout_option.item_selected.connect(_on_layout_selected)
-	var LayoutsScript = load("res://scripts/LevelLayouts.gd")
-	if LayoutsScript:
-		LayoutsScript.set_current(saved_layout)
-	touch_button = Button.new()
-	touch_button.custom_minimum_size = Vector2(0, 28)
-	touch_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	touch_button.add_theme_font_size_override("font_size", 12)
-	UI_THEME.apply_utility(touch_button, UI_THEME.color(UI_THEME.ORANGE))
-	utility_row.add_child(touch_button)
-	var prefs_touch = load("res://scripts/InputPrefs.gd")
-	var touch_pref := "auto"
-	if prefs_touch and prefs_touch.has_method("touch_mode"):
-		touch_pref = prefs_touch.touch_mode()
-	touch_button.text = _touch_button_label(touch_pref)
-	touch_button.pressed.connect(_on_touch_button)
-	stats_label = Label.new()
-	stats_label.text = ""
-	stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stats_label.add_theme_font_size_override("font_size", 12)
-	stats_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
-	$VBox.add_child(stats_label)
-	_register_small_label(stats_label)
-	var stats = get_node_or_null("/root/StatsManager")
-	if stats:
-		stats_label.text = stats.get_summary_line()
-		stats.stats_updated.connect(func(): stats_label.text = stats.get_summary_line())
-	_build_menu_theme()
-	host_button.visible = true
-	host_button.text = "MULTIPLAYER"
 	host_button.pressed.connect(_open_lobby)
-	join_button.visible = false
-	back_button.visible = false
-	var splash = load("res://scripts/SplashScreen.gd")
-	if splash and splash.has_method("mount"):
-		splash.mount(self)
+	other_modes_button.pressed.connect(_open_modes_subview)
+	customize_button.pressed.connect(_open_customize_subview)
+	office_button.pressed.connect(_open_office_subview)
+	settings_button.pressed.connect(_open_settings)
+	credits_button.pressed.connect(_open_credits)
+	host_button.visible = true
+	# Home is a departure board: no dense description copy on entry.
+	desc_label.visible = false
+	# Single scroll surface; gamepad focus scrolls the list along.
+	scroll.follow_focus = true
+	play_button.grab_focus()
 
-func _build_mode_buttons() -> void:
-	for i in range(MODE_INFO.size()):
-		var info = MODE_INFO[i]
-		var btn = Button.new()
-		var card_script = load("res://scripts/ModeCard.gd")
-		btn.set_script(card_script)
-		var is_hero := (i == 0)
-		btn.configure(info.title, info.subtitle, MODE_STATUS[i], info.color, is_hero)
-		# D2: hero card 84px min height; others 56px.
-		btn.custom_minimum_size = Vector2(0, 84 if is_hero else 56)
-		btn.focus_mode = Control.FOCUS_ALL
-		btn.pressed.connect(_select_mode.bind(i))
-		mode_list.add_child(btn)
-		buttons.append(btn)
-
-## HERO PANEL: D2 — YOUR RIDE panel in right column grid (340px), shares
-## vertical rhythm with mode list; not a floating card. Hidden <1080px.
-func _build_hero_panel() -> void:
+## Backdrop + YOUR RIDE hero panel in the right field (existing components).
+func _build_backdrop_and_hero() -> void:
 	backdrop = Control.new()
 	backdrop.set_script(load("res://scripts/MenuBackdrop.gd"))
 	backdrop.name = "MenuBackdrop"
-	get_node("BG").add_child(backdrop)
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	$BG.add_child(backdrop)
 
 	hero_panel = PanelContainer.new()
 	hero_panel.name = "HeroPanel"
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.055, 0.055, 0.09, 0.92)
+	style.bg_color = Color(0.055, 0.055, 0.09, 1.0)  # opaque, no purple wash
 	style.border_color = Color(1.0, 0.60, 0.22, 0.35)
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(16)
 	hero_panel.add_theme_stylebox_override("panel", style)
-	hero_panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
-	hero_panel.anchor_left = 0.70
-	hero_panel.offset_left = 12
-	hero_panel.offset_top = 10
-	hero_panel.offset_right = -12
-	hero_panel.offset_bottom = -10
-	# D2: 340px right column.
-	hero_panel.custom_minimum_size = Vector2(340, 0)
+	# Top-right ANCHORS with fixed offsets: the card tracks the right edge and
+	# can never land offscreen at any window size (no absolute positions).
+	hero_panel.anchor_left = 1.0
+	hero_panel.anchor_right = 1.0
+	hero_panel.anchor_top = 0.0
+	hero_panel.anchor_bottom = 0.0
+	hero_panel.offset_left = -376.0   # 340 wide
+	hero_panel.offset_right = -36.0
+	hero_panel.offset_top = 36.0      # 140 tall
+	hero_panel.offset_bottom = 176.0
 	var hero_vb := VBoxContainer.new()
 	hero_vb.add_theme_constant_override("separation", 10)
 	hero_panel.add_child(hero_vb)
@@ -224,53 +220,338 @@ func _build_hero_panel() -> void:
 	hero_vb.add_child(hero_hint)
 	add_child(hero_panel)
 
-func _refresh_hero() -> void:
-	if hero and hero.has_method("refresh_for_pick"):
-		hero.refresh_for_pick()
+# --- departure board home actions -------------------------------------------
 
-func _build_modifier_row() -> void:
-	var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
-	if not RaceModifiersScript:
+## The main CTA always launches Evacuation (mode cards no longer own PLAY).
+func _on_play() -> void:
+	selected_index = 0
+	GameManager.select_mode(GameManager.GameMode.EVACUATION)
+	mode_chosen.emit(GameManager.GameMode.EVACUATION)
+	if _block_navigation:
 		return
-	RaceModifiersScript.load_from_cfg()
+	var scene_path = GameManager.get_mode_scene(GameManager.GameMode.EVACUATION)
+	var loading = load("res://scripts/LoadingScreen.gd")
+	if loading:
+		loading.show_loading(scene_path)
+	else:
+		get_tree().change_scene_to_file(scene_path)
+
+func _open_modes_subview() -> void:
+	if modes_subview == null:
+		_build_modes_subview()
+	_show_subview(modes_subview, other_modes_button)
+
+func _open_customize_subview() -> void:
+	if customize_subview == null:
+		_build_customize_subview()
+	_show_subview(customize_subview, customize_button)
+
+func _open_office_subview() -> void:
+	if office_subview == null:
+		_build_office_subview()
+	_show_subview(office_subview, office_button)
+
+func _show_subview(sub: Control, opener: Button) -> void:
+	_subview_owner = opener
+	last_focused = get_viewport().gui_get_focus_owner()
+	# Home column hides; the subview paints its own opaque ink field sized
+	# exactly over the nav width (no content floating on the art).
+	scroll.visible = false
+	_sync_subview_field(sub)
+	sub.visible = true
+	open_subview = sub
+	_focus_subview.call_deferred(sub)
+
+func _close_subview() -> void:
+	if open_subview == null:
+		return
+	open_subview.visible = false
+	open_subview = null
+	scroll.visible = true
+	if _subview_owner and is_instance_valid(_subview_owner):
+		_subview_owner.grab_focus()
+	_subview_owner = null
+
+## Focus entry point: the actual first focusable child Button of the subview
+## content (or the BACK button if the content list is empty). No external
+## subview wrapper script is involved.
+func _focus_subview(sub_wrap: Control) -> void:
+	if open_subview != sub_wrap or not is_instance_valid(sub_wrap):
+		return
+	var list: Node = sub_wrap.get_meta("focus_list") if sub_wrap.has_meta("focus_list") else null
+	if list:
+		for node in list.find_children("*", "Button", true, false):
+			var btn := node as Button
+			if btn and btn.is_visible_in_tree() and btn.focus_mode != Control.FOCUS_NONE:
+				btn.call_deferred("grab_focus")
+				return
+	var back: Button = sub_wrap.get_meta("back_button") if sub_wrap.has_meta("back_button") else null
+	if back and is_instance_valid(back):
+		back.call_deferred("grab_focus")
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if open_subview:
+			_close_subview()
+			get_viewport().set_input_as_handled()
+
+func _build_modes_subview() -> void:
+	modes_subview = _subview_shell("MODES", _build_mode_rows)
+
+## Mode cards + selected readout + PLAY SELECTED. The card buttons select;
+## the pinned PLAY SELECTED button launches the selected mode.
+func _build_mode_rows(list: VBoxContainer, play_out: Array, _back_out: Array) -> Control:
+	var card_script = load("res://scripts/ModeCard.gd")
+	for i in range(MODE_INFO.size()):
+		var info = MODE_INFO[i]
+		var btn = Button.new()
+		if card_script:
+			btn.set_script(card_script)
+			btn.configure(info.title, info.subtitle, MODE_STATUS[i], info.color, i == 0)
+			btn.custom_minimum_size = Vector2(0, 84 if i == 0 else 56)
+		else:
+			btn.custom_minimum_size = Vector2(0, 56)
+		btn.text = info.title
+		btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		btn.focus_mode = Control.FOCUS_ALL
+		btn.pressed.connect(_select_mode.bind(i))
+		list.add_child(btn)
+		buttons.append(btn)
+
+	var footer := VBoxContainer.new()
+	footer.add_theme_constant_override("separation", 6)
+	modes_title_label = Label.new()
+	modes_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	modes_title_label.add_theme_font_size_override("font_size", 16)
+	modes_title_label.add_theme_color_override("font_color", IVORY)
+	footer.add_child(modes_title_label)
+	modes_desc_label = Label.new()
+	modes_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	modes_desc_label.custom_minimum_size = Vector2(0, 44)
+	modes_desc_label.add_theme_font_size_override("font_size", 14)
+	modes_desc_label.add_theme_color_override("font_color", TEXT_MUTED)
+	footer.add_child(modes_desc_label)
+	var play_selected := Button.new()
+	play_selected.text = "PLAY SELECTED"
+	play_selected.custom_minimum_size = Vector2(0, 52)
+	play_selected.focus_mode = Control.FOCUS_ALL
+	play_selected.add_theme_font_size_override("font_size", 20)
+	UI_THEME.apply_primary(play_selected)
+	play_selected.pressed.connect(_play_selected_mode)
+	play_selected.pressed.connect(_play_click_sound)
+	footer.add_child(play_selected)
+	play_out.append(play_selected)
+	_select_mode(selected_index)
+	return footer
+
+func _build_customize_subview() -> void:
+	customize_subview = _subview_shell("RIDE", _build_ride_rows)
+
+func _build_ride_rows(list: VBoxContainer, _play_out: Array, _back_out: Array) -> void:
+	_build_character_selector(list)
+	_build_skin_selector(list)
+
+func _build_office_subview() -> void:
+	office_subview = _subview_shell("OFFICE", _build_office_rows)
+
+func _build_office_rows(list: VBoxContainer, _play_out: Array, _back_out: Array) -> void:
 	var menu_script = load("res://scripts/ModifierMenu.gd")
-	if not menu_script:
-		return
-	modifier_menu = menu_script.mount($VBox, play_button)
-	modifier_menu.visible = selected_index == 0
+	if menu_script:
+		var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
+		if RaceModifiersScript:
+			RaceModifiersScript.load_from_cfg()
+		# ModifierMenu.mount(parent, above_node) moves the menu to
+		# above_node.get_index() INSIDE parent — pass a real child anchor of
+		# the list, never the list itself (its index belongs to another
+		# parent, producing an invalid move_child index).
+		var anchor := Control.new()
+		anchor.name = "MenuAnchor"
+		list.add_child(anchor)
+		modifier_menu = menu_script.mount(list, anchor)
+		modifier_menu.visible = true
 
-func _build_character_selector() -> void:
+	var label := Label.new()
+	label.text = "MAP"
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", TEXT_MUTED)
+	list.add_child(label)
+	layout_option = OptionButton.new()
+	layout_option.add_item("MAP: OPEN PLAN", 0)
+	layout_option.add_item("MAP: CUBICLE MAZE", 1)
+	layout_option.add_item("MAP: EXECUTIVE", 2)
+	layout_option.custom_minimum_size = Vector2(0, 48)
+	layout_option.add_theme_font_size_override("font_size", 14)
+	layout_option.fit_to_longest_item = false
+	layout_option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	list.add_child(layout_option)
+	var saved_layout := str(_load_saved_layout())
+	layout_option.select({"open_plan": 0, "cubicle_maze": 1, "executive": 2}.get(saved_layout, 0))
+	layout_option.item_selected.connect(_on_layout_selected)
+	var LayoutsScript = load("res://scripts/LevelLayouts.gd")
+	if LayoutsScript and LayoutsScript.has_method("set_current"):
+		LayoutsScript.set_current(saved_layout)
+
+	touch_button = Button.new()
+	touch_button.custom_minimum_size = Vector2(0, 48)
+	touch_button.add_theme_font_size_override("font_size", 14)
+	UI_THEME.apply_utility(touch_button, UI_THEME.color(UI_THEME.ORANGE))
+	list.add_child(touch_button)
+	var prefs_touch = load("res://scripts/InputPrefs.gd")
+	var touch_pref := "auto"
+	if prefs_touch and prefs_touch.has_method("touch_mode"):
+		touch_pref = prefs_touch.touch_mode()
+	touch_button.text = _touch_button_label(touch_pref)
+	touch_button.pressed.connect(_on_touch_button)
+
+## Shared subview scaffold: opaque ink field over the nav width, header with
+## pinned BACK, scrollable content, plus an optional builder footer (the
+## modes subview's selected readout + PLAY SELECTED). No missing scripts:
+## focus entry is handled by Main._focus_subview via real child Buttons.
+func _subview_shell(title_text: String, builder: Callable) -> Control:
+	var wrap := Control.new()
+	wrap.name = "%sSubview" % title_text
+	wrap.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wrap.mouse_filter = Control.MOUSE_FILTER_STOP
+	var field := ColorRect.new()
+	field.name = "Field"
+	field.color = INK
+	field.anchor_left = 0.0
+	field.anchor_top = 0.0
+	field.anchor_bottom = 1.0
+	field.anchor_right = 0.4
+	field.mouse_filter = Control.MOUSE_FILTER_STOP
+	wrap.add_child(field)
+	var sub := VBoxContainer.new()
+	sub.name = "Content"
+	sub.anchor_left = 0.0
+	sub.anchor_top = 0.0
+	sub.anchor_bottom = 1.0
+	sub.anchor_right = 1.0
+	sub.offset_left = 24.0
+	sub.offset_right = -24.0
+	sub.offset_top = 24.0
+	sub.offset_bottom = -16.0
+	sub.add_theme_constant_override("separation", 10)
+	field.add_child(sub)
+	var back_holder: Array = []
+	var play_holder: Array = []
+	var header := HBoxContainer.new()
+	var heading := Label.new()
+	heading.text = title_text
+	heading.add_theme_font_size_override("font_size", 24)
+	heading.add_theme_color_override("font_color", IVORY)
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	header.add_child(heading)
+	var back := Button.new()
+	back.text = "BACK"
+	back.custom_minimum_size = Vector2(0, 48)
+	back.add_theme_font_size_override("font_size", 16)
+	back.pressed.connect(_close_subview)
+	header.add_child(back)
+	sub.add_child(header)
+	var scroll_sub := ScrollContainer.new()
+	scroll_sub.name = "ScrollSub"
+	scroll_sub.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll_sub.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll_sub.follow_focus = true
+	sub.add_child(scroll_sub)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 8)
+	scroll_sub.add_child(list)
+	var footer: Control = builder.call(list, play_holder, back_holder)
+	if footer is Control:
+		sub.add_child(footer)
+	wrap.visible = false
+	add_child(wrap)
+	wrap.set_meta("play_button", play_holder[0] if not play_holder.is_empty() else back)
+	wrap.set_meta("back_button", back)
+	wrap.set_meta("focus_list", list)
+	return wrap
+
+func _sync_subview_field(sub: Control) -> void:
+	var field: Control = sub.get_node_or_null("Field")
+	if field:
+		field.anchor_right = _nav_frac
+
+# --- modes subview play routing ---------------------------------------------
+
+func _select_mode(idx: int) -> void:
+	selected_index = clampi(idx, 0, MODE_INFO.size() - 1)
+	var info = MODE_INFO[selected_index]
+	# Selected style on the actual card buttons (ModeCard.set_selected or a
+	# dim fallback), plus the visible selected readout inside the subview.
+	for i in range(buttons.size()):
+		var card = buttons[i]
+		if card == null or not is_instance_valid(card):
+			continue
+		if card.has_method("set_selected"):
+			card.set_selected(i == selected_index)
+		else:
+			card.modulate = Color(1, 1, 1, 1.0 if i == selected_index else 0.55)
+	if modes_title_label:
+		modes_title_label.text = "%s — %s" % [info.title.to_upper(), info.subtitle]
+	if modes_desc_label:
+		modes_desc_label.text = info.desc
+
+## Play the currently selected mode from the OTHER MODES subview.
+func _play_selected_mode() -> void:
+	var mode: GameManager.GameMode = MODE_INFO[selected_index].mode
+	GameManager.select_mode(mode)
+	mode_chosen.emit(mode)
+	if _block_navigation:
+		return
+	var scene_path = GameManager.get_mode_scene(mode)
+	var loading = load("res://scripts/LoadingScreen.gd")
+	if loading:
+		loading.show_loading(scene_path)
+	else:
+		get_tree().change_scene_to_file(scene_path)
+
+func _play_click_sound() -> void:
+	var audio = get_node_or_null("/root/AudioManager")
+	if audio:
+		audio.play_sfx("powerup", 0.9)
+
+# --- rider / chair selectors (existing persistence paths) --------------------
+
+func _build_character_selector(parent: Control) -> void:
 	var roster = load("res://scripts/CharacterRoster.gd")
 	if not roster:
 		return
+	# Stacked layout: label + OptionButton in the row, the tagline BELOW the
+	# row (an HBox with a long expanding detail made the min width huge).
 	character_row = HBoxContainer.new()
 	character_row.name = "CharacterSelector"
-	character_row.custom_minimum_size = Vector2(0, 30)
+	character_row.custom_minimum_size = Vector2(0, 48)
 	character_row.add_theme_constant_override("separation", 10)
-	$VBox.add_child(character_row)
-	$VBox.move_child(character_row, play_button.get_index())
+	parent.add_child(character_row)
 	var label := Label.new()
 	label.text = "RIDER"
 	label.custom_minimum_size.x = 62
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 14)
 	label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	character_row.add_child(label)
 	character_select = OptionButton.new()
 	character_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	character_select.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	character_select.custom_minimum_size = Vector2(0, 48)
 	character_select.add_theme_font_size_override("font_size", 14)
+	character_select.fit_to_longest_item = false
+	character_select.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	character_row.add_child(character_select)
 	character_detail = Label.new()
-	# D3: detail labels autowrap, min height 44px — no clip_text/ellipsis.
 	character_detail.custom_minimum_size = Vector2(0, 44)
 	character_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	character_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	character_detail.clip_text = false
 	character_detail.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	character_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	character_detail.add_theme_font_size_override("font_size", 11)
+	character_detail.add_theme_font_size_override("font_size", 14)
 	character_detail.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
-	character_row.add_child(character_detail)
-	_register_detail_label(character_detail)
+	parent.add_child(character_detail)
 	var selected := 0
 	var characters: Array[Dictionary] = roster.all()
 	var short_items := _is_narrow()
@@ -301,7 +582,7 @@ func _on_character_selected(index: int) -> void:
 		character_detail.text = character["tagline"]
 		character_detail.tooltip_text = "%s • %s" % [character["silhouette"], character["accessory"]]
 
-func _build_skin_selector() -> void:
+func _build_skin_selector(parent: Control) -> void:
 	var skins = load("res://scripts/ChairSkins.gd")
 	if not skins:
 		return
@@ -310,38 +591,36 @@ func _build_skin_selector() -> void:
 
 	skin_row = HBoxContainer.new()
 	skin_row.name = "SkinSelector"
-	skin_row.custom_minimum_size = Vector2(0, 28)
+	skin_row.custom_minimum_size = Vector2(0, 48)
 	skin_row.add_theme_constant_override("separation", 10)
-	$VBox.add_child(skin_row)
-	$VBox.move_child(skin_row, character_row.get_index() + 1)
-
+	parent.add_child(skin_row)
 	var label := Label.new()
 	label.text = "CHAIR"
-	label.add_theme_font_size_override("font_size", 13)
+	label.custom_minimum_size.x = 62
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 14)
 	label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	skin_row.add_child(label)
-
 	skin_select = OptionButton.new()
 	skin_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	skin_select.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	skin_select.custom_minimum_size = Vector2(0, 48)
 	skin_select.add_theme_font_size_override("font_size", 14)
+	skin_select.fit_to_longest_item = false
+	skin_select.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	skin_row.add_child(skin_select)
-
 	skin_detail = Label.new()
-	# D3: detail labels autowrap, min height 44px — no clip_text/ellipsis.
 	skin_detail.custom_minimum_size = Vector2(0, 44)
 	skin_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	skin_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	skin_detail.clip_text = false
 	skin_detail.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	skin_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	skin_detail.add_theme_font_size_override("font_size", 11)
+	skin_detail.add_theme_font_size_override("font_size", 14)
 	skin_detail.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
-	skin_row.add_child(skin_detail)
-	_register_detail_label(skin_detail)
+	parent.add_child(skin_detail)
 
 	var all_skins: Array[Dictionary] = skins.all()
 	var selected := 0
-	var locked_count := 0
 	for i in range(all_skins.size()):
 		var skin: Dictionary = all_skins[i]
 		var id := String(skin["id"])
@@ -352,7 +631,6 @@ func _build_skin_selector() -> void:
 			if id == GameManager.selected_skin_id:
 				selected = skin_select.item_count - 1
 		else:
-			locked_count += 1
 			var need := int(skin["unlock_wins"])
 			if _is_narrow():
 				skin_select.add_item("%s 🔒%d" % [skin["name"], need])
@@ -398,38 +676,11 @@ func _on_skin_selected(index: int) -> void:
 		else:
 			skin_detail.tooltip_text = "everything unlocked"
 
-func _select_mode(idx: int) -> void:
-	selected_index = idx
-	var info = MODE_INFO[idx]
-	subtitle_label.text = "%s — %s" % [info.subtitle, info.title.to_upper()]
-	subtitle_label.modulate = info.color
-	desc_label.text = info.desc
-	if modifier_menu:
-		modifier_menu.visible = idx == 0
+func _refresh_hero() -> void:
+	if hero and hero.has_method("refresh_for_pick"):
+		hero.refresh_for_pick()
 
-	for i in range(buttons.size()):
-		if buttons[i].has_method("set_selected"):
-			buttons[i].set_selected(i == idx)
-			if i == 0:
-				buttons[i].text = MODE_INFO[i].title
-			else:
-				buttons[i].text = "%s\n%s  •  %s" % [MODE_INFO[i].title, MODE_INFO[i].subtitle, MODE_STATUS[i]]
-
-func _play_click_sound() -> void:
-	var audio = get_node_or_null("/root/AudioManager")
-	if audio:
-		audio.play_sfx("powerup", 0.9)
-
-func _on_play() -> void:
-	GameManager.select_mode(MODE_INFO[selected_index].mode)
-	var scene_path = GameManager.get_mode_scene(MODE_INFO[selected_index].mode)
-	var loading = load("res://scripts/LoadingScreen.gd")
-	if loading:
-		loading.show_loading(scene_path)
-	else:
-		get_tree().change_scene_to_file(scene_path)
-
-const LAYOUT_CFG_PATH := "user://settings.cfg"
+# --- office setup persistence (existing paths) --------------------------------
 
 func _load_saved_layout() -> String:
 	var cfg := ConfigFile.new()
@@ -440,7 +691,7 @@ func _on_layout_selected(index: int) -> void:
 	var names := ["open_plan", "cubicle_maze", "executive"]
 	var picked: String = names[clampi(index, 0, 2)]
 	var LevelLayouts = load("res://scripts/LevelLayouts.gd")
-	if LevelLayouts:
+	if LevelLayouts and LevelLayouts.has_method("set_current"):
 		LevelLayouts.set_current(picked)
 	var cfg := ConfigFile.new()
 	cfg.load(LAYOUT_CFG_PATH)
@@ -479,110 +730,42 @@ func _on_touch_button() -> void:
 	if audio and audio.has_method("play_sfx"):
 		audio.play_sfx("ui_click", 1.0)
 
+# --- overlays ------------------------------------------------------------------
+
 func _open_credits() -> void:
-	var overlay = CanvasLayer.new()
-	overlay.set_script(load("res://scripts/CreditsScreen.gd"))
-	add_child(overlay)
-
-func _process(delta: float) -> void:
-	menu_time += delta
-	if title_label:
-		title_label.modulate = Color(1, 1, 1, 1.0).lerp(Color(1.08, 0.95, 0.85), 0.5 + sin(menu_time * 1.6) * 0.5)
-	_update_layout()
-
-func _update_layout() -> void:
-	var w := get_viewport_rect().size.x
-	var wide := w >= 1080.0
-	if hero_panel:
-		hero_panel.visible = wide
-	var vbox := get_node_or_null("VBox") as Control
-	if vbox == null:
+	# Dedupe: one credits layer at a time; restore focus on close.
+	if credits_overlay != null and is_instance_valid(credits_overlay):
 		return
-	var margin: float
-	if wide:
-		margin = 80.0
-	elif w >= 700.0:
-		margin = 40.0
-	elif w >= 500.0:
-		margin = 20.0
-	else:
-		margin = 12.0
-	vbox.offset_left = margin
-	vbox.offset_right = -420.0 if wide else -margin
-	var needed := vbox.get_combined_minimum_size().y
-	var view_h := get_viewport_rect().size.y
-	if needed > view_h - 34.0:
-		vbox.grow_vertical = Control.GROW_DIRECTION_END
-		vbox.anchor_bottom = 0.0
-		vbox.offset_bottom = needed
-	var center_header := w >= 700.0
-	var small := w < 560.0
-	if utility_row and utility_row is HBoxContainer:
-		(utility_row as HBoxContainer).alignment = BoxContainer.ALIGNMENT_CENTER if center_header \
-			else BoxContainer.ALIGNMENT_BEGIN
-	if stats_label:
-		stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if center_header \
-			else HORIZONTAL_ALIGNMENT_LEFT
-	for child in [title_label, subtitle_label, desc_label]:
-		if child:
-			child.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if center_header \
-				else HORIZONTAL_ALIGNMENT_LEFT
-	for label in _small_labels:
-		if is_instance_valid(label):
-			label.add_theme_font_size_override("font_size", 10 if small else 12)
-	# D2: tagline scrim — bottom-up gradient black 0.0->0.55 behind subtitle+desc.
-	if tagline_scrim:
-		tagline_scrim.visible = backdrop != null and backdrop.visible
-		if tagline_scrim.visible and subtitle_label and desc_label:
-			var sub_y := subtitle_label.global_position.y
-			var desc_bottom := desc_label.global_position.y + desc_label.size.y
-			if desc_bottom > sub_y:
-				tagline_scrim.position = Vector2(margin, sub_y - 4.0)
-				tagline_scrim.size = Vector2(w - margin * 2.0, desc_bottom - sub_y + 8.0)
+	var script = load("res://scripts/CreditsScreen.gd")
+	if script == null:
+		return
+	credits_overlay = CanvasLayer.new()
+	credits_overlay.name = "CreditsOverlay"
+	credits_overlay.set_script(script)
+	add_child(credits_overlay)
+	if credits_overlay.has_signal("closed"):
+		credits_overlay.closed.connect(_on_credits_closed)
 
-var _small_labels: Array[Label] = []
+func _on_credits_closed() -> void:
+	credits_overlay = null
+	if credits_button and is_instance_valid(credits_button):
+		credits_button.grab_focus()
 
-func _is_narrow() -> bool:
-	return get_viewport_rect().size.x < 560.0
-
-func _register_detail_label(label: Label) -> void:
-	_small_labels.append(label)
-	if get_viewport_rect().size.x < 560.0:
-		label.custom_minimum_size.x = 0
-
-func _register_small_label(label: Label) -> void:
-	_small_labels.append(label)
-	label.add_theme_font_size_override("font_size", 12)
-
-func _build_menu_theme() -> void:
-	title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
-	var w := get_viewport_rect().size.x
-	title_label.add_theme_font_size_override("font_size", 34 if w >= 700.0 else 26)
-	subtitle_label.add_theme_font_size_override("font_size", 14)
-	subtitle_label.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35))
-	if title_label.text.length() > 0 and not title_label.text.contains("\n"):
-		title_label.text = "FRIDAY 5PM\nEVACUATION"
-		title_label.add_theme_constant_override("line_spacing", -6)
-	desc_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
-	desc_label.add_theme_font_size_override("font_size", 13)
-	# D2: tagline scrim panel — bottom-up gradient black 0.0->0.55 so text
-	# reads over the skyline backdrop. ColorRect can't gradient; use a
-	# custom Control that draws vertical bands.
-	tagline_scrim = Control.new()
-	tagline_scrim.name = "TaglineScrim"
-	tagline_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tagline_scrim.set_script(load("res://scripts/TaglineScrim.gd"))
-	# Insert behind the VBox (draw order = tree order; BG is child 0).
-	add_child(tagline_scrim)
-	move_child(tagline_scrim, 0)
-	UI_THEME.apply_primary(play_button)
-	play_button.grab_focus()
-	UI_THEME.apply_secondary(host_button, UI_THEME.color(UI_THEME.CYAN))
-	UI_THEME.apply_secondary(join_button, UI_THEME.color(UI_THEME.LIME))
-	UI_THEME.apply_secondary(back_button, UI_THEME.color(UI_THEME.CORAL))
+func _open_settings() -> void:
+	if settings_overlay and is_instance_valid(settings_overlay):
+		return
+	var script = load("res://scripts/Settings.gd")
+	settings_overlay = Control.new()
+	settings_overlay.set_script(script)
+	add_child(settings_overlay)
+	settings_overlay.closed.connect(func():
+		settings_overlay = null
+		if settings_button and is_instance_valid(settings_button):
+			settings_button.grab_focus()
+	)
 
 func _open_lobby() -> void:
-	if lobby_overlay:
+	if lobby_overlay and is_instance_valid(lobby_overlay):
 		return
 	var script = load("res://scripts/Lobby.gd")
 	if not script:
@@ -593,13 +776,41 @@ func _open_lobby() -> void:
 	lobby_overlay.close_requested.connect(func():
 		lobby_overlay.queue_free()
 		lobby_overlay = null
+		if host_button and is_instance_valid(host_button):
+			host_button.grab_focus()
 	)
 
-func _open_settings() -> void:
-	if settings_overlay:
+# --- responsive layout ---------------------------------------------------------
+
+var _nav_frac: float = 0.4
+
+func _process(delta: float) -> void:
+	menu_time += delta
+	# No per-frame geometry work; the pulsing title is gone (brand is static).
+
+func _layout_responsive() -> void:
+	if nav_field == null:
 		return
-	var script = load("res://scripts/Settings.gd")
-	settings_overlay = Control.new()
-	settings_overlay.set_script(script)
-	add_child(settings_overlay)
-	settings_overlay.closed.connect(func(): settings_overlay = null)
+	var w := get_viewport_rect().size.x
+	var h := get_viewport_rect().size.y
+	# Margins: 16px under 1080 (keeps 960 legible), 32px on desktop.
+	var margin := 16.0 if w < 1080.0 else 32.0
+	# Field width: exactly 40% at >= 960 (512 at 1280), FULL viewport minus
+	# margins below 960 (no 56% rule — the compact nav owns the screen).
+	var field_w := w * 0.4 if w >= 960.0 else w - margin * 2.0
+	_nav_frac = field_w / w
+	nav_field.anchor_right = _nav_frac
+	# Top brand sits at y=40; the column scrolls the rest of the height.
+	scroll.offset_left = margin
+	scroll.offset_right = -margin
+	scroll.offset_top = 40.0
+	scroll.offset_bottom = -16.0
+	# Hero preview: desktop-only (>= 1080), anchored inside the right field.
+	if hero_panel:
+		hero_panel.visible = w >= 1080.0
+	for sub in [modes_subview, customize_subview, office_subview]:
+		if sub and is_instance_valid(sub):
+			_sync_subview_field(sub)
+
+func _is_narrow() -> bool:
+	return get_viewport_rect().size.x < 560.0

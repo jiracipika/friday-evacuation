@@ -1,21 +1,20 @@
 # MenuLayoutSmokeTest.gd — UI SLICE regression test for the responsive menu.
 #
-# Pins the actual mechanism found by the LayoutProbe investigation
-# (2026-09-06): a Control's container refuses to shrink below its combined
-# MINIMUM width, so "responsive margins" mean nothing unless every child's
-# minimum width also fits the narrow viewport. Portrait clip root causes
-# were: unwrapped mode-card labels (455px), unwrapped detail labels
-# (341px), long dropdown item text (361px), and the 4-wide utility row
-# (449px sum).
+# Rewritten for the superseding departure-board design (Main.gd + Main.tscn
+# + code-built subviews), keeping the original intent of the LayoutProbe
+# findings (2026-09-06): containers refuse to shrink below their combined
+# MINIMUM width, so every column/content minimum must fit the narrowest
+# supported window and the hero must only exist where there is room.
 #
-# Checks at a 390-wide portrait window:
-#   1. Menu column min width <= 380 (must fit 390 minus margins)
-#   2. Hero panel hidden; narrow margins applied (12px)
-#   3. Detail labels clip (no 250px minimums)
-#   4. Utility row is a flow container at narrow widths
-#   5. Mode cards wrap (autowrap enabled)
-#   6. Header alignment switches: centered >=700, left-aligned <700
-# And at 1280 desktop: hero visible, 420px hero margin, min width < 800.
+# Checks at 390x844 portrait:
+#   1. Home nav column min width <= viewport minus margins (no overflow).
+#   2. Hero panel hidden; full-width ink field minus margins.
+#   3. Detail labels (rider/chair taglines) wrap, min width suppressed.
+#   4. OptionButtons do not force min width from their longest item.
+#   5. Mode cards in the OTHER MODES subview wrap/trim (no 455px rows).
+#   6. All visible action controls >= 48px; essential text >= 14px.
+# And at 1280x720 desktop: hero visible inside the right field, nav column
+# inside the 40% ink field, min width sane.
 extends SceneTree
 
 var checks_total := 0
@@ -34,78 +33,127 @@ func check(cond: bool, label: String) -> void:
 func _init() -> void:
 	_run.call_deferred()
 
+func _set_size(win: Window, size: Vector2i) -> void:
+	win.size = size
+	win.content_scale_size = size
+
 func _run() -> void:
 	var packed := load("res://scenes/Main.tscn")
 	var win := root.get_window()
 
-	# ---------- portrait 390 ----------
+	# ---------- portrait 390x844 ----------
 	# Boot the scene at the narrow size by editing the window BEFORE the
 	# first layout pass, then sync content_scale_size (canvas_items stretch
 	# divides by it; a stale 1280 design size desyncs anchors).
-	win.size = Vector2i(390, 844)
-	win.content_scale_size = Vector2i(390, 844)
+	_set_size(win, Vector2i(390, 844))
 	var main = packed.instantiate()
 	root.add_child(main)
 	for i in 8:
 		await process_frame
 
-	var vbox: Control = main.get_node_or_null("VBox")
-	var min_w: float = vbox.get_combined_minimum_size().x
-	check(min_w <= 380.0, "portrait menu min width fits 390 (%.0f)" % min_w)
-
 	var vp_w: float = main.get_viewport_rect().size.x
-	check(absf(vbox.offset_left - 12.0) < 0.5, "narrow margin applied (offset_left=%.0f)" % vbox.offset_left)
-	check(vp_w < 560.0 or true, "viewport reports narrow (%.0f)" % vp_w)
+	var col: Control = main.nav_column
+	var col_min_w: float = col.get_combined_minimum_size().x
+	check(col_min_w <= vp_w - 24.0,
+		"portrait menu min width fits 390 minus margins (%.0f vs %.0f)" % [col_min_w, vp_w - 24.0])
+	check(col.size.x <= vp_w + 1.0, "portrait column does not overflow viewport (%.0f)" % col.size.x)
+	check(col.global_position.x >= 14.0,
+		"narrow margin applied (x=%.0f)" % col.global_position.x)
 
-	var hero: Control = null
-	for child in main.get_children():
-		if String(child.name).begins_with("HeroPanel"):
-			hero = child
-	check(hero != null and not hero.visible, "hero panel hidden in portrait")
+	# Full-width ink field minus margins under 960 (not a 56% rule).
+	var field_w: float = main.nav_field.size.x
+	check(absf(field_w - (vp_w - 32.0)) < 2.0,
+		"ink field is full viewport minus margins (w=%.0f)" % field_w)
 
+	# Hero panel hidden in portrait.
+	check(main.hero_panel != null and not main.hero_panel.visible,
+		"hero panel hidden in portrait")
+
+	# Detail labels: suppressed min width + autowrap (stacked under the row).
+	# The selectors are lazy-built — open CUSTOMIZE RIDE first.
+	main.customize_button.pressed.emit()
+	await process_frame
 	var char_detail: Label = main.character_detail
 	var skin_detail: Label = main.skin_detail
-	check(char_detail.custom_minimum_size.x == 0.0, "rider tagline min width suppressed")
-	check(skin_detail.custom_minimum_size.x == 0.0, "chair tagline min width suppressed")
-	# D3: detail labels now autowrap (never clip mid-word) with 44px min height.
-	check(char_detail.autowrap_mode != TextServer.AUTOWRAP_OFF
-		and skin_detail.autowrap_mode != TextServer.AUTOWRAP_OFF,
+	check(char_detail != null and char_detail.custom_minimum_size.x == 0.0,
+		"rider tagline min width suppressed")
+	check(skin_detail != null and skin_detail.custom_minimum_size.x == 0.0,
+		"chair tagline min width suppressed")
+	check(char_detail != null and char_detail.autowrap_mode != TextServer.AUTOWRAP_OFF
+		and skin_detail != null and skin_detail.autowrap_mode != TextServer.AUTOWRAP_OFF,
 		"detail labels autowrap instead of clipping")
+	check(main.character_select.fit_to_longest_item == false
+		and main.skin_select.fit_to_longest_item == false,
+		"OptionButtons do not size to longest item")
+	var row_min: float = main.character_row.get_combined_minimum_size().x
+	check(row_min <= vp_w + 1.0, "rider selector row fits portrait (%.0f)" % row_min)
 
-	var utility: Container = main.utility_row
-	check(utility is HFlowContainer, "utility row wraps (flow container) at narrow width")
+	# OTHER MODES subview at portrait: opaque ink field full-width minus
+	# margins, mode cards trimmed (no 455px minimum rows), footer reachable.
+	main.other_modes_button.pressed.emit()
+	await process_frame
+	check(main.modes_subview.visible, "modes subview opens in portrait")
+	var sub_field: ColorRect = main.modes_subview.get_node("Field")
+	check(absf(sub_field.size.x - (vp_w - 32.0)) < 2.0,
+		"modes subview field full-width minus margins (%.0f)" % sub_field.size.x)
+	check(main.modes_subview.size.y <= 844.0 + 1.0 and sub_field.size.y <= 844.0 + 1.0,
+		"modes subview inside viewport height at portrait")
+	var cards_wrap := true
+	for card in main.buttons:
+		var b := card as Button
+		if b == null:
+			continue
+		if b.get_combined_minimum_size().x > vp_w + 1.0:
+			cards_wrap = false
+			print("    wide card min: %s %.0f" % [b.text, b.get_combined_minimum_size().x])
+	check(cards_wrap and main.buttons.size() > 0, "mode cards fit portrait width")
+	var play_sel: Button = main.modes_subview.get_meta("play_button")
+	check(play_sel != null and play_sel.custom_minimum_size.y >= 48.0,
+		"PLAY SELECTED stays a >=48px target in portrait")
+	var scroll_sub: ScrollContainer = main.modes_subview.get_node("Field/Content/ScrollSub")
+	check(scroll_sub != null and scroll_sub.get_v_scroll_bar() != null,
+		"modes subview scrolls (content reachable)")
 
-	var card_wraps := true  # pinned via _cards_wrap() below (black-box)
-	check(_cards_wrap(main), "mode cards wrap their two-line labels")
-
-	var title: Label = main.get_node_or_null("VBox/Title")
-	check(title.horizontal_alignment == HORIZONTAL_ALIGNMENT_LEFT,
-		"narrow header left-aligned (align=%d)" % title.horizontal_alignment)
+	# Action targets + essential text at portrait.
+	var targets_ok := true
+	var text_ok := true
+	for node in main.find_children("*", "Button", true, false):
+		var b := node as Button
+		if b == null or not b.is_visible_in_tree():
+			continue
+		if b.custom_minimum_size.y < 48.0:
+			targets_ok = false
+			print("    tiny target: %s h=%.0f" % [b.text, b.custom_minimum_size.y])
+		if b.get_theme_font_size("font_size") < 14:
+			text_ok = false
+	check(targets_ok, "all action targets >= 48px in portrait")
+	check(text_ok, "essential button text >= 14px in portrait")
 
 	main.queue_free()
 	await process_frame
 
-	# ---------- desktop 1280 ----------
-	win.size = Vector2i(1280, 720)
-	win.content_scale_size = Vector2i(1280, 720)
+	# ---------- desktop 1280x720 ----------
+	_set_size(win, Vector2i(1280, 720))
 	main = packed.instantiate()
 	root.add_child(main)
 	for i in 8:
 		await process_frame
 
-	var vbox2: Control = main.get_node_or_null("VBox")
-	check(absf(vbox2.offset_right + 420.0) < 0.5, "desktop hero margin restored (-420)")
-	check(absf(vbox2.offset_left - 80.0) < 0.5, "desktop margin 80px")
-	var hero2: Control = null
-	for child in main.get_children():
-		if String(child.name).begins_with("HeroPanel"):
-			hero2 = child
-	check(hero2 != null and hero2.visible, "hero panel visible on desktop")
-	var title2: Label = main.get_node_or_null("VBox/Title")
-	check(title2.horizontal_alignment == HORIZONTAL_ALIGNMENT_CENTER,
-		"desktop header centered")
-	check(vbox2.get_combined_minimum_size().x < 800.0,
-		"desktop min width sane (%.0f)" % vbox2.get_combined_minimum_size().x)
+	var field_w2: float = main.nav_field.size.x
+	check(absf(field_w2 - 512.0) < 2.0, "desktop ink field is 512px (w=%.0f)" % field_w2)
+	var col2: Control = main.nav_column
+	var col2_min: float = col2.get_combined_minimum_size().x
+	check(col2_min <= 512.0 - 48.0,
+		"desktop nav column min fits the ink field (%.0f)" % col2_min)
+	check(main.hero_panel != null and main.hero_panel.visible,
+		"hero panel visible on desktop")
+	var hero_rect := Rect2(main.hero_panel.global_position, main.hero_panel.size)
+	check(hero_rect.position.x >= field_w2 and hero_rect.end.x <= 1280.0 + 1.0
+		and hero_rect.position.y >= 0.0 and hero_rect.end.y <= 720.0 + 1.0,
+		"hero panel inside right field + viewport (%s)" % hero_rect)
+	check(main.get_viewport_rect().size == Vector2(1280, 720),
+		"desktop viewport reports 1280x720")
+
 	main.queue_free()
 	await process_frame
 
@@ -117,11 +165,3 @@ func _run() -> void:
 		for f in failures:
 			print("  - %s" % f)
 		quit(1)
-
-func _cards_wrap(main: Node) -> bool:
-	for card in main.buttons:
-		if not (card is Button):
-			continue
-		if (card as Button).autowrap_mode == TextServer.AUTOWRAP_OFF:
-			return false
-	return main.buttons.size() > 0
