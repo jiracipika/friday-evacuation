@@ -100,6 +100,52 @@ static func styled_checkbutton(cb: CheckButton) -> void:
 	cb.add_theme_font_size_override("font_size", 14)
 
 ## D6: section header — 13px ORANGE, returns a Label with +10px top margin
+## Modern dark OptionButton: styled closed button + themed popup list.
+## Without this the dropdowns render Godot-default grey — the single most
+## dated-looking control on the menu.
+static func style_option_button(ob: OptionButton) -> void:
+	var sb := button_style(color(SURFACE), Color(color(CYAN).r, color(CYAN).g, color(CYAN).b, 0.28), 1, 10)
+	sb.content_margin_left = 14.0
+	sb.content_margin_right = 14.0
+	ob.add_theme_stylebox_override("normal", sb)
+	var sbh := button_style(color(SURFACE_HOVER), color(CYAN), 1, 10)
+	sbh.content_margin_left = 14.0
+	sbh.content_margin_right = 14.0
+	ob.add_theme_stylebox_override("hover", sbh)
+	ob.add_theme_stylebox_override("pressed", sbh)
+	ob.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	ob.add_theme_color_override("font_color", color(TEXT, 0.92))
+	ob.add_theme_color_override("font_hover_color", color(TEXT))
+	ob.add_theme_color_override("font_pressed_color", color(TEXT))
+	ob.add_theme_icon_override("arrow", _arrow_icon())
+	# Popup list (the menu that drops down).
+	var pop := ob.get_popup()
+	if pop != null:
+		var psb := panel_style(color(CYAN), false)
+		psb.content_margin_left = 4.0
+		psb.content_margin_right = 4.0
+		psb.content_margin_top = 6.0
+		psb.content_margin_bottom = 6.0
+		pop.add_theme_stylebox_override("panel", psb)
+		pop.add_theme_stylebox_override("hover", button_style(color(SURFACE_HOVER), color(CYAN), 1, 8))
+		pop.add_theme_color_override("font_color", color(TEXT, 0.88))
+		pop.add_theme_color_override("font_hover_color", color(TEXT))
+		pop.add_theme_color_override("font_hover_pressed_color", color(TEXT))
+		pop.add_theme_constant_override("v_separation", 6)
+
+static func _arrow_icon() -> ImageTexture:
+	# 12x12 chevron in muted text color (crisp at 1x; menus are 1x UI).
+	var size := 12
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var col := color(TEXT_MUTED)
+	for y in range(3, 9):
+		var x := y - 2  # 1..7 downward slope
+		img.set_pixel(x, y, col)
+		img.set_pixel(size - 1 - x, y, col)
+	return ImageTexture.create_from_image(img)
+
+
+## D6: section header — 13px ORANGE, returns a Label with +10px top margin
 static func make_section_header(text: String) -> Label:
 	var label := Label.new()
 	label.text = text

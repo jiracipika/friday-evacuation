@@ -150,12 +150,23 @@ func _draw_office_foreground(sz: Vector2) -> void:
 	# Ceiling: dark band + a warm troffer light strip that gently pulses.
 	draw_rect(Rect2(Vector2(0, 0), Vector2(sz.x, sz.y * 0.10)), Color(0.028, 0.028, 0.045), true)
 	var pulse := 0.85 + sin(time * 1.3) * 0.15
-	var strip_c := Color(1.0, 0.82, 0.55, 0.5 * pulse)
-	draw_rect(Rect2(Vector2(sz.x * 0.32, sz.y * 0.028), Vector2(sz.x * 0.36, maxf(4.0, sz.y * 0.010))), strip_c, true)
+	# Soft troffer glow: gradient feather instead of a hard-edged bar so it
+	# reads as ceiling light, not a floating UI stripe.
+	var strip_y := sz.y * 0.020
+	var strip_h := maxf(3.0, sz.y * 0.006)
+	var strip_rect := Rect2(Vector2(sz.x * 0.30, strip_y), Vector2(sz.x * 0.40, strip_h))
+	draw_rect(strip_rect, Color(1.0, 0.82, 0.55, 0.34 * pulse), true)
+	var feather_h := maxf(8.0, sz.y * 0.03)
+	for i in 6:
+		var a := 0.05 * pulse * (1.0 - float(i) / 6.0)
+		draw_rect(Rect2(Vector2(sz.x * 0.30 - float(i) * 6.0, strip_y + strip_h),
+			Vector2(sz.x * 0.40 + float(i) * 12.0, feather_h)), Color(1.0, 0.82, 0.55, a), true)
 	# Interior floor: warm pool sweeping a desk-lamp hue across the bottom.
 	draw_rect(Rect2(Vector2(0, sz.y * 0.90), Vector2(sz.x, sz.y * 0.10)), Color(0.05, 0.04, 0.06), true)
 	var sweep := fmod(time * 0.03, 1.0)
 	var pool_x := sz.x * (0.15 + 0.7 * sweep)
-	draw_rect(Rect2(Vector2(pool_x - sz.x * 0.08, sz.y * 0.90), Vector2(sz.x * 0.16, sz.y * 0.035)), Color(0.55, 0.30, 0.12), true)
+	# Two-layer soft pool: wide dim base + narrow warm core (desk-lamp hue).
+	draw_rect(Rect2(Vector2(pool_x - sz.x * 0.13, sz.y * 0.90), Vector2(sz.x * 0.26, sz.y * 0.028)), Color(0.40, 0.22, 0.09, 0.55), true)
+	draw_rect(Rect2(Vector2(pool_x - sz.x * 0.06, sz.y * 0.90), Vector2(sz.x * 0.12, sz.y * 0.02)), Color(0.52, 0.29, 0.12, 0.75), true)
 	# Brand floor line.
 	draw_rect(Rect2(Vector2(0, sz.y - 4.0), Vector2(sz.x, 4.0)), Color(1.0, 0.60, 0.22, 0.35), true)

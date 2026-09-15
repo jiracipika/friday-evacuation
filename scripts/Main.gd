@@ -376,6 +376,7 @@ func _build_office_rows(list: VBoxContainer, _play_out: Array, _back_out: Array)
 	label.add_theme_color_override("font_color", TEXT_MUTED)
 	list.add_child(label)
 	layout_option = OptionButton.new()
+	FridayUITheme.style_option_button(layout_option)
 	layout_option.add_item("MAP: OPEN PLAN", 0)
 	layout_option.add_item("MAP: CUBICLE MAZE", 1)
 	layout_option.add_item("MAP: EXECUTIVE", 2)
@@ -536,6 +537,7 @@ func _build_character_selector(parent: Control) -> void:
 	label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	character_row.add_child(label)
 	character_select = OptionButton.new()
+	FridayUITheme.style_option_button(character_select)
 	character_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	character_select.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	character_select.custom_minimum_size = Vector2(0, 48)
@@ -602,6 +604,7 @@ func _build_skin_selector(parent: Control) -> void:
 	label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	skin_row.add_child(label)
 	skin_select = OptionButton.new()
+	FridayUITheme.style_option_button(skin_select)
 	skin_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	skin_select.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	skin_select.custom_minimum_size = Vector2(0, 48)
