@@ -42,6 +42,11 @@ const MODE_INFO = [
 
 const MODE_STATUS := ["PLAYABLE", "DELIVERY PLAYABLE", "SHOPPER PLAYABLE", "SURVIVAL PLAYABLE"]
 
+# S-C F2: fixed meta slots (category / crew) + icon glyph per card.
+const MODE_CATEGORY := ["PRIMARY", "VERSUS", "SOCIAL", "CO-OP"]
+const MODE_CREW := ["1-4 PLAYERS", "TEAMS OF 2+", "1 SEEKER · 3+ HIDERS", "2-4 PLAYERS"]
+const MODE_ICON := ["flag", "flag_mirrored", "eye", "pizza"]
+
 # Signals re-used by the old flow so callers can detect navigation intent.
 signal mode_chosen(mode: GameManager.GameMode)
 
@@ -84,7 +89,8 @@ var _remap_capture_active := false  # set true while Settings captures raw keys
 ## S-PAD: Settings remap capture toggles this via set("remap_capture_active").
 # Modes subview selected-mode readout (title/description + PLAY SELECTED).
 var modes_title_label: Label
-var modes_desc_label: Label
+var modes_desc_label: RichTextLabel
+var modes_caution_row: HFlowContainer
 
 # Scene nodes (built in Main.tscn).
 @onready var nav_field: ColorRect = $NavField
@@ -481,21 +487,28 @@ func _unhandled_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 func _build_modes_subview() -> void:
-	modes_subview = _subview_shell("MODES", _build_mode_rows)
+	modes_subview = _subview_shell("PICK YOUR EXIT", _build_mode_rows)
+
+## S-C F2: nav field width in px (drives the narrow-layout meta collapse).
+func _nav_frac_width() -> float:
+	return get_viewport_rect().size.x * _nav_frac
 
 ## Mode cards + selected readout + PLAY SELECTED. The card buttons select;
 ## the pinned PLAY SELECTED button launches the selected mode.
 func _build_mode_rows(list: VBoxContainer, play_out: Array, _back_out: Array) -> Control:
 	var card_script = load("res://scripts/ModeCard.gd")
+	# S-C F2: meta box drops to crew-only under 560px (portrait fit).
+	var two_line := _nav_frac_width() >= 560.0
 	for i in range(MODE_INFO.size()):
 		var info = MODE_INFO[i]
 		var btn = Button.new()
 		if card_script:
 			btn.set_script(card_script)
-			btn.configure(info.title, info.subtitle, MODE_STATUS[i], info.color, i == 0)
-			btn.custom_minimum_size = Vector2(0, 84 if i == 0 else 56)
+			btn.configure(info.title, info.subtitle, MODE_STATUS[i], info.color, i == 0,
+				MODE_CATEGORY[i], MODE_CREW[i], MODE_ICON[i], two_line)
+			btn.custom_minimum_size = Vector2(0, 78)
 		else:
-			btn.custom_minimum_size = Vector2(0, 56)
+			btn.custom_minimum_size = Vector2(0, 78)
 		btn.text = info.title
 		btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		btn.focus_mode = Control.FOCUS_ALL
@@ -503,21 +516,100 @@ func _build_mode_rows(list: VBoxContainer, play_out: Array, _back_out: Array) ->
 		list.add_child(btn)
 		buttons.append(btn)
 
+	# S-C F2 desc panel: flat dark sheet + FORM EX-01 stamp + title + desc
+	# (with the "5:00 PM sharp" emphasis applied in _select_mode) + caution chips.
 	var footer := VBoxContainer.new()
-	footer.add_theme_constant_override("separation", 6)
+	footer.name = "DescPanel"
+	footer.add_theme_constant_override("separation", 8)
+
+	var sheet := PanelContainer.new()
+	sheet.name = "DescSheet"
+	var ssb := StyleBoxFlat.new()
+	ssb.bg_color = Color(0, 0, 0, 0.45)
+	ssb.set_corner_radius_all(12)
+	ssb.border_color = Color(1, 1, 1, 0.09)
+	ssb.set_border_width_all(1)
+	ssb.content_margin_left = 14.0
+	ssb.content_margin_right = 14.0
+	ssb.content_margin_top = 12.0
+	ssb.content_margin_bottom = 12.0
+	sheet.add_theme_stylebox_override("panel", ssb)
+
+	var sheet_col := VBoxContainer.new()
+	sheet_col.add_theme_constant_override("separation", 4)
+	sheet.add_child(sheet_col)
+
+	# FORM stamp: "FORM EX-01" rotated -4deg, RED border/text, top-right overlap.
+	var stamp_anchor := Control.new()
+	stamp_anchor.name = "FormStampAnchor"
+	stamp_anchor.anchor_left = 1.0
+	stamp_anchor.anchor_right = 1.0
+	stamp_anchor.offset_left = -84.0
+	stamp_anchor.offset_right = 10.0
+	stamp_anchor.offset_top = -10.0
+	stamp_anchor.offset_bottom = 14.0
+	stamp_anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sheet.add_child(stamp_anchor)
+	var stamp := Label.new()
+	stamp.name = "FormStamp"
+	stamp.text = "FORM EX-01"
+	stamp.rotation_degrees = -4.0
+	stamp.add_theme_font_size_override("font_size", 9)
+	stamp.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.RED))
+	var stamp_sb := StyleBoxFlat.new()
+	stamp_sb.bg_color = Color(0, 0, 0, 0.0)
+	stamp_sb.border_color = UI_THEME.color(UI_THEME.RED)
+	stamp_sb.set_border_width_all(2)
+	stamp_sb.set_corner_radius_all(3)
+	stamp_sb.content_margin_left = 5.0
+	stamp_sb.content_margin_right = 5.0
+	stamp_sb.content_margin_top = 1.0
+	stamp_sb.content_margin_bottom = 1.0
+	stamp.add_theme_stylebox_override("normal", stamp_sb)
+	stamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stamp_anchor.add_child(stamp)
+
 	modes_title_label = Label.new()
 	modes_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	modes_title_label.add_theme_font_size_override("font_size", 16)
-	modes_title_label.add_theme_color_override("font_color", IVORY)
-	footer.add_child(modes_title_label)
-	modes_desc_label = Label.new()
-	modes_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	modes_title_label.add_theme_font_size_override("font_size", 11)
+	modes_title_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.ORANGE))
+	sheet_col.add_child(modes_title_label)
+	modes_desc_label = RichTextLabel.new()
+	modes_desc_label.name = "ModesDescLabel"
+	modes_desc_label.bbcode_enabled = true
+	modes_desc_label.fit_content = true
 	modes_desc_label.custom_minimum_size = Vector2(0, 44)
-	modes_desc_label.add_theme_font_size_override("font_size", 14)
-	modes_desc_label.add_theme_color_override("font_color", TEXT_MUTED)
-	footer.add_child(modes_desc_label)
+	modes_desc_label.add_theme_font_size_override("normal_font_size", 12)
+	modes_desc_label.add_theme_color_override("default_color", UI_THEME.color(UI_THEME.TEXT_FAIR))
+	sheet_col.add_child(modes_desc_label)
+	footer.add_child(sheet)
+
+	# CAUTION chips row (EVACUATION only).
+	modes_caution_row = HFlowContainer.new()
+	modes_caution_row.name = "CautionRow"
+	modes_caution_row.add_theme_constant_override("separation", 6)
+	for chip_text in ["COFFEE = BOOST", "WATER = TRAP", "STAPLERS BITE"]:
+		var chip := PanelContainer.new()
+		var csb := StyleBoxFlat.new()
+		csb.bg_color = Color(UI_THEME.color(UI_THEME.YELLOW), 0.08)
+		csb.border_color = Color(UI_THEME.color(UI_THEME.YELLOW), 0.55)
+		csb.set_border_width_all(1)
+		csb.set_corner_radius_all(8)
+		csb.content_margin_left = 8.0
+		csb.content_margin_right = 8.0
+		csb.content_margin_top = 2.0
+		csb.content_margin_bottom = 2.0
+		chip.add_theme_stylebox_override("panel", csb)
+		var chip_label := Label.new()
+		chip_label.text = chip_text
+		chip_label.add_theme_font_size_override("font_size", 10)
+		chip_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.YELLOW))
+		chip.add_child(chip_label)
+		modes_caution_row.add_child(chip)
+	footer.add_child(modes_caution_row)
+
 	var play_selected := Button.new()
-	play_selected.text = "PLAY SELECTED"
+	play_selected.text = "CLOCK OUT"
 	play_selected.custom_minimum_size = Vector2(0, 52)
 	play_selected.focus_mode = Control.FOCUS_ALL
 	play_selected.add_theme_font_size_override("font_size", 20)
@@ -679,9 +771,15 @@ func _select_mode(idx: int) -> void:
 		else:
 			card.modulate = Color(1, 1, 1, 1.0 if i == selected_index else 0.55)
 	if modes_title_label:
-		modes_title_label.text = "%s — %s" % [info.title.to_upper(), info.subtitle]
+		modes_title_label.text = info.title.to_upper()
 	if modes_desc_label:
-		modes_desc_label.text = info.desc
+		# S-C F2: emphasize "5:00 PM sharp" inline (source data untouched).
+		var emphasized: String = info.desc
+		if selected_index == 0 and emphasized.contains("4:59 PM"):
+			emphasized = "Race your office chair through the building before [color=#f2c230][b]5:00 PM sharp[/b][/color]. Coffee boosts, water traps, stapler sabotage. Last one buys beers."
+		modes_desc_label.text = emphasized
+	if modes_caution_row:
+		modes_caution_row.visible = selected_index == 0
 
 ## Play the currently selected mode from the OTHER MODES subview.
 func _play_selected_mode() -> void:

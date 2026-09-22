@@ -121,8 +121,9 @@ func _run() -> void:
 		and not main.modes_desc_label.text.is_empty(),
 		"selected mode title/description visible inside the subview")
 	var play_sel: Button = main.modes_subview.get_meta("play_button")
-	check(play_sel.text == "PLAY SELECTED" and play_sel.custom_minimum_size.y >= 48.0,
-		"PLAY SELECTED is a visible pinned action")
+	# S-C: CTA renamed to CLOCK OUT per FINAL-SPEC section 4.
+	check(play_sel.text == "CLOCK OUT" and play_sel.custom_minimum_size.y >= 48.0,
+		"CLOCK OUT is a visible pinned action")
 	for i in range(4):
 		main._select_mode(i)
 		var card: Button = main.buttons[i]
