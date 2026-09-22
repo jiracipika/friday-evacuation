@@ -67,6 +67,7 @@ var menu_time: float = 0.0
 var hero_panel: Control
 var hero: Control
 var backdrop: Control
+var nav_grid: GridContainer
 var modes_subview: Control
 var customize_subview: Control
 var office_subview: Control
@@ -136,9 +137,9 @@ func _build_menu_theme() -> void:
 	kicker_label.add_theme_color_override("font_color", ORANGE)
 	kicker_label.add_theme_font_size_override("font_size", 14)
 	brand_label.add_theme_color_override("font_color", IVORY)
-	brand_label.add_theme_font_size_override("font_size", 42)
+	brand_label.add_theme_font_size_override("font_size", 52)
 	brand_label.add_theme_constant_override("line_spacing", -6)
-	subtitle_label.add_theme_color_override("font_color", TEXT_MUTED)
+	subtitle_label.add_theme_color_override("font_color", Color(UI_THEME.color(UI_THEME.PAPER)))
 	desc_label.add_theme_color_override("font_color", TEXT_MUTED)
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
@@ -169,9 +170,147 @@ func _build_home_column() -> void:
 	host_button.visible = true
 	# Home is a departure board: no dense description copy on entry.
 	desc_label.visible = false
+	# S-B1 "After Hours" home column: clock subtitle, departures ticker,
+	# CTA subline, 2x2 nav grid, version footer (FINAL-SPEC.md section 3).
+	subtitle_label.text = "4:59 — one minute to freedom"
+	subtitle_label.add_theme_font_size_override("font_size", 20)
+	var ticker := _build_departures_ticker()
+	var spacer := Control.new()
+	spacer.name = "FlexSpacer"
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	nav_column.add_child(spacer)
+	nav_column.move_child(spacer, ticker.get_index() + 1)
+	var subline := Label.new()
+	subline.name = "CtaSubline"
+	subline.text = "LAST ONE BUYS BEERS"
+	subline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subline.add_theme_font_size_override("font_size", 11)
+	subline.add_theme_color_override("font_color", Color(UI_THEME.color(UI_THEME.ORANGE_BRIGHT), 0.75))
+	nav_column.add_child(subline)
+	nav_column.move_child(subline, play_button.get_index() + 1)
+	var grid := GridContainer.new()
+	grid.name = "NavGrid"
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for btn: Button in [host_button, other_modes_button, customize_button,
+			office_button]:
+		# Buttons are scene children of NavColumn — detach before re-parenting.
+		nav_column.remove_child(btn)
+		if btn.custom_minimum_size.y < 48.0:
+			btn.custom_minimum_size = Vector2(0, 48)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(btn)
+	nav_column.add_child(grid)
+	nav_column.move_child(grid, subline.get_index() + 1)
+	nav_grid = grid
+	var version_label := Label.new()
+	version_label.name = "VersionLabel"
+	version_label.text = "v0.9 · 26 SEP 26"
+	version_label.add_theme_font_size_override("font_size", 11)
+	version_label.add_theme_color_override("font_color", Color("9a9aae"))
+	nav_column.add_child(version_label)
 	# Single scroll surface; gamepad focus scrolls the list along.
 	scroll.follow_focus = true
 	play_button.grab_focus()
+
+## DEPARTURES board panel (iter3 board: 3 gate rows + status pills).
+func _build_departures_ticker() -> PanelContainer:
+	var ticker := PanelContainer.new()
+	ticker.name = "DeparturesTicker"
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.35)
+	style.set_corner_radius_all(12)
+	style.set_border_width_all(1)
+	style.border_color = Color(1, 1, 1, 0.09)
+	ticker.add_theme_stylebox_override("panel", style)
+	ticker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var rows_box := VBoxContainer.new()
+	rows_box.name = "Rows"
+	rows_box.add_theme_constant_override("separation", 4)
+	rows_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ticker.add_child(rows_box)
+	var header := HBoxContainer.new()
+	header.name = "TickerHeader"
+	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var head := Label.new()
+	head.text = "DEPARTURES"
+	head.add_theme_font_size_override("font_size", 11)
+	head.add_theme_color_override("font_color", ORANGE)
+	header.add_child(head)
+	var head_spacer := Control.new()
+	head_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header.add_child(head_spacer)
+	var floors := Label.new()
+	floors.text = "ALL FLOORS"
+	floors.add_theme_font_size_override("font_size", 11)
+	floors.add_theme_color_override("font_color", Color("9a9aae"))
+	header.add_child(floors)
+	rows_box.add_child(header)
+	var yellow := Color("f2c230")
+	var lime := Color("b9f34a")
+	var data := [
+		["GATE A", "PARKING LOT", "BOARDING"],
+		["GATE B", "PATIO · BEERS", "ON TIME"],
+		["GATE C", "HOME", "DELAYED"],
+	]
+	for i in range(data.size()):
+		var row := HBoxContainer.new()
+		row.name = "GateRow%d" % (i + 1)
+		row.custom_minimum_size = Vector2(0, 30)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_theme_constant_override("separation", 10)
+		var gate := Label.new()
+		gate.name = "Gate"
+		gate.text = data[i][0]
+		gate.custom_minimum_size.x = 88
+		gate.add_theme_font_size_override("font_size", 13)
+		gate.add_theme_color_override("font_color", yellow)
+		row.add_child(gate)
+		var dest := Label.new()
+		dest.name = "Dest"
+		dest.text = data[i][1]
+		dest.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		dest.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		dest.add_theme_font_size_override("font_size", 13)
+		dest.add_theme_color_override("font_color", Color("f7f6f2"))
+		row.add_child(dest)
+		var pill := PanelContainer.new()
+		pill.name = "Status"
+		pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var pill_style := StyleBoxFlat.new()
+		pill_style.set_corner_radius_all(999)
+		pill_style.content_margin_left = 8.0
+		pill_style.content_margin_right = 8.0
+		pill_style.content_margin_top = 4.0
+		pill_style.content_margin_bottom = 4.0
+		var status := Label.new()
+		status.text = data[i][2]
+		status.add_theme_font_size_override("font_size", 11)
+		match data[i][2]:
+			"BOARDING":
+				pill_style.bg_color = ORANGE
+				status.add_theme_color_override("font_color", Color("231303"))
+			"ON TIME":
+				pill_style.draw_center = false
+				pill_style.set_border_width_all(1)
+				pill_style.border_color = lime
+				status.add_theme_color_override("font_color", lime)
+			"DELAYED":
+				pill_style.draw_center = false
+				pill_style.set_border_width_all(1)
+				pill_style.border_color = Color(yellow.r, yellow.g, yellow.b, 0.55)
+				status.add_theme_color_override("font_color", yellow)
+		pill.add_theme_stylebox_override("panel", pill_style)
+		pill.add_child(status)
+		row.add_child(pill)
+		rows_box.add_child(row)
+	nav_column.add_child(ticker)
+	nav_column.move_child(ticker, subtitle_label.get_index() + 1)
+	return ticker
 
 ## Backdrop + YOUR RIDE hero panel in the right field (existing components).
 func _build_backdrop_and_hero() -> void:
@@ -789,7 +928,10 @@ var _nav_frac: float = 0.4
 
 func _process(delta: float) -> void:
 	menu_time += delta
-	# No per-frame geometry work; the pulsing title is gone (brand is static).
+	# Kicker blink dot: whole label pulses 1.0 -> 0.55 -> 1.0 over 1.6s.
+	if kicker_label:
+		var t := fmod(menu_time, 1.6) / 1.6
+		kicker_label.modulate.a = 1.0 - 0.45 * sin(PI * t)
 
 func _layout_responsive() -> void:
 	if nav_field == null:
@@ -814,6 +956,19 @@ func _layout_responsive() -> void:
 	for sub in [modes_subview, customize_subview, office_subview]:
 		if sub and is_instance_valid(sub):
 			_sync_subview_field(sub)
+	# S-B1 responsive: the 2x2 nav grid exceeds portrait width — collapse
+	# to one column under 560px and slim the ticker gate column.
+	if nav_grid:
+		nav_grid.columns = 1 if w < 560.0 else 2
+	if w < 560.0:
+		var ticker_ref := nav_column.get_node_or_null("Scroll/NavColumn/DeparturesTicker")
+		if ticker_ref == null:
+			ticker_ref = nav_column.get_node_or_null("DeparturesTicker")
+		if ticker_ref:
+			for row in ticker_ref.find_children("GateRow*", "HBoxContainer", true, false):
+				var gate: Label = row.get_node_or_null("Gate")
+				if gate:
+					gate.custom_minimum_size.x = 64
 
 func _is_narrow() -> bool:
 	return get_viewport_rect().size.x < 560.0

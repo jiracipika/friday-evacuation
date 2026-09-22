@@ -44,17 +44,16 @@ theme_override_constants/separation = 10
 
 [node name="Kicker" type="Label" parent="NavField/Scroll/NavColumn"]
 layout_mode = 2
-text = "YOUR SHIFT IS OVER."
+text = "● OFFICE EVACUATION NOTICE"
 theme_override_font_sizes/font_size = 14
 theme_override_colors/font_color = Color(1, 0.603922, 0.101961, 1)
 
 [node name="Title" type="Label" parent="NavField/Scroll/NavColumn"]
 layout_mode = 2
-text = "FRIDAY 5PM
-EVACUATION"
+text = "GET OUT"
 horizontal_alignment = 0
 theme_override_constants/line_spacing = -6
-theme_override_font_sizes/font_size = 42
+theme_override_font_sizes/font_size = 52
 theme_override_colors/font_color = Color(0.952941, 0.905882, 0.827451, 1)
 
 [node name="Subtitle" type="Label" parent="NavField/Scroll/NavColumn"]

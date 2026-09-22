@@ -60,11 +60,12 @@ func _run() -> void:
 	check(evac_style != null and evac_style.bg_color.is_equal_approx(Color("ff9a1a")),
 		"EVACUATE uses the orange primary fill")
 	check(main.host_button.text == "PLAY WITH FRIENDS"
-		and main.host_button.custom_minimum_size.y >= 52.0,
-		"PLAY WITH FRIENDS is a 52px secondary")
+		and main.host_button.custom_minimum_size.y >= 48.0,
+		"PLAY WITH FRIENDS is a 48px nav-grid secondary (S-B1 2x2 grid)")
 	check(not main.desc_label.visible, "home description copy hidden per design")
 	var brand: Label = main.brand_label
-	check(brand != null and brand.text.contains("FRIDAY"), "brand label present")
+	check(brand != null and brand.text == "GET OUT",
+		"GET OUT title present (S-B1 replaces the FRIDAY brand line)")
 
 	for entry in [["other_modes_button", "OTHER MODES"], ["customize_button", "CUSTOMIZE RIDE"],
 			["office_button", "OFFICE SETUP"], ["settings_button", "SETTINGS"],
