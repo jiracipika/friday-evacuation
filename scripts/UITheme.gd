@@ -59,6 +59,17 @@ static func button_style(bg: Color, border: Color, width: int = 1, radius: int =
 	style.shadow_offset = Vector2(0, 4)
 	return style
 
+## S-PAD: shared focus ring — StyleBoxFlat outline, ORANGE border 2,
+## draw_center false, radius 12, expand_margin 2 (visible pad/kb affordance).
+static func apply_focus(button: Button) -> void:
+	var focus := StyleBoxFlat.new()
+	focus.draw_center = false
+	focus.border_color = color(ORANGE)
+	focus.set_border_width_all(2)
+	focus.set_corner_radius_all(12)
+	focus.set_expand_margin_all(2.0)
+	button.add_theme_stylebox_override("focus", focus)
+
 static func apply_mode_card(button: Button, accent: Color, selected: bool = false) -> void:
 	button.add_theme_font_size_override("font_size", 18)
 	# UI SLICE: two-line card labels must wrap instead of forcing a 455px
@@ -73,12 +84,14 @@ static func apply_mode_card(button: Button, accent: Color, selected: bool = fals
 	button.add_theme_stylebox_override("hover", button_style(color(SURFACE_HOVER), accent, 2))
 	button.add_theme_stylebox_override("pressed", button_style(accent.darkened(0.68), accent.lightened(0.18), 2))
 	button.add_theme_stylebox_override("disabled", panel_style(accent, true))
+	apply_focus(button)
 	button.modulate = Color.WHITE if selected else Color(1, 1, 1, 0.94)
 
 static func apply_primary(button: Button) -> void:
 	button.add_theme_stylebox_override("normal", button_style(color(ORANGE), color(ORANGE_BRIGHT), 2, 14))
 	button.add_theme_stylebox_override("hover", button_style(color(ORANGE_BRIGHT), Color.WHITE, 2, 14))
 	button.add_theme_stylebox_override("pressed", button_style(color(ORANGE).darkened(0.18), color(ORANGE_BRIGHT), 2, 14))
+	apply_focus(button)
 	button.add_theme_color_override("font_color", color(BG))
 	button.add_theme_color_override("font_hover_color", color(BG))
 	button.add_theme_font_size_override("font_size", 24)
@@ -86,6 +99,7 @@ static func apply_primary(button: Button) -> void:
 static func apply_secondary(button: Button, accent: Color = color(CYAN)) -> void:
 	button.add_theme_stylebox_override("normal", button_style(color(SURFACE), Color(accent.r, accent.g, accent.b, 0.28), 1))
 	button.add_theme_stylebox_override("hover", button_style(color(SURFACE_HOVER), accent, 2))
+	apply_focus(button)
 	button.add_theme_color_override("font_color", color(TEXT, 0.86))
 	button.add_theme_color_override("font_hover_color", color(TEXT))
 
@@ -123,7 +137,9 @@ static func style_option_button(ob: OptionButton) -> void:
 	sbh.content_margin_right = 14.0
 	ob.add_theme_stylebox_override("hover", sbh)
 	ob.add_theme_stylebox_override("pressed", sbh)
-	ob.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	# S-PAD: real focus outline (was StyleBoxEmpty). Kept non-invasive for the
+	# popup: only the closed-button "focus" stylebox changes.
+	apply_focus(ob)
 	ob.add_theme_color_override("font_color", color(TEXT, 0.92))
 	ob.add_theme_color_override("font_hover_color", color(TEXT))
 	ob.add_theme_color_override("font_pressed_color", color(TEXT))
@@ -171,6 +187,6 @@ static func make_section_header(text: String) -> Label:
 static func apply_utility(button: Button, accent: Color = color(CYAN)) -> void:
 	button.add_theme_stylebox_override("normal", button_style(color(SURFACE), Color(accent.r, accent.g, accent.b, 0.2), 1, 10))
 	button.add_theme_stylebox_override("hover", button_style(color(SURFACE_HOVER), accent, 2, 10))
-	button.add_theme_stylebox_override("focus", button_style(color(SURFACE), accent, 2, 10))
+	apply_focus(button)
 	button.add_theme_color_override("font_color", color(TEXT, 0.82))
 	button.add_theme_color_override("font_hover_color", color(TEXT))

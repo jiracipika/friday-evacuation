@@ -132,7 +132,8 @@ func _ready() -> void:
 	box.add_child(rule)
 
 	agree_button = Button.new()
-	agree_button.text = "I AGREE — START"
+	# S-PAD F4: pad glyph hint in the CTA line (plain text, no new fonts).
+	agree_button.text = "I AGREE — START   (A / CROSS · ENTER)"
 	agree_button.custom_minimum_size = Vector2(0, 54)
 	agree_button.add_theme_font_size_override("font_size", 22)
 	agree_button.pressed.connect(_agree)

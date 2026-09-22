@@ -75,6 +75,13 @@ var open_subview: Control
 var last_focused: Control
 var _subview_owner: Control
 var _block_navigation: bool = false  # test seam: run handlers, skip scene change
+# S-PAD: OptionButton pad-cycling — tracks the last OptionButton that gained
+# focus so ui_left/ui_right (joypad axis 0 / dpad 7-8) can step its selection.
+var _focused_option: OptionButton
+var _remap_capture_active := false  # set true while Settings captures raw keys
+
+
+## S-PAD: Settings remap capture toggles this via set("remap_capture_active").
 # Modes subview selected-mode readout (title/description + PLAY SELECTED).
 var modes_title_label: Label
 var modes_desc_label: Label
@@ -103,6 +110,10 @@ const ORANGE := Color("ff9a1a")
 const INK := Color("0a0a0f")
 
 func _ready() -> void:
+	var focus_watch := func(_control: Control) -> void:
+		var owner_ctl: Control = get_viewport().gui_get_focus_owner()
+		_focused_option = owner_ctl as OptionButton if owner_ctl is OptionButton else null
+	get_viewport().gui_focus_changed.connect(focus_watch)
 	get_window().title = "Friday 5PM: Evacuation"
 	var prefs_boot = load("res://scripts/InputPrefs.gd")
 	if prefs_boot and prefs_boot.has_method("refresh_cache"):
@@ -214,6 +225,12 @@ func _build_home_column() -> void:
 	nav_column.add_child(version_label)
 	# Single scroll surface; gamepad focus scrolls the list along.
 	scroll.follow_focus = true
+	# S-PAD: every home-column action is pad-reachable (Button default is
+	# FOCUS_ALL already; enforce it so scene edits can never drop nav).
+	for btn in [play_button, host_button, other_modes_button, customize_button,
+			office_button, settings_button, credits_button]:
+		if btn:
+			btn.focus_mode = Control.FOCUS_ALL
 	play_button.grab_focus()
 
 ## DEPARTURES board panel (iter3 board: 3 gate rows + status pills).
@@ -429,10 +446,39 @@ func _focus_subview(sub_wrap: Control) -> void:
 		back.call_deferred("grab_focus")
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"):
+	# S-PAD: joypad B (button 1) mirrors ui_cancel on the menu layers; pad
+	# Start (button 6) also closes a subview for one-press dismissal.
+	var joy := event as InputEventJoypadButton
+	var pad_cancel: bool = joy != null and joy.pressed and joy.button_index == JOY_BUTTON_B
+	var pad_start: bool = joy != null and joy.pressed and joy.button_index == JOY_BUTTON_START
+	if event.is_action_pressed("ui_cancel") or pad_cancel or (pad_start and open_subview != null):
 		if open_subview:
 			_close_subview()
 			get_viewport().set_input_as_handled()
+			return
+	# S-PAD: focused OptionButton + ui_left/ui_right (keyboard OR joypad
+	# axis 0 / dpad) cycles the selection — Godot doesn't do this natively.
+	if _remap_capture_active or _focused_option == null \
+			or not is_instance_valid(_focused_option):
+		return
+	var step := 0
+	if event.is_action_pressed("ui_right"):
+		step = 1
+	elif event.is_action_pressed("ui_left"):
+		step = -1
+	else:
+		return
+	var ob := _focused_option
+	var idx := ob.selected
+	var count := ob.item_count
+	for _i in range(count):
+		idx = wrapi(idx + step, 0, count)
+		if not ob.is_item_disabled(idx):
+			break
+	if idx != ob.selected:
+		ob.select(idx)
+		ob.item_selected.emit(idx)
+	get_viewport().set_input_as_handled()
 
 func _build_modes_subview() -> void:
 	modes_subview = _subview_shell("MODES", _build_mode_rows)
@@ -587,6 +633,7 @@ func _subview_shell(title_text: String, builder: Callable) -> Control:
 	back.text = "BACK"
 	back.custom_minimum_size = Vector2(0, 48)
 	back.add_theme_font_size_override("font_size", 16)
+	back.focus_mode = Control.FOCUS_ALL  # S-PAD: BACK is pad-reachable
 	back.pressed.connect(_close_subview)
 	header.add_child(back)
 	sub.add_child(header)

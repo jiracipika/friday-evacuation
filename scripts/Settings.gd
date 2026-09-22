@@ -371,6 +371,11 @@ func _refresh_remap_labels() -> void:
 func _input(event: InputEvent) -> void:
 	if _remap_action == "":
 		return
+	# S-PAD: while a remap cell is armed, suppress Main's OptionButton
+	# pad-cycling so ui_left/right binds instead of cycling dropdowns.
+	var main_ctl := get_tree().root.get_node_or_null("Main")
+	if main_ctl and "remap_capture_active" in main_ctl:
+		main_ctl.set("remap_capture_active", true)
 	var prefs = load("res://scripts/InputPrefs.gd")
 	if prefs == null:
 		_remap_action = ""
@@ -388,6 +393,8 @@ func _input(event: InputEvent) -> void:
 		accepted = prefs.set_key_binding(_remap_action, event)
 	if accepted or event is InputEventKey:
 		_remap_action = ""
+		if main_ctl and "remap_capture_active" in main_ctl:
+			main_ctl.set("remap_capture_active", false)
 		_refresh_remap_labels()
 		get_viewport().set_input_as_handled()
 
