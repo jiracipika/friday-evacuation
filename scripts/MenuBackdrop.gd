@@ -49,6 +49,7 @@ func _draw() -> void:
 	_draw_sun(size_vec)
 	_draw_clouds(size_vec)
 	_draw_skyline(size_vec)
+	_draw_office_props(size_vec)
 	_draw_office_foreground(size_vec)
 
 func _draw_sky(sz: Vector2) -> void:
@@ -133,6 +134,77 @@ func _draw_skyline(sz: Vector2) -> void:
 							Vector2(bx + 6.0 + float(wx) * (bw - 12.0) / float(cols), base_y - bh + 8.0 + float(wy) * (bh - 16.0) / float(rows)),
 							Vector2(maxf(4.0, (bw - 12.0) / float(cols) * 0.4), maxf(5.0, (bh - 16.0) / float(rows) * 0.42)))
 						draw_rect(wrect, wcol, true)
+
+## S-A office set dressing: prop silhouettes along the sill + EXIT sign.
+## Colors are lifted ~10-15% above the floor pool so they read as set
+## dressing, not artifacts. Deterministic positions, opaque fills only.
+func _office_props() -> Array[Rect2]:
+	var sill_y := size.y * 0.90
+	var unit := size.y * 0.10
+	var rects: Array[Rect2] = []
+	# Water cooler: slim box with rounded top (position x 0.06 of width).
+	var wc_w := unit * 0.42
+	var wc_h := unit * 0.72
+	var wc_x := size.x * 0.06
+	var wc_rect := Rect2(Vector2(wc_x, sill_y - wc_h), Vector2(wc_w, wc_h))
+	rects.append(wc_rect)
+	# Copier: wider low box with a paper tray lip (x 0.40 of width).
+	var cp_w := unit * 0.85
+	var cp_h := unit * 0.50
+	var cp_x := size.x * 0.40
+	var cp_rect := Rect2(Vector2(cp_x, sill_y - cp_h), Vector2(cp_w, cp_h))
+	rects.append(cp_rect)
+	# Ficus: trunk strip + round canopy approximated as a tall rect (x 0.74).
+	var tr_w := unit * 0.30
+	var tr_h := unit * 0.85
+	var tr_x := size.x * 0.74
+	var tr_rect := Rect2(Vector2(tr_x, sill_y - tr_h), Vector2(tr_w, tr_h))
+	rects.append(tr_rect)
+	return rects
+
+func _exit_sign_rect() -> Rect2:
+	return Rect2(Vector2(size.x - 120.0, 36.0), Vector2(84.0, 30.0))
+
+func _draw_office_props(sz: Vector2) -> void:
+	var props := _office_props()
+	var prop_col := Color(0.09, 0.09, 0.13)
+	# Water cooler: box + rounded top + faint cyan bottle glow.
+	var wc := props[0]
+	var radius := wc.size.x * 0.28
+	draw_rect(wc, prop_col, true)
+	draw_rect(Rect2(wc.position - Vector2(0, radius), Vector2(wc.size.x, radius * 2.0)), prop_col, true)
+	draw_circle(Vector2(wc.position.x + wc.size.x * 0.5, wc.position.y - radius), radius, prop_col, true)
+	draw_rect(Rect2(Vector2(wc.position.x + wc.size.x * 0.18, wc.position.y - radius * 1.6),
+		Vector2(wc.size.x * 0.64, radius * 1.3)), Color(0.22, 0.34, 0.38), true)
+	# Copier: box + paper tray lip sticking out the front.
+	var cp := props[1]
+	draw_rect(cp, prop_col, true)
+	draw_rect(Rect2(Vector2(cp.position.x + cp.size.x * 0.12, cp.position.y - sz.y * 0.012),
+		Vector2(cp.size.x * 0.44, sz.y * 0.012)), Color(0.11, 0.11, 0.16), true)
+	# Ficus: trunk + round canopy.
+	var tr := props[2]
+	var trunk_w := tr.size.x * 0.22
+	draw_rect(Rect2(Vector2(tr.position.x + (tr.size.x - trunk_w) * 0.5, tr.position.y + tr.size.y * 0.45),
+		Vector2(trunk_w, tr.size.y * 0.55)), prop_col, true)
+	var canopy_c := Vector2(tr.position.x + tr.size.x * 0.5, tr.position.y + tr.size.y * 0.30)
+	var canopy_r := tr.size.x * 0.62
+	draw_circle(canopy_c, canopy_r, prop_col, true)
+	draw_circle(canopy_c + Vector2(-canopy_r * 0.45, canopy_r * 0.40), canopy_r * 0.62, prop_col, true)
+	draw_circle(canopy_c + Vector2(canopy_r * 0.45, canopy_r * 0.38), canopy_r * 0.58, prop_col, true)
+	# EXIT sign: green rect + inner white-bordered rect + white arrow.
+	# Signage, not a button — no glow (FINAL-SPEC R1).
+	var ex := Rect2(Vector2(sz.x - 120.0, 36.0), Vector2(84.0, 30.0))
+	draw_rect(ex, UI_THEME.color(UI_THEME.GREEN), true)
+	var inner := ex.grow(-4.0)
+	draw_rect(Rect2(inner.position, Vector2(inner.size.x, 2.0)), Color.WHITE, true)
+	draw_rect(Rect2(Vector2(inner.position.x, inner.position.y + inner.size.y - 2.0), Vector2(inner.size.x, 2.0)), Color.WHITE, true)
+	draw_rect(Rect2(Vector2(inner.position.x, inner.position.y), Vector2(2.0, inner.size.y)), Color.WHITE, true)
+	draw_rect(Rect2(Vector2(inner.position.x + inner.size.x - 2.0, inner.position.y), Vector2(2.0, inner.size.y)), Color.WHITE, true)
+	# Arrow: shaft + head, pointing right.
+	var ac := Vector2(ex.position.x + ex.size.x * 0.5, ex.position.y + ex.size.y * 0.5)
+	draw_rect(Rect2(Vector2(ac.x - 16.0, ac.y - 2.5), Vector2(22.0, 5.0)), Color.WHITE, true)
+	draw_rect(Rect2(Vector2(ac.x + 2.0, ac.y - 8.5), Vector2(10.0, 5.0)), Color.WHITE, true)
+	draw_rect(Rect2(Vector2(ac.x + 2.0, ac.y + 3.5), Vector2(10.0, 5.0)), Color.WHITE, true)
 
 ## Interior-office foreground: the menu sits INSIDE the office looking out.
 ## Ceiling light band at top, warm floor pool at bottom, and tall window

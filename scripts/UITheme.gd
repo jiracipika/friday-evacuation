@@ -14,6 +14,16 @@ const LIME := "b9f34a"
 const CORAL := "ff6f61"
 const VIOLET := "9b82ff"
 
+# S-A tokens (FINAL-SPEC.md section 2 — locked "After Hours" palette).
+const TEXT_FAIR := "9a9aae"
+const PAPER := "f2ecdc"
+const GREEN := "2fa05a"
+const YELLOW := "f2c230"
+const RED := "e04a3a"
+const INK := "231303"
+const TICKER_BG := Color(0, 0, 0, 0.35)
+const DIM := Color(0.02, 0.02, 0.04, 0.72)
+
 static func color(hex: String, alpha: float = 1.0) -> Color:
 	var value := Color(hex)
 	value.a = alpha
