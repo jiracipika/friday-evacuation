@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FRIDAY 5PM — Direction B: Safety Card</title>
+<style>
+/* ============ DIRECTION B: SAFETY CARD ============
+   Emergency-signage-first. High contrast, stencil display type,
+   floor-plan iconography. Orange reserved for ACTIONS only.
+   Tokens:
+   --paper:#f5efe2 (safety-card cream) --ink:#1a1408
+   --bg:#0b0a10 --orange:#ff7a00 (action only) --green:#1f8a4c (safety)
+   --red:#d33a2f (hazard) --blue:#2d6cdf (info) --yellow:#f2c230
+   Type: display = stencil-ish heavy caps w/ hard shadow;
+         body = grotesque. Panels read as laminated cards.
+======================================================== */
+:root{
+  --paper:#f5efe2; --paper-dim:#e8dfca; --ink:#1a1408; --ink-soft:#4a4232;
+  --bg:#0b0a10; --panel:#12101a; --line:#2a2740;
+  --orange:#ff7a00; --green:#1f8a4c; --red:#d33a2f; --blue:#2d6cdf; --yellow:#f2c230;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#060509;color:var(--paper);
+  font-family:"Helvetica Neue","Segoe UI",system-ui,sans-serif;
+  display:flex;flex-wrap:wrap;gap:40px;padding:40px;justify-content:center}
+.board{width:1280px;height:720px;position:relative;overflow:hidden;
+  border-radius:4px;box-shadow:0 0 0 1px #222;background:var(--bg)}
+.cap{width:100%;text-align:center;color:#666;font-size:13px;
+  letter-spacing:.14em;text-transform:uppercase;margin-bottom:-28px;flex-basis:100%}
+.disp{font-weight:900;letter-spacing:.02em;
+  text-shadow:4px 4px 0 rgba(0,0,0,.55)}
+
+/* backdrop: blueprint night grid */
+.bg{position:absolute;inset:0;
+  background:
+   radial-gradient(90% 70% at 78% 30%,rgba(45,108,223,.10),transparent 60%),
+   radial-gradient(70% 60% at 20% 90%,rgba(255,122,0,.07),transparent 60%),
+   var(--bg)}
+.bg::before{content:"";position:absolute;inset:0;opacity:.5;
+  background-image:
+   linear-gradient(rgba(122,130,180,.07) 1px,transparent 1px),
+   linear-gradient(90deg,rgba(122,130,180,.07) 1px,transparent 1px);
+  background-size:48px 48px}
+
+/* signage panel = the whole left column */
+.sign{position:absolute;left:48px;top:48px;bottom:48px;width:470px;
+  background:var(--paper);color:var(--ink);border-radius:10px;
+  box-shadow:0 24px 60px rgba(0,0,0,.65);overflow:hidden;
+  display:flex;flex-direction:column}
+.sign .stripe{height:14px;background:repeating-linear-gradient(45deg,
+  var(--ink) 0 24px,var(--yellow) 24px 48px)}
+.sign .body{padding:26px 30px 22px;display:flex;flex-direction:column;flex:1}
+.kicker{display:inline-flex;align-items:center;gap:10px;
+  font-size:12px;font-weight:800;letter-spacing:.24em;color:var(--ink-soft)}
+.kicker .dot{width:10px;height:10px;border-radius:50%;background:var(--red);
+  box-shadow:0 0 0 3px rgba(211,58,47,.25);animation:blink 1.6s infinite}
+@keyframes blink{50%{opacity:.35}}
+h1{font-size:46px;line-height:.95;margin:12px 0 4px}
+h1 em{font-style:normal;color:var(--orange)}
+.sub{font-size:13.5px;color:var(--ink-soft);margin-bottom:20px;font-weight:600}
+.spacer{flex:1}
+
+/* action button: ONLY orange element on the card */
+.cta{display:block;width:100%;min-height:64px;border:3px solid var(--ink);border-radius:8px;
+  background:var(--orange);color:var(--ink);font-size:21px;font-weight:900;
+  letter-spacing:.06em;box-shadow:5px 5px 0 var(--ink);cursor:pointer;transition:.12s}
+.cta:hover{transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--ink)}
+.cta small{display:block;font-size:10.5px;font-weight:700;letter-spacing:.2em}
+.nav{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.nav button{min-height:46px;border:2px solid var(--ink);border-radius:8px;cursor:pointer;
+  background:var(--paper-dim);color:var(--ink);font-size:13.5px;font-weight:800;
+  letter-spacing:.05em;transition:.12s}
+.nav button:hover{background:var(--ink);color:var(--paper)}
+.util{display:flex;gap:10px;margin-top:16px;padding-top:14px;border-top:2px dashed rgba(26,20,8,.25)}
+.util button{flex:1;min-height:34px;border:0;background:transparent;color:var(--ink-soft);
+  font-size:11.5px;font-weight:800;letter-spacing:.16em;cursor:pointer;border-radius:6px}
+.util button:hover{background:rgba(26,20,8,.08);color:var(--ink)}
+.stamp{position:absolute;right:-14px;top:86px;transform:rotate(8deg);
+  border:3px solid var(--red);color:var(--red);font-weight:900;font-size:13px;
+  letter-spacing:.18em;padding:6px 14px;border-radius:6px;opacity:.85;
+  background:rgba(245,239,226,.7)}
+
+/* exit sign top right */
+.exit{position:absolute;top:48px;right:48px;background:var(--green);color:#fff;
+  font-weight:900;font-size:26px;letter-spacing:.12em;padding:10px 26px;border-radius:6px;
+  box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 -4px 0 rgba(0,0,0,.25);display:flex;gap:14px;align-items:center}
+.exit .man{font-size:22px}
+
+/* ride card: blueprint style */
+.ride{position:absolute;right:48px;top:140px;width:340px;padding:18px;
+  background:rgba(18,16,26,.92);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 14px 40px rgba(0,0,0,.55)}
+.ride h3{color:var(--yellow);font-size:12px;letter-spacing:.22em;margin-bottom:10px;display:flex;justify-content:space-between}
+.ride h3 span{color:#6d6a86}
+.ride .stage{height:180px;border-radius:8px;position:relative;
+  background:
+   radial-gradient(60% 40% at 50% 88%,rgba(242,194,48,.18),transparent 70%),
+   linear-gradient(rgba(122,130,180,.06) 1px,transparent 1px),
+   linear-gradient(90deg,rgba(122,130,180,.06) 1px,transparent 1px),
+   #0d0b14;
+  background-size:auto,24px 24px,24px 24px,auto;
+  display:flex;align-items:flex-end;justify-content:center}
+.ride .chair{font-size:96px;line-height:.8;filter:drop-shadow(0 10px 14px rgba(0,0,0,.8))}
+.specs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.spec{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:6px;padding:8px 6px;text-align:center}
+.spec b{display:block;font-size:15px;color:var(--paper);font-variant-numeric:tabular-nums}
+.spec span{font-size:9.5px;color:#8f8ca8;letter-spacing:.14em;font-weight:700}
+
+/* ===== mode select ===== */
+.head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px}
+.head h2{font-size:30px}
+.back{border:2px solid var(--ink);background:var(--paper-dim);color:var(--ink);
+  border-radius:6px;padding:8px 16px;font-weight:800;font-size:12px;letter-spacing:.12em;cursor:pointer}
+.modes{display:flex;flex-direction:column;gap:12px}
+.mode{display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:8px;
+  background:var(--paper-dim);border:2px solid transparent;cursor:pointer;transition:.12s;position:relative}
+.mode .swatch{width:34px;height:34px;border-radius:6px;border:2px solid var(--ink);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:17px}
+.mode h4{font-size:18px;font-weight:900;color:var(--ink)}
+.mode p{font-size:12px;color:var(--ink-soft);font-weight:600}
+.mode .ppl{margin-left:auto;font-size:11px;font-weight:800;color:var(--ink-soft);
+  letter-spacing:.08em;text-align:right}
+.mode.sel{border-color:var(--ink);background:#fff;box-shadow:5px 5px 0 rgba(26,20,8,.9);transform:translate(-2px,-2px)}
+.mode.sel .ppl b{color:var(--orange)}
+.desc{margin:18px 0 16px;border:2px dashed rgba(26,20,8,.3);border-radius:8px;padding:13px 16px}
+.desc b{font-size:11px;letter-spacing:.18em;color:var(--red);display:block;margin-bottom:5px}
+.desc p{font-size:13.5px;color:var(--ink-soft);line-height:1.45;font-weight:600}
+
+/* ===== settings: clipboard card ===== */
+.set{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:560px;background:var(--paper);color:var(--ink);border-radius:10px;
+  box-shadow:0 24px 60px rgba(0,0,0,.65);overflow:hidden}
+.set .stripe{height:12px;background:repeating-linear-gradient(45deg,var(--ink) 0 24px,var(--yellow) 24px 48px)}
+.set .inner{padding:24px 30px;max-height:520px;overflow-y:auto}
+.sec{margin-top:22px}.sec:first-child{margin-top:0}
+.sec h3{font-size:12px;font-weight:900;letter-spacing:.22em;color:var(--ink-soft);
+  display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.sec h3::after{content:"";flex:1;height:2px;background:rgba(26,20,8,.15)}
+.row{margin-bottom:12px}
+.lbl{display:flex;justify-content:space-between;margin-bottom:6px;font-size:12.5px;font-weight:800;letter-spacing:.04em}
+.lbl em{font-style:normal;color:var(--orange);font-variant-numeric:tabular-nums}
+select{width:100%;min-height:42px;font:inherit;font-weight:700;color:var(--ink);
+  background:#fff;border:2px solid var(--ink);border-radius:6px;padding:0 12px}
+input[type=range]{width:100%;height:26px;appearance:none;background:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:4px;border:2px solid var(--ink);
+  background:linear-gradient(90deg,var(--orange) var(--v,80%),#fff var(--v,80%))}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:20px;height:20px;margin-top:-8px;
+  border-radius:4px;background:var(--ink);border:2px solid var(--paper);box-shadow:2px 2px 0 rgba(26,20,8,.4)}
+.tgl{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;
+  background:#fff;border:2px solid var(--ink);border-radius:6px;font-weight:800;font-size:12.5px}
+.box{width:22px;height:22px;border:2px solid var(--ink);border-radius:4px;background:#fff;position:relative}
+.box.on::after{content:"✓";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:var(--green);color:#fff;font-size:15px;font-weight:900}
+.set .foot{padding:14px 30px 20px;border-top:2px dashed rgba(26,20,8,.25)}
+
+/* ===== how-to: card with pictos ===== */
+.how{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:660px;background:var(--paper);color:var(--ink);border-radius:10px;
+  box-shadow:0 24px 60px rgba(0,0,0,.65);overflow:hidden;padding-bottom:22px}
+.how .stripe{height:12px;background:repeating-linear-gradient(45deg,var(--ink) 0 24px,var(--yellow) 24px 48px)}
+.how .inner{padding:24px 30px}
+.how .head h2{color:var(--ink)}
+.how .steps{display:flex;gap:12px;margin:16px 0}
+.step{flex:1;border:2px solid var(--ink);border-radius:8px;padding:14px 12px;background:#fff;text-align:center}
+.step .ico{width:52px;height:52px;margin:0 auto 8px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:26px;border:2px solid var(--ink)}
+.step b{display:block;font-size:13px;font-weight:900;letter-spacing:.12em;margin-bottom:4px}
+.step p{font-size:11.5px;color:var(--ink-soft);font-weight:600;line-height:1.35}
+.how .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.how .cols h5{font-size:10.5px;font-weight:900;letter-spacing:.18em;color:var(--ink-soft);margin-bottom:6px}
+.how li{list-style:none;display:flex;justify-content:space-between;font-size:12.5px;
+  font-weight:700;padding:5px 2px;border-bottom:1px solid rgba(26,20,8,.15)}
+.how li span{color:var(--ink-soft);font-weight:600}
+.fine{font-size:11px;color:var(--ink-soft);text-align:center;font-weight:700;margin-bottom:14px}
+</style>
+</head>
+<body>
+
+<div class="cap">B1 — Main menu · Safety Card</div>
+<div class="board">
+  <div class="bg"></div>
+  <div class="exit"><span class="man">🏃</span> EXIT</div>
+  <div class="sign">
+    <div class="stripe"></div>
+    <div class="body">
+      <div class="kicker"><span class="dot"></span> OFFICE EVACUATION NOTICE</div>
+      <h1 class="disp">FRIDAY<br>5PM <em>GO</em> HOME</h1>
+      <div class="sub">It's 4:59. The elevators are war zones. Chairs are faster.</div>
+      <div class="stamp">LAST ONE OUT<br>BUYS BEERS</div>
+      <div class="spacer"></div>
+      <button class="cta">EVACUATE <small>RACE DOWN FOUR FLOORS</small></button>
+      <div class="nav">
+        <button>PLAY WITH FRIENDS</button><button>OTHER MODES</button>
+        <button>CUSTOMIZE RIDE</button><button>OFFICE SETUP</button>
+      </div>
+      <div class="util"><button>SETTINGS</button><button>CREDITS</button><button>QUIT</button></div>
+    </div>
+  </div>
+  <div class="ride">
+    <h3>YOUR RIDE <span>SPEC 07-A</span></h3>
+    <div class="stage"><div class="chair">🪑</div></div>
+    <div class="specs">
+      <div class="spec"><b>×1.0</b><span>JUMP</span></div>
+      <div class="spec"><b>×1.0</b><span>GRIP</span></div>
+      <div class="spec"><b>×1.0</b><span>BOOST</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="cap">B2 — Mode select</div>
+<div class="board">
+  <div class="bg"></div>
+  <div class="sign" style="width:500px">
+    <div class="stripe"></div>
+    <div class="body">
+      <div class="head"><h2 class="disp" style="font-size:28px">PICK YOUR EXIT</h2><button class="back">← BACK</button></div>
+      <div class="modes">
+        <div class="mode sel"><div class="swatch" style="background:var(--orange)">🏁</div>
+          <div><h4>EVACUATION</h4><p>Race the clock down four floors</p></div>
+          <div class="ppl"><b>PRIMARY</b><br>1–4 PLAYERS</div></div>
+        <div class="mode"><div class="swatch" style="background:var(--red)">🎯</div>
+          <div><h4>HAULED</h4><p>Drag the boss. Don't get caught.</p></div>
+          <div class="ppl">TEAMS<br>OF 2+</div></div>
+        <div class="mode"><div class="swatch" style="background:var(--green)">🔍</div>
+          <div><h4>SHOP &amp; SEEK</h4><p>Hide-and-seek among the cubicles</p></div>
+          <div class="ppl">1 SEEKER<br>3+ HIDERS</div></div>
+        <div class="mode"><div class="swatch" style="background:var(--blue)">🍕</div>
+          <div><h4>PIZZA COLONY</h4><p>Feed the office. Survive the crash.</p></div>
+          <div class="ppl">CO-OP<br>2–4</div></div>
+      </div>
+      <div class="desc"><b>EVACUATION · PRIMARY MODE</b>
+        <p>Ride your office chair down four floors of hazards before 5:00. Coffee boosts, water traps, stapler sabotage.</p></div>
+      <div class="spacer"></div>
+      <button class="cta" style="min-height:54px;font-size:17px">PLAY SELECTED</button>
+    </div>
+  </div>
+  <div class="ride" style="top:140px">
+    <h3>YOUR RIDE <span>SPEC 07-A</span></h3>
+    <div class="stage"><div class="chair">🪑</div></div>
+    <div class="specs">
+      <div class="spec"><b>×1.0</b><span>JUMP</span></div>
+      <div class="spec"><b>×1.0</b><span>GRIP</span></div>
+      <div class="spec"><b>×1.0</b><span>BOOST</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="cap">B3 — Settings</div>
+<div class="board">
+  <div class="bg" style="filter:brightness(.55)"></div>
+  <div class="set">
+    <div class="stripe"></div>
+    <div class="inner">
+      <div class="head"><h2 class="disp" style="font-size:26px;color:var(--ink)">SETTINGS</h2><span style="font-size:11px;font-weight:800;color:var(--ink-soft);letter-spacing:.14em">AUTOSAVED</span></div>
+      <div class="sec"><h3>VIDEO</h3>
+        <div class="row"><div class="lbl"><span>GRAPHICS QUALITY</span><em>STANDARD</em></div>
+          <select><option>Standard</option></select></div>
+      </div>
+      <div class="sec"><h3>AUDIO</h3>
+        <div class="row"><div class="lbl"><span>MASTER</span><em>80</em></div><input type="range" style="--v:80%"></div>
+        <div class="row"><div class="lbl"><span>MUSIC</span><em>25</em></div><input type="range" style="--v:25%"></div>
+        <div class="row"><div class="lbl"><span>SFX</span><em>55</em></div><input type="range" style="--v:55%"></div>
+      </div>
+      <div class="sec"><h3>ACCESSIBILITY</h3>
+        <div class="tgl" style="margin-bottom:10px"><span>SCREEN SHAKE</span><div class="box"></div></div>
+        <div class="tgl"><span>REDUCED FLASHING</span><div class="box on"></div></div>
+      </div>
+    </div>
+    <div class="foot"><button class="back" style="width:100%;min-height:44px">BACK</button></div>
+  </div>
+</div>
+
+<div class="cap">B4 — How to Play</div>
+<div class="board">
+  <div class="bg" style="filter:brightness(.5)"></div>
+  <div class="how">
+    <div class="stripe"></div>
+    <div class="inner">
+      <div class="head"><h2 class="disp" style="font-size:26px;color:var(--ink)">HOW IT WORKS</h2>
+        <span style="border:2px solid var(--ink);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:900;letter-spacing:.14em">3 STEPS</span></div>
+      <div class="steps">
+        <div class="step"><div class="ico">🏁</div><b>DRIVE</b><p>Steer the chair. Coffee is boost.</p></div>
+        <div class="step"><div class="ico">🛗</div><b>CLIMB</b><p>Elevator pads lift you up a floor.</p></div>
+        <div class="step"><div class="ico">🚪</div><b>ESCAPE</b><p>Exit before 5:00 PM. Or else.</p></div>
+      </div>
+      <div class="cols">
+        <div><h5>KEYBOARD &amp; MOUSE</h5><ul>
+          <li><b>WASD / ARROWS</b><span>MOVE</span></li><li><b>SHIFT</b><span>BOOST</span></li>
+          <li><b>SPACE</b><span>ACTION</span></li><li><b>E</b><span>SABOTAGE</span></li></ul></div>
+        <div><h5>CONTROLLER</h5><ul>
+          <li><b>LEFT STICK</b><span>MOVE</span></li><li><b>RT</b><span>BOOST</span></li>
+          <li><b>A / CROSS</b><span>ACTION</span></li><li><b>X / SQUARE</b><span>SABOTAGE</span></li></ul></div>
+      </div>
+      <div class="fine">Timer and world are paused until you start.</div>
+      <button class="cta">I'M OUT — START</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FRIDAY 5PM — Final Direction: AFTER HOURS (A×B merge)</title>
+<style>
+/* ====== FINAL: dark departure-board system + safety-card motifs ======
+   Fixes applied from round-1 critiques:
+   - Inverted title: EVACUATION solid heavy; FRIDAY 5PM = eyebrow
+   - 4:59 live clock component (the signature moment)
+   - CTA = exit-switch object w/ icon, pulse, shortcut hint
+   - Hazard tape, stamp, EXIT sign, spec-sheet ride card (from B)
+   - Drawn pictogram icons (CSS shapes, NO emoji)
+   - Keycap chips for inputs; controller glyph circles
+   - Hard selected states (rail + invert), fixed meta slots (MODE/CREW)
+   - Consistent radius scale 8/12/16 + pill; rhythm 8pt scale
+   - Footer w/ version; no cropped buttons; no dead voids
+   - Settings: aligned thumb+fill, orange ON toggle, tabular nums,
+     single label pattern, scroll fade
+========================================================================= */
+:root{
+  --bg:#0a0a0f; --surface:#15151f; --raised:#1c1c2e; --hover:#25253a;
+  --text:#f7f6f2; --muted:#b8b8c6; --faint:#8a8a9c;
+  --orange:#ff9a1a; --orange-bright:#ffbd4a; --ink:#231303;
+  --cyan:#57d7ff; --lime:#b9f34a; --coral:#ff6f61; --violet:#9b82ff;
+  --paper:#f2ecdc; --paper-dim:#ddd2b8; --paper-ink:#221a08;
+  --green:#2fa05a; --yellow:#f2c230; --red:#e04a3a;
+  --r-sm:8px; --r-md:12px; --r-lg:16px; --r-pill:999px;
+  --e1:0 2px 8px rgba(0,0,0,.5); --e2:0 10px 28px rgba(0,0,0,.65);
+  --frame:#20202f; --line:rgba(255,255,255,.09);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#050508;color:var(--text);
+  font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;
+  display:flex;flex-wrap:wrap;gap:40px;padding:40px;justify-content:center}
+.board{width:1280px;height:720px;position:relative;overflow:hidden;
+  border-radius:4px;box-shadow:0 0 0 1px #222;flex:none}
+.cap{width:100%;text-align:center;color:#666;font-size:13px;
+  letter-spacing:.14em;text-transform:uppercase;margin-bottom:-28px;flex-basis:100%}
+
+/* ---------- backdrop: dusk skyline through office window, DRESSED ---------- */
+.sky{position:absolute;inset:0;
+  background:linear-gradient(180deg,#1d1630 0%,#35203f 30%,#7c3a45 58%,#cf6438 80%,#ef9440 100%)}
+.sun{position:absolute;right:330px;bottom:150px;width:200px;height:200px;border-radius:50%;
+  background:radial-gradient(circle,#ffd98a 0%,#ffb24a 55%,rgba(255,178,74,0) 72%)}
+.bld{position:absolute;bottom:0;background:#141220}
+.bld.lit{background:
+  repeating-linear-gradient(0deg,#141220 0 14px,#2a2038 14px 16px),
+  repeating-linear-gradient(90deg,transparent 0 16px,#141220 16px 18px)}
+/* cubicle silhouettes INSIDE the office, against the window */
+.cubes{position:absolute;left:498px;right:0;bottom:26px;height:190px;pointer-events:none}
+.cube{position:absolute;bottom:0;background:#0e0e18;border-top:3px solid #1f1f30}
+.cube::after{content:"";position:absolute;top:-3px;left:8px;right:8px;height:6px;
+  background:rgba(255,255,255,.05)}
+/* fluorescent strip on ceiling */
+.fluor{position:absolute;top:0;left:498px;right:0;height:20px;
+  background:linear-gradient(180deg,rgba(240,244,255,.14),rgba(240,244,255,0));}
+.fluor::before{content:"";position:absolute;top:6px;left:8%;right:8%;height:7px;border-radius:4px;
+  background:#e8ecff;box-shadow:0 0 26px 6px rgba(220,228,255,.35);opacity:.85}
+.fluor::after{content:"";position:absolute;top:6px;left:64%;width:120px;height:7px;border-radius:4px;
+  background:#dfe4f5;box-shadow:0 0 18px 4px rgba(220,228,255,.22);opacity:.55}
+/* finished mullion frame */
+.frame{position:absolute;inset:0;pointer-events:none;
+  background:
+   linear-gradient(90deg,var(--frame) 0 26px,transparent 26px calc(100% - 26px),var(--frame) calc(100% - 26px) 100%),
+   linear-gradient(0deg,var(--frame) 0 26px,transparent 26px calc(100% - 20px),var(--frame) calc(100% - 20px) 100%)}
+.frame::before,.frame::after{content:"";position:absolute;top:20px;bottom:26px;width:26px;background:var(--frame)}
+.frame::before{left:calc(33.3% - 13px)}
+.frame::after{left:calc(66.6% - 13px)}
+.sill{position:absolute;left:0;right:0;bottom:0;height:26px;
+  background:linear-gradient(180deg,#2c2c42,#191926)}
+
+/* ---------- left column ---------- */
+.col{position:absolute;left:26px;top:20px;bottom:26px;width:472px;
+  display:flex;flex-direction:column}
+/* hazard tape header */
+.tape{height:16px;border-radius:var(--r-sm) var(--r-sm) 0 0;
+  background:repeating-linear-gradient(45deg,var(--ink) 0 22px,var(--yellow) 22px 44px);
+  opacity:.92}
+.panelbody{flex:1;background:linear-gradient(180deg,rgba(14,14,22,.97),rgba(10,10,16,.98));
+  border-left:1px solid rgba(255,255,255,.05);border-right:1px solid rgba(255,255,255,.05);
+  display:flex;flex-direction:column;padding:24px 34px 18px}
+.kicker{color:var(--orange);font-size:13px;font-weight:800;letter-spacing:.26em;
+  display:flex;align-items:center;gap:10px}
+.kicker .dot{width:9px;height:9px;border-radius:50%;background:var(--red);
+  box-shadow:0 0 0 3px rgba(224,74,58,.22);animation:blink 1.6s infinite}
+@keyframes blink{50%{opacity:.35}}
+h1{font-size:52px;line-height:.94;font-weight:800;margin:10px 0 2px;letter-spacing:.01em}
+h1 em{font-style:normal;color:var(--orange)}
+.clockrow{display:flex;align-items:baseline;gap:14px;margin:6px 0 0}
+.clock{font-size:30px;font-weight:800;color:var(--paper);font-variant-numeric:tabular-nums;
+  background:var(--ink);padding:4px 14px 5px;border-radius:var(--r-sm);
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.5),var(--e1);letter-spacing:.06em}
+.clock b{color:var(--yellow)}
+.clockrow span{color:var(--muted);font-size:13px;font-weight:600}
+.spacer{flex:1}
+
+/* CTA: exit switch */
+.cta{position:relative;display:block;width:100%;min-height:62px;border:0;border-radius:var(--r-md);
+  background:linear-gradient(180deg,var(--orange-bright),var(--orange));
+  color:var(--ink);font-size:21px;font-weight:900;letter-spacing:.05em;cursor:pointer;
+  box-shadow:var(--e1),inset 0 2px 0 rgba(255,255,255,.4),inset 0 -4px 0 rgba(0,0,0,.22);
+  display:flex;align-items:center;justify-content:center;gap:14px}
+.cta:hover{filter:brightness(1.06)}
+.cta .arrow{width:26px;height:26px;border:3px solid var(--ink);border-radius:6px;position:relative;flex:none}
+.cta .arrow::after{content:"";position:absolute;left:8px;top:7px;right:5px;top:8.5px;
+  border-top:4px solid var(--ink);transform:rotate(0)} /* simplified run glyph */
+.cta .run{font-size:24px;line-height:1}
+.cta small{position:absolute;bottom:6px;right:12px;font-size:10px;font-weight:800;
+  letter-spacing:.14em;opacity:.7}
+.cta .kbd-hint{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);
+  font-size:11px;color:var(--muted);white-space:nowrap}
+
+.nav{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:26px}
+.nav button{min-height:48px;border-radius:var(--r-sm);cursor:pointer;
+  background:var(--raised);color:var(--text);border:1px solid var(--line);
+  font-size:14px;font-weight:700;letter-spacing:.05em;transition:.15s;
+  display:flex;align-items:center;justify-content:center;gap:10px}
+.nav button:hover{background:var(--hover);border-color:var(--orange);transform:translateY(-1px)}
+.nav .glyph{width:16px;height:16px;flex:none}
+.footer{display:flex;align-items:center;justify-content:space-between;
+  margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.footer .util{display:flex;gap:8px}
+.footer button{min-height:32px;padding:0 16px;border-radius:var(--r-pill);cursor:pointer;
+  background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,.14);
+  font-size:11.5px;font-weight:700;letter-spacing:.14em}
+.footer button:hover{color:var(--text);border-color:var(--cyan)}
+.ver{color:var(--faint);font-size:10.5px;letter-spacing:.1em;font-variant-numeric:tabular-nums}
+
+/* exit sign above ride card */
+.exit{position:absolute;top:44px;right:56px;background:var(--green);color:#fff;
+  font-weight:900;font-size:19px;letter-spacing:.14em;padding:8px 20px;border-radius:6px;
+  box-shadow:0 8px 22px rgba(0,0,0,.5),inset 0 -4px 0 rgba(0,0,0,.28);
+  display:flex;gap:10px;align-items:center;z-index:3}
+.exit svg{width:18px;height:18px}
+
+/* ---------- ride card: spec sheet ---------- */
+.ride{position:absolute;right:56px;top:126px;width:336px;padding:16px 16px 14px;
+  background:rgba(15,15,24,.93);border:1px solid rgba(255,154,26,.35);
+  border-radius:var(--r-lg);box-shadow:var(--e2)}
+.ride .rhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.ride h3{color:var(--orange);font-size:12.5px;letter-spacing:.2em;font-weight:800}
+.ride .spec{color:var(--faint);font-size:10px;letter-spacing:.12em;font-weight:700;
+  border:1px solid var(--line);border-radius:var(--r-sm);padding:3px 8px}
+.ride .stage{height:172px;border-radius:var(--r-md);position:relative;overflow:hidden;
+  background:
+   radial-gradient(60% 45% at 50% 92%,rgba(255,189,74,.15),transparent 70%),
+   linear-gradient(rgba(122,130,180,.05) 1px,transparent 1px),
+   linear-gradient(90deg,rgba(122,130,180,.05) 1px,transparent 1px),
+   #0e0c15;
+  background-size:auto,22px 22px,22px 22px,auto;
+  display:flex;align-items:flex-end;justify-content:center}
+/* office chair pictogram built from CSS */
+.chair-glyph{position:relative;width:110px;height:150px;margin-bottom:8px}
+.chair-glyph .back{position:absolute;top:0;left:18px;width:58px;height:74px;border-radius:12px 12px 6px 6px;
+  background:linear-gradient(180deg,#3fb9c9,#2e8f9e);box-shadow:inset -6px -8px 0 rgba(0,0,0,.18)}
+.chair-glyph .seat{position:absolute;top:70px;left:8px;width:78px;height:20px;border-radius:8px;
+  background:linear-gradient(180deg,#3fb9c9,#2e8f9e);box-shadow:inset 0 -6px 0 rgba(0,0,0,.18)}
+.chair-glyph .post{position:absolute;top:88px;left:41px;width:12px;height:30px;background:#3a3a4e}
+.chair-glyph .base{position:absolute;top:114px;left:6px;width:82px;height:12px}
+.chair-glyph .leg{position:absolute;top:114px;width:12px;height:26px;background:#3a3a4e;border-radius:6px}
+.chair-glyph .l1{left:14px;transform:rotate(28deg);transform-origin:top center}
+.chair-glyph .l2{left:41px}
+.chair-glyph .l3{left:66px;transform:rotate(-28deg);transform-origin:top center}
+.chair-glyph .caster{position:absolute;top:138px;width:12px;height:12px;border-radius:50%;background:#565672}
+.chair-glyph .c1{left:24px}.chair-glyph .c2{left:41px}.chair-glyph .c3{left:62px}
+.chair-glyph .glow{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);
+  width:150px;height:22px;border-radius:50%;
+  background:radial-gradient(50% 50% at 50% 50%,rgba(255,200,90,.45),rgba(255,200,90,0) 70%)}
+.ride .who{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+.ride .who b{font-size:14px;font-weight:800;letter-spacing:.02em}
+.ride .who span{color:var(--faint);font-size:10.5px;font-weight:700;letter-spacing:.14em}
+.meters{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+.meter{display:grid;grid-template-columns:52px 1fr 34px;align-items:center;gap:10px}
+.meter span{font-size:9.5px;font-weight:800;letter-spacing:.16em;color:var(--faint)}
+.meter .track{height:6px;border-radius:3px;background:#262638;overflow:hidden}
+.meter .fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--orange),var(--orange-bright))}
+.meter em{font-style:normal;font-size:12px;font-weight:800;color:var(--text);
+  font-variant-numeric:tabular-nums;text-align:right}
+
+/* ============ MODES screen ============ */
+.head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px}
+.head h2{font-size:28px;font-weight:800;letter-spacing:.03em}
+.head .crumb{color:var(--faint);font-size:11px;font-weight:700;letter-spacing:.18em}
+.back{background:transparent;border:1px solid rgba(255,255,255,.16);color:var(--muted);
+  border-radius:var(--r-sm);padding:8px 16px;font-size:12px;font-weight:700;letter-spacing:.12em;cursor:pointer}
+.back:hover{color:var(--text);border-color:var(--cyan)}
+.modes-list{display:flex;flex-direction:column;gap:10px}
+.mode{position:relative;display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:14px;
+  min-height:78px;padding:12px 16px 12px 18px;border-radius:var(--r-md);cursor:pointer;
+  background:var(--raised);border:1px solid transparent;box-shadow:var(--e1);transition:.15s}
+.mode .icon{width:40px;height:40px;border-radius:var(--r-sm);border:2px solid var(--line);
+  display:flex;align-items:center;justify-content:center;background:var(--surface)}
+.mode h4{font-size:18px;font-weight:800;letter-spacing:.02em}
+.mode p{font-size:12px;color:var(--muted);margin-top:2px}
+.mode .meta{text-align:right;display:flex;flex-direction:column;gap:3px;align-items:flex-end}
+.mode .meta b{font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--faint)}
+.mode .meta b.hot{color:var(--orange)}
+.mode .rail{position:absolute;left:0;top:12px;bottom:12px;width:4px;border-radius:2px;background:transparent}
+.mode.sel{background:var(--hover);border-color:var(--orange);transform:translateX(4px)}
+.mode.sel .rail{background:var(--orange)}
+.mode.sel .icon{border-color:var(--orange)}
+.mode:not(.sel):hover{background:var(--hover)}
+.mode.sel::after{content:"SELECTED";position:absolute;top:-8px;right:14px;font-size:8.5px;
+  font-weight:900;letter-spacing:.2em;color:var(--ink);background:var(--orange);
+  padding:2px 8px;border-radius:var(--r-pill)}
+/* drawn pictograms */
+.pg{width:22px;height:22px;position:relative}
+.pg.flag::before{content:"";position:absolute;left:2px;top:1px;bottom:1px;width:3px;background:var(--muted);border-radius:2px}
+.pg.flag::after{content:"";position:absolute;left:5px;top:2px;width:13px;height:9px;
+  background:var(--orange);clip-path:polygon(0 0,100% 25%,0 50%)}
+.pg.eye::before{content:"";position:absolute;inset:2px 0 6px 0;border:2.5px solid var(--muted);
+  border-radius:50% 50% 50% 50%/60% 60% 40% 40%}
+.pg.eye::after{content:"";position:absolute;left:8px;top:7px;width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.pg.cart{border:2.5px solid var(--muted);border-radius:3px;background:transparent}
+.pg.pizza{border:2.5px dashed var(--muted);border-radius:50%}
+.pg.pizza::after{content:"";position:absolute;left:9px;top:4px;width:4px;height:4px;border-radius:50%;
+  background:var(--muted);box-shadow:0 6px 0 var(--muted)}
+.desc{margin:18px 0 0;padding:14px 16px;border-radius:var(--r-md);position:relative;
+  background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.45));border:1px solid var(--line)}
+.desc .stamp{position:absolute;top:-10px;right:14px;transform:rotate(-4deg);
+  border:2px solid var(--red);color:var(--red);font-weight:900;font-size:9px;
+  letter-spacing:.2em;padding:2px 8px;border-radius:4px;opacity:.9}
+.desc b{color:var(--orange);font-size:11px;letter-spacing:.18em;display:block;margin-bottom:6px}
+.desc p{font-size:13.5px;color:var(--muted);line-height:1.5}
+.desc .caution{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.desc .caution span{font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--yellow);
+  border:1px dashed rgba(242,194,48,.45);border-radius:var(--r-sm);padding:3px 9px}
+.cta.small{min-height:52px;font-size:16px;margin-top:14px}
+
+/* ============ SETTINGS ============ */
+.dim{position:absolute;inset:0;background:rgba(5,5,9,.72)}
+.set-panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:560px;max-height:600px;display:flex;flex-direction:column;
+  background:rgba(17,17,27,.98);border:1px solid rgba(255,154,26,.3);
+  border-radius:var(--r-lg);box-shadow:var(--e2);overflow:hidden}
+.set-panel .inner{padding:22px 30px 8px;overflow-y:auto;scrollbar-width:thin;
+  scrollbar-color:#3a3a50 transparent;
+  mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 26px),transparent)}
+.sec{margin-top:24px}.sec:first-child{margin-top:0}
+.sec>h3{color:var(--orange);font-size:14px;font-weight:800;letter-spacing:.2em;
+  margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.sec>h3::after{content:"";flex:1;height:1px;background:var(--line)}
+.row{margin-bottom:12px}
+.row .lbl{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+.row .lbl span{font-size:13px;font-weight:700;letter-spacing:.05em;color:var(--text)}
+.row .lbl em{font-style:normal;color:var(--orange);font-size:13px;font-weight:800;
+  font-variant-numeric:tabular-nums}
+select{width:100%;min-height:44px;background:var(--hover);color:var(--text);
+  border:1px solid rgba(255,255,255,.12);border-radius:var(--r-sm);
+  font:inherit;font-weight:700;padding:0 14px;appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 20px) 50%,calc(100% - 14px) 50%;background-size:6px 6px;background-repeat:no-repeat}
+input[type=range]{width:100%;height:32px;appearance:none;background:transparent;cursor:pointer;
+  --v:80%}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;
+  background:linear-gradient(90deg,var(--orange) var(--v),#2c2c40 var(--v))}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:18px;height:18px;margin-top:-6px;
+  border-radius:50%;background:var(--orange-bright);border:2px solid #0a0a0f;
+  box-shadow:var(--e1),0 0 0 1px rgba(255,189,74,.5)}
+.tgl{display:flex;justify-content:space-between;align-items:center;min-height:44px;
+  background:var(--hover);border:1px solid rgba(255,255,255,.1);border-radius:var(--r-sm);
+  padding:0 14px}
+.tgl span{font-size:13px;font-weight:700;letter-spacing:.05em}
+.tgl .state{font-size:9.5px;font-weight:900;letter-spacing:.18em;margin-right:10px;color:var(--faint)}
+.tgl .state.on{color:var(--lime)}
+.switch{width:46px;height:26px;border-radius:var(--r-pill);background:#2c2c40;position:relative;transition:.2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+  background:#8a8a9c;transition:.2s}
+.switch.on{background:var(--orange)}
+.switch.on::after{left:23px;background:#fff}
+.set-foot{padding:12px 30px 18px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.set-foot .ver{font-size:10px}
+
+/* ============ HOW TO PLAY ============ */
+.how{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:680px;background:rgba(17,17,27,.98);border:1px solid rgba(255,154,26,.3);
+  border-radius:var(--r-lg);box-shadow:var(--e2);padding:0 0 20px;overflow:hidden}
+.how .tape{border-radius:0;height:12px}
+.how .inner{padding:22px 30px 0}
+.how .steps{display:flex;gap:12px;margin:16px 0 18px}
+.how .step{flex:1;background:var(--raised);border-radius:var(--r-md);padding:14px;
+  border:1px solid var(--line);position:relative}
+.how .num{position:absolute;top:10px;right:12px;font-size:11px;font-weight:900;
+  color:var(--faint);letter-spacing:.1em;font-variant-numeric:tabular-nums}
+.how .ico{width:46px;height:46px;border-radius:50%;border:2px solid rgba(255,154,26,.4);
+  display:flex;align-items:center;justify-content:center;margin-bottom:9px;background:rgba(255,154,26,.07)}
+.how .ico svg{width:24px;height:24px}
+.how .step b{font-size:13.5px;letter-spacing:.1em;color:var(--orange);display:block;margin-bottom:4px}
+.how .step p{font-size:12px;color:var(--muted);line-height:1.45}
+.how .cols{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-bottom:14px}
+.how .cols>div{border-left:1px solid var(--line);padding-left:18px}
+.how .cols>div:first-child{border-left:0;padding-left:0}
+.how .cols h5{color:var(--orange);font-size:11px;letter-spacing:.18em;margin-bottom:9px}
+.how li{list-style:none;display:flex;justify-content:space-between;align-items:center;
+  font-size:12.5px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.how li:last-child{border-bottom:0}
+.how li span{color:var(--muted);font-weight:600}
+.keys{display:flex;gap:5px}
+.kbd{min-width:30px;height:26px;padding:0 8px;border-radius:6px;display:inline-flex;
+  align-items:center;justify-content:center;font-size:11px;font-weight:800;
+  background:linear-gradient(180deg,#34344c,#26263a);border:1px solid rgba(255,255,255,.16);
+  box-shadow:0 2px 0 rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.12);color:var(--text)}
+.pad{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:900;background:#26263a;border:1px solid rgba(255,255,255,.16);
+  box-shadow:0 2px 0 rgba(0,0,0,.5);color:var(--text)}
+.fine{color:var(--faint);font-size:11.5px;text-align:center;margin:4px 0 14px}
+</style>
+</head>
+<body>
+
+<!-- ================= 1. MAIN MENU ================= -->
+<div class="cap">F1 — Main menu · After Hours (merged direction)</div>
+<div class="board">
+  <div class="sky"><div class="sun"></div>
+    <div class="bld lit" style="left:520px;width:150px;height:290px"></div>
+    <div class="bld" style="left:690px;width:120px;height:370px"></div>
+    <div class="bld lit" style="left:830px;width:170px;height:240px"></div>
+    <div class="bld" style="left:1020px;width:130px;height:320px"></div>
+    <div class="bld lit" style="left:1170px;width:90px;height:190px"></div>
+  </div>
+  <div class="frame"></div>
+  <div class="fluor"></div>
+  <div class="cubes">
+    <div class="cube" style="left:6%;width:120px;height:120px"></div>
+    <div class="cube" style="left:34%;width:150px;height:95px"></div>
+    <div class="cube" style="left:70%;width:130px;height:135px"></div>
+    <div class="cube" style="left:90%;width:90px;height:80px"></div>
+  </div>
+  <div class="sill"></div>
+
+  <div class="col">
+    <div class="tape"></div>
+    <div class="panelbody">
+      <div class="kicker"><span class="dot"></span> OFFICE EVACUATION NOTICE</div>
+      <h1>GET <em>OUT</em></h1>
+      <div class="clockrow">
+        <div class="clock">4:5<b>9</b></div>
+        <span>one minute to freedom</span>
+      </div>
+      <div class="spacer"></div>
+      <button class="cta"><span class="run">🏃</span> EVACUATE <small>LAST ONE BUYS BEERS</small></button>
+      <div class="kbd-hint" style="text-align:center;color:var(--faint);font-size:11px;margin:6px 0 2px">
+        press <span class="kbd" style="display:inline-flex;height:20px;min-width:22px">SPACE</span> or <span class="pad" style="width:20px;height:20px;display:inline-flex">A</span></div>
+      <div class="nav">
+        <button><svg class="glyph" viewBox="0 0 16 16"><circle cx="4" cy="4" r="2" fill="#57d7ff"/><circle cx="12" cy="4" r="2" fill="#b9f34a"/><circle cx="4" cy="12" r="2" fill="#ff6f61"/><circle cx="12" cy="12" r="2" fill="#9b82ff"/></svg>FRIENDS · LAN</button>
+        <button><svg class="glyph" viewBox="0 0 16 16"><rect x="1" y="3" width="6" height="10" rx="1.5" fill="#ff9a1a"/><rect x="9" y="3" width="6" height="10" rx="1.5" fill="none" stroke="#b8b8c6" stroke-width="1.5"/></svg>OTHER MODES</button>
+        <button><svg class="glyph" viewBox="0 0 16 16"><path d="M3 13 L8 2 L13 13 Z" fill="none" stroke="#57d7ff" stroke-width="1.8" stroke-linejoin="round"/></svg>CUSTOMIZE RIDE</button>
+        <button><svg class="glyph" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="#b8b8c6" stroke-width="1.8"/><path d="M5 7h6M5 10h4" stroke="#ff9a1a" stroke-width="1.8" stroke-linecap="round"/></svg>OFFICE SETUP</button>
+      </div>
+      <div class="footer">
+        <div class="util"><button>SETTINGS</button><button>CREDITS</button><button>QUIT</button></div>
+        <div class="ver">v0.9 · BUILD 26Sep26</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="exit"><svg viewBox="0 0 18 18"><path d="M2 9h9M8 5l4 4-4 4" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 3v12" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg> EXIT</div>
+  <div class="ride">
+    <div class="rhead"><h3>YOUR RIDE</h3><span class="spec">SPEC 07-A</span></div>
+    <div class="stage">
+      <div class="chair-glow"></div>
+      <div class="chair-glyph">
+        <div class="back"></div><div class="seat"></div><div class="post"></div>
+        <div class="base"><div class="leg l1"></div><div class="leg l2"></div><div class="leg l3"></div></div>
+        <div class="caster c1"></div><div class="caster c2"></div><div class="caster c3"></div>
+        <div class="glow"></div>
+      </div>
+    </div>
+    <div class="who"><b>THE STANDARD</b><span>DRIVER · DANA, PM</span></div>
+    <div class="meters">
+      <div class="meter"><span>JUMP</span><div class="track"><div class="fill" style="width:52%"></div></div><em>×1.0</em></div>
+      <div class="meter"><span>GRIP</span><div class="track"><div class="fill" style="width:64%"></div></div><em>×1.1</em></div>
+      <div class="meter"><span>BOOST</span><div class="track"><div class="fill" style="width:48%"></div></div><em>×0.9</em></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 2. MODES ================= -->
+<div class="cap">F2 — Mode select · fixed meta slots, hard selected state</div>
+<div class="board">
+  <div class="sky" style="filter:brightness(.9)"></div>
+  <div class="frame"></div>
+  <div class="cubes" style="height:150px">
+    <div class="cube" style="left:10%;width:140px;height:100px"></div>
+    <div class="cube" style="left:55%;width:160px;height:125px"></div>
+  </div>
+  <div class="sill"></div>
+
+  <div class="col" style="width:520px">
+    <div class="tape"></div>
+    <div class="panelbody">
+      <div class="head"><h2>PICK YOUR EXIT</h2><button class="back">← BACK</button></div>
+      <div class="modes-list">
+        <div class="mode sel"><span class="rail"></span>
+          <div class="icon"><i class="pg flag"></i></div>
+          <div><h4>EVACUATION</h4><p>Race the clock down four floors</p></div>
+          <div class="meta"><b class="hot">PRIMARY</b><b>1–4 PLAYERS</b></div></div>
+        <div class="mode"><span class="rail"></span>
+          <div class="icon"><i class="pg flag" style="transform:scaleX(-1)"></i></div>
+          <div><h4>HAULED</h4><p>Drag the boss. Don't get caught.</p></div>
+          <div class="meta"><b>VERSUS</b><b>TEAMS OF 2+</b></div></div>
+        <div class="mode"><span class="rail"></span>
+          <div class="icon"><i class="pg eye"></i></div>
+          <div><h4>SHOP &amp; SEEK</h4><p>Hide-and-seek among the cubicles</p></div>
+          <div class="meta"><b>SOCIAL</b><b>1 SEEKER · 3+ HIDERS</b></div></div>
+        <div class="mode"><span class="rail"></span>
+          <div class="icon"><i class="pg pizza"></i></div>
+          <div><h4>PIZZA COLONY</h4><p>Feed the office. Survive the crash.</p></div>
+          <div class="meta"><b>CO-OP</b><b>2–4 PLAYERS</b></div></div>
+      </div>
+      <div class="desc">
+        <span class="stamp">FORM EX-01</span>
+        <b>EVACUATION</b>
+        <p>Ride your chair down four floors of hazards before <b style="display:inline;color:var(--yellow)">5:00 PM sharp</b>. Last one out buys the beers.</p>
+        <div class="caution"><span>⚠ COFFEE = BOOST</span><span>⚠ WATER = TRAP</span><span>⚠ STAPLERS BITE</span></div>
+      </div>
+      <button class="cta small"><span class="run">🏃</span> CLOCK OUT</button>
+    </div>
+  </div>
+  <div class="exit" style="top:auto;bottom:44px"><svg viewBox="0 0 18 18"><path d="M2 9h9M8 5l4 4-4 4" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 3v12" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg> EXIT</div>
+</div>
+
+<!-- ================= 3. SETTINGS ================= -->
+<div class="cap">F3 — Settings · sliders/toggles fixed</div>
+<div class="board">
+  <div class="sky" style="filter:brightness(.5)"></div>
+  <div class="dim"></div>
+  <div class="set-panel">
+    <div class="tape" style="height:12px;border-radius:var(--r-lg) var(--r-lg) 0 0"></div>
+    <div class="inner">
+      <div class="head" style="margin-bottom:4px"><h2>SETTINGS</h2><span style="color:var(--lime);font-size:11px;font-weight:800;letter-spacing:.16em">● AUTOSAVED</span></div>
+      <div class="sec"><h3>VIDEO</h3>
+        <div class="row"><div class="lbl"><span>GRAPHICS QUALITY</span></div>
+          <select><option>STANDARD</option></select></div>
+      </div>
+      <div class="sec"><h3>AUDIO</h3>
+        <div class="row"><div class="lbl"><span>MASTER</span><em>80</em></div>
+          <input type="range" style="--v:80%"></div>
+        <div class="row"><div class="lbl"><span>MUSIC</span><em>25</em></div>
+          <input type="range" style="--v:25%"></div>
+        <div class="row"><div class="lbl"><span>SFX</span><em>55</em></div>
+          <input type="range" style="--v:55%"></div>
+      </div>
+      <div class="sec"><h3>ACCESSIBILITY</h3>
+        <div class="tgl" style="margin-bottom:10px"><span style="display:flex;align-items:center">SCREEN SHAKE<span class="state">OFF</span></span><div class="switch"></div></div>
+        <div class="tgl"><span style="display:flex;align-items:center">REDUCED FLASHING<span class="state on">ON</span></span><div class="switch on"></div></div>
+      </div>
+    </div>
+    <div class="set-foot">
+      <button class="back">← BACK</button>
+      <span class="ver">v0.9 · BUILD 26Sep26</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 4. HOW TO PLAY ================= -->
+<div class="cap">F4 — How to Play · drawn pictos + keycaps</div>
+<div class="board">
+  <div class="sky" style="filter:brightness(.4) saturate(.7)"></div>
+  <div class="frame" style="opacity:.4"></div>
+  <div class="dim" style="background:rgba(4,4,8,.8)"></div>
+  <div class="how">
+    <div class="tape"></div>
+    <div class="inner">
+      <div class="head"><h2>HOW IT WORKS</h2><span style="color:var(--faint);font-size:11px;font-weight:800;letter-spacing:.18em">3 STEPS · 60 SECONDS</span></div>
+      <div class="steps">
+        <div class="step"><span class="num">01</span>
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 20V4" stroke="#ffbd4a" stroke-width="2.4" stroke-linecap="round"/><path d="M7 5h11l-2.5 3L18 11H7z" fill="#ff9a1a"/></svg></div>
+          <b>DRIVE</b><p>Steer the chair. Coffee is boost, water is a trap.</p></div>
+        <div class="step"><span class="num">02</span>
+          <div class="ico"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="#ffbd4a" stroke-width="2.2"/><path d="M9 3v18" stroke="#ff9a1a" stroke-width="2.2"/><path d="M15 3v18" stroke="#ff9a1a" stroke-width="2.2"/></svg></div>
+          <b>CLIMB</b><p>Elevator pads carry you up one floor at a time.</p></div>
+        <div class="step"><span class="num">03</span>
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 21V9l7-5 7 5v12" fill="none" stroke="#ffbd4a" stroke-width="2.2" stroke-linejoin="round"/><path d="M9 21v-6h6v6" fill="none" stroke="#ff9a1a" stroke-width="2.2" stroke-linejoin="round"/></svg></div>
+          <b>ESCAPE</b><p>Reach an exit before 5:00 PM. Or else.</p></div>
+      </div>
+      <div class="cols">
+        <div><h5>KEYBOARD &amp; MOUSE</h5><ul>
+          <li><span class="keys"><span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span></span><span>MOVE</span></li>
+          <li><span class="keys"><span class="kbd">SHIFT</span></span><span>BOOST</span></li>
+          <li><span class="keys"><span class="kbd">SPACE</span></span><span>ACTION</span></li>
+          <li><span class="keys"><span class="kbd">E</span></span><span>SABOTAGE</span></li></ul></div>
+        <div><h5>CONTROLLER</h5><ul>
+          <li><span class="keys"><span class="pad">◉</span><span style="font-size:10px;color:var(--faint);font-weight:700">STICK</span></span><span>MOVE</span></li>
+          <li><span class="keys"><span class="pad">RT</span></span><span>BOOST</span></li>
+          <li><span class="keys"><span class="pad">A</span></span><span>ACTION</span></li>
+          <li><span class="keys"><span class="pad">X</span></span><span>SABOTAGE</span></li></ul></div>
+      </div>
+      <div class="fine">Timer and world are paused until you start.</div>
+      <button class="cta" style="min-height:56px;font-size:18px"><span class="run">🏃</span> CLOCK OUT — GO <small>SPACE / Ⓐ</small></button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

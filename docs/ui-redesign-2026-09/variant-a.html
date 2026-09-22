@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FRIDAY 5PM — Direction A: Departure Board</title>
+<style>
+/* ============ DIRECTION A: DEPARTURE BOARD ============
+   Evolution of current architecture. Fixes F1-F11 in-system.
+   Tokens:
+   --bg #0a0a0f  --surface #15151f  --raised #1c1c2e  --hover #25253a
+   --text #f7f6f2 --muted #b8b8c6 (raised from 9b9baa)
+   --orange #ff9a1a --orange-bright #ffbd4a
+   --cyan #57d7ff --lime #b9f34a --coral #ff6f61 --violet #9b82ff
+   Radii scale: sm 8 / md 12 / lg 16 / pill 999 — ONE scale, used by role.
+   Rhythm: 8px base. Section gap 40, in-group 16, control 8.
+   Elevation: e1 shadow 0 2px 8px rgba(0,0,0,.5) cards;
+              e2 0 8px 24px rgba(0,0,0,.6) modals + ride card.
+======================================================== */
+:root{
+  --bg:#0a0a0f; --surface:#15151f; --raised:#1c1c2e; --hover:#25253a;
+  --text:#f7f6f2; --muted:#b8b8c6; --faint:#8a8a9c;
+  --orange:#ff9a1a; --orange-bright:#ffbd4a;
+  --cyan:#57d7ff; --lime:#b9f34a; --coral:#ff6f61; --violet:#9b82ff;
+  --ink:#231303; /* dark text on orange */
+  --r-sm:8px; --r-md:12px; --r-lg:16px; --r-pill:999px;
+  --e1:0 2px 8px rgba(0,0,0,.5); --e2:0 8px 24px rgba(0,0,0,.6);
+  --frame:#262636; --frame-edge:#3a3a50;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#050508;color:var(--text);
+  font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;
+  display:flex;flex-wrap:wrap;gap:40px;padding:40px;justify-content:center}
+.board{width:1280px;height:720px;position:relative;overflow:hidden;
+  border-radius:4px;box-shadow:0 0 0 1px #222}
+.cap{width:100%;text-align:center;color:#666;font-size:13px;
+  letter-spacing:.14em;text-transform:uppercase;margin-bottom:-28px;flex-basis:100%}
+
+/* ---------- shared: skyline backdrop w/ FINISHED window frame ---------- */
+.sky{position:absolute;inset:0;
+  background:linear-gradient(180deg,#241733 0%,#3d1f42 34%,#8a3a44 62%,#d96a35 82%,#ef9440 100%)}
+.sky .sun{position:absolute;right:290px;bottom:120px;width:190px;height:190px;border-radius:50%;
+  background:radial-gradient(circle,#ffd98a 0%,#ffb24a 55%,rgba(255,178,74,0) 72%)}
+.bld{position:absolute;bottom:0;background:#141220}
+.bld.lit{background:
+  repeating-linear-gradient(0deg,#141220 0 14px,#2a2038 14px 16px),
+  repeating-linear-gradient(90deg,transparent 0 16px,#141220 16px 18px)}
+.win{position:absolute;background:#f0b23e;opacity:.85}
+.win.dim{background:#e2702f;opacity:.5}
+/* Finished mullion frame: even thirds, sill + header, reads as a window */
+.frame{position:absolute;inset:0;pointer-events:none;
+  background:
+   linear-gradient(90deg,var(--frame) 0 26px,transparent 26px calc(100% - 26px),var(--frame) calc(100% - 26px) 100%),
+   linear-gradient(0deg,var(--frame) 0 30px,transparent 30px calc(100% - 22px),var(--frame) calc(100% - 22px) 100%)}
+.frame::before,.frame::after{content:"";position:absolute;top:22px;bottom:30px;width:26px;background:var(--frame)}
+.frame::before{left:calc(33.3% - 13px)}
+.frame::after{left:calc(66.6% - 13px)}
+.frame .hbar{position:absolute;left:26px;right:26px;top:52%;height:22px;background:var(--frame);
+  box-shadow:0 1px 0 var(--frame-edge)}
+.sill{position:absolute;left:0;right:0;bottom:0;height:30px;background:linear-gradient(180deg,#2e2e42,#1b1b2a)}
+.sill::before{content:"";position:absolute;left:26px;right:26px;top:-8px;height:8px;background:#34344c;border-radius:2px}
+
+/* ---------- panel ---------- */
+.panel{position:absolute;left:26px;top:22px;bottom:30px;width:472px;
+  background:linear-gradient(180deg,rgba(13,13,20,.96),rgba(10,10,15,.97));
+  border-right:1px solid rgba(255,255,255,.06);
+  display:flex;flex-direction:column;padding:34px 38px 28px}
+.kicker{color:var(--orange);font-size:13px;font-weight:700;letter-spacing:.22em}
+h1{font-size:44px;line-height:.98;font-weight:800;letter-spacing:.01em;margin:10px 0 6px}
+h1 .out{color:transparent;-webkit-text-stroke:2px var(--orange)}
+.tagline{color:var(--muted);font-size:15px;margin-bottom:22px}
+.spacer{flex:1}
+
+/* ---------- buttons: grouped, 3 roles ---------- */
+.cta{display:block;width:100%;min-height:58px;border:0;border-radius:var(--r-md);
+  background:linear-gradient(180deg,var(--orange-bright),var(--orange));
+  color:var(--ink);font-size:19px;font-weight:800;letter-spacing:.08em;
+  box-shadow:var(--e1),inset 0 1px 0 rgba(255,255,255,.35);cursor:pointer}
+.cta small{display:block;font-size:11px;font-weight:600;letter-spacing:.18em;opacity:.75}
+.nav{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.nav button{min-height:46px;border-radius:var(--r-sm);cursor:pointer;
+  background:var(--raised);color:var(--text);border:1px solid rgba(255,255,255,.08);
+  font-size:14px;font-weight:700;letter-spacing:.06em;transition:.15s}
+.nav button:hover{background:var(--hover);border-color:var(--orange);transform:translateY(-1px)}
+.util{display:flex;gap:10px;margin-top:18px;padding-top:16px;
+  border-top:1px solid rgba(255,255,255,.07)}
+.util button{flex:1;min-height:36px;border-radius:var(--r-pill);cursor:pointer;
+  background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,.14);
+  font-size:12px;font-weight:700;letter-spacing:.14em}
+.util button:hover{color:var(--text);border-color:var(--cyan)}
+
+/* ---------- ride card: aligned to mullion, elevated ---------- */
+.ride{position:absolute;right:60px;top:54px;width:330px;padding:18px 18px 14px;
+  background:rgba(16,16,26,.92);border:1px solid rgba(255,154,26,.4);
+  border-radius:var(--r-lg);box-shadow:var(--e2);backdrop-filter:blur(6px)}
+.ride h3{color:var(--orange);font-size:13px;letter-spacing:.2em;text-align:center;margin-bottom:10px}
+.ride .stage{height:190px;border-radius:var(--r-md);
+  background:radial-gradient(120% 90% at 50% 100%,rgba(255,189,74,.16),rgba(0,0,0,0) 62%),#101018;
+  display:flex;align-items:flex-end;justify-content:center;position:relative}
+.ride .chair{font-size:104px;line-height:.8;filter:drop-shadow(0 10px 16px rgba(0,0,0,.7))}
+.ride .ring{position:absolute;bottom:6px;width:170px;height:26px;border-radius:50%;
+  background:radial-gradient(50% 50% at 50% 50%,rgba(255,200,90,.5),rgba(255,200,90,0) 70%)}
+.ride .meta{display:flex;gap:8px;justify-content:center;margin-top:12px}
+.pill{font-size:11px;font-weight:700;letter-spacing:.1em;padding:5px 12px;
+  border-radius:var(--r-pill);border:1px solid}
+.pill.o{color:var(--orange);border-color:rgba(255,154,26,.5);background:rgba(255,154,26,.1)}
+.pill.c{color:var(--cyan);border-color:rgba(87,215,255,.4);background:rgba(87,215,255,.08)}
+
+/* ============ SCREEN 2: MODES ============ */
+.head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px}
+.head h2{font-size:26px;font-weight:800;letter-spacing:.04em}
+.back{background:transparent;border:1px solid rgba(255,255,255,.16);color:var(--muted);
+  border-radius:var(--r-sm);padding:8px 18px;font-size:12px;font-weight:700;letter-spacing:.14em;cursor:pointer}
+.back:hover{color:var(--text);border-color:var(--cyan)}
+.modes-list{display:flex;flex-direction:column;gap:12px}
+.mode{position:relative;display:flex;align-items:center;gap:16px;min-height:88px;
+  padding:14px 18px 14px 20px;border-radius:var(--r-md);cursor:pointer;
+  background:var(--raised);border:1px solid transparent;box-shadow:var(--e1);transition:.15s}
+.mode .bar{position:absolute;left:0;top:14px;bottom:14px;width:4px;border-radius:2px}
+.mode h4{font-size:19px;font-weight:800;letter-spacing:.03em}
+.mode p{font-size:12.5px;color:var(--muted);margin-top:3px}
+.mode .tag{position:static;margin-left:auto;flex-shrink:0}
+.mode .tag span{display:block;text-align:right;font-size:10.5px;font-weight:700;letter-spacing:.12em}
+.mode.sel{background:var(--hover);border-color:var(--orange);transform:translateX(4px)}
+.mode.sel .tag span{color:var(--orange)}
+.mode:not(.sel):hover{background:var(--hover)}
+/* plain, meaningful tags — no straddling the border */
+.desc{margin:20px 0 18px;padding:16px 18px;border-radius:var(--r-md);
+  background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.45));border:1px solid rgba(255,255,255,.07)}
+.desc b{color:var(--orange);font-size:12px;letter-spacing:.16em;display:block;margin-bottom:6px}
+.desc p{font-size:14px;color:var(--muted);line-height:1.5}
+
+/* ============ SCREEN 3: SETTINGS ============ */
+.set-panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:560px;max-height:640px;display:flex;flex-direction:column;
+  background:rgba(18,18,29,.97);border:1px solid rgba(255,154,26,.35);
+  border-radius:var(--r-lg);box-shadow:var(--e2)}
+.set-panel .inner{padding:26px 30px;overflow-y:auto;scrollbar-width:thin;
+  scrollbar-color:#3a3a50 transparent}
+.sec{margin-top:26px}.sec:first-child{margin-top:0}
+.sec>h3{color:var(--orange);font-size:13px;font-weight:800;letter-spacing:.18em;
+  margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.sec>h3::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.08)}
+/* ONE label pattern: label-left, value-right, control full-width beneath */
+.row{margin-bottom:14px}
+.row .lbl{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.row .lbl span{font-size:13px;font-weight:700;letter-spacing:.06em}
+.row .lbl em{font-style:normal;color:var(--orange);font-size:13px;font-weight:800;
+  font-variant-numeric:tabular-nums}
+select{width:100%;min-height:44px;background:var(--hover);color:var(--text);
+  border:1px solid rgba(255,255,255,.12);border-radius:var(--r-sm);
+  font:inherit;font-weight:700;padding:0 14px;appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 20px) 50%,calc(100% - 14px) 50%;background-size:6px 6px;background-repeat:no-repeat}
+/* F1 FIXED: real slider rail + orange fill + grabber */
+input[type=range]{width:100%;height:28px;appearance:none;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;
+  background:linear-gradient(90deg,var(--orange) var(--v,80%),#2c2c40 var(--v,80%))}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:18px;height:18px;margin-top:-6px;
+  border-radius:50%;background:var(--orange-bright);border:2px solid #0a0a0f;
+  box-shadow:var(--e1),0 0 0 1px rgba(255,189,74,.5)}
+.tgl{display:flex;justify-content:space-between;align-items:center;min-height:44px;
+  background:var(--hover);border:1px solid rgba(255,255,255,.1);border-radius:var(--r-sm);
+  padding:0 14px}
+.tgl span{font-size:13px;font-weight:700;letter-spacing:.06em}
+.switch{width:46px;height:26px;border-radius:var(--r-pill);background:#2c2c40;position:relative;transition:.2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+  background:#8a8a9c;transition:.2s}
+.switch.on{background:var(--orange)}
+.switch.on::after{left:23px;background:#fff}
+.set-foot{padding:14px 30px 20px;border-top:1px solid rgba(255,255,255,.08)}
+
+/* ============ SCREEN 4: HOW TO PLAY overlay ============ */
+.how{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:640px;background:rgba(18,18,29,.97);border:1px solid rgba(255,154,26,.35);
+  border-radius:var(--r-lg);box-shadow:var(--e2);padding:26px 30px}
+.how .steps{display:flex;gap:10px;margin:16px 0 20px}
+.how .step{flex:1;background:var(--raised);border-radius:var(--r-md);padding:14px;
+  border:1px solid rgba(255,255,255,.07)}
+.how .step i{font-style:normal;font-size:22px;display:block;margin-bottom:6px}
+.how .step b{font-size:13px;letter-spacing:.1em;color:var(--orange);display:block;margin-bottom:4px}
+.how .step p{font-size:12px;color:var(--muted);line-height:1.4}
+.how .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+.how .cols h5{color:var(--orange);font-size:11px;letter-spacing:.16em;margin-bottom:8px}
+.how .cols li{list-style:none;display:flex;justify-content:space-between;
+  font-size:12.5px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.how .cols li b{color:var(--text)}.how .cols li span{color:var(--faint)}
+.fine{color:var(--faint);font-size:11.5px;text-align:center;margin-bottom:16px}
+
+/* dimmer */
+.dim{position:absolute;inset:0;background:rgba(5,5,9,.68)}
+.hud-timer{position:absolute;top:22px;left:60px;font-size:34px;font-weight:800;
+  color:var(--orange);text-shadow:0 2px 0 rgba(0,0,0,.6);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<div class="cap">A1 — Main menu · Departure Board</div>
+<div class="board" id="s1">
+  <div class="sky"><div class="sun"></div>
+    <div class="bld lit" style="left:520px;width:150px;height:300px"></div>
+    <div class="bld" style="left:690px;width:120px;height:380px"></div>
+    <div class="bld lit" style="left:830px;width:170px;height:250px"></div>
+    <div class="bld" style="left:1020px;width:130px;height:330px"></div>
+    <div class="bld lit" style="left:1170px;width:90px;height:200px"></div>
+  </div>
+  <div class="frame"><div class="hbar"></div></div>
+  <div class="sill"></div>
+
+  <div class="panel">
+    <div class="kicker">YOUR SHIFT IS OVER</div>
+    <h1>FRIDAY 5PM<br><span class="out">EVACUATION</span></h1>
+    <div class="tagline">It's 4:59. One minute to freedom.</div>
+    <div class="spacer"></div>
+    <button class="cta">EVACUATE <small>PRIMARY MODE · LAST ONE BUYS BEERS</small></button>
+    <div class="nav">
+      <button>PLAY WITH FRIENDS</button>
+      <button>OTHER MODES</button>
+      <button>CUSTOMIZE RIDE</button>
+      <button>OFFICE SETUP</button>
+    </div>
+    <div class="util">
+      <button>SETTINGS</button><button>CREDITS</button><button>QUIT</button>
+    </div>
+  </div>
+
+  <div class="ride">
+    <h3>YOUR RIDE</h3>
+    <div class="stage"><div class="ring"></div><div class="chair">🪑</div></div>
+    <div class="meta"><span class="pill o">DANA · PM</span><span class="pill c">THE BEIGE ONE</span></div>
+  </div>
+</div>
+
+<div class="cap">A2 — Mode select</div>
+<div class="board" id="s2">
+  <div class="sky"><div class="sun" style="right:180px;bottom:150px;opacity:.85"></div>
+    <div class="bld lit" style="left:520px;width:180px;height:340px"></div>
+    <div class="bld" style="left:720px;width:140px;height:260px"></div>
+    <div class="bld lit" style="left:880px;width:200px;height:300px;opacity:.8"></div>
+    <div class="bld" style="left:1100px;width:120px;height:380px"></div>
+  </div>
+  <div class="frame"><div class="hbar" style="top:56%"></div></div>
+  <div class="sill"></div>
+
+  <div class="panel">
+    <div class="head"><h2>MODES</h2><button class="back">← BACK</button></div>
+    <div class="modes-list">
+      <div class="mode sel"><span class="bar" style="background:var(--orange)"></span>
+        <div><h4>EVACUATION</h4><p>Race the clock down four floors</p></div>
+        <div class="tag"><span>1–4 PLAYERS</span><span style="color:var(--orange)">PRIMARY</span></div></div>
+      <div class="mode"><span class="bar" style="background:var(--coral)"></span>
+        <div><h4>HAULED</h4><p>Drag the boss. Don't get caught.</p></div>
+        <div class="tag"><span style="color:var(--coral)">TEAMS OF 2+</span></div></div>
+      <div class="mode"><span class="bar" style="background:var(--lime)"></span>
+        <div><h4>SHOP &amp; SEEK</h4><p>Hide-and-seek among the cubicles</p></div>
+        <div class="tag"><span style="color:var(--lime)">1 SEEKER · 3+ HIDERS</span></div></div>
+      <div class="mode"><span class="bar" style="background:var(--violet)"></span>
+        <div><h4>PIZZA COLONY</h4><p>Feed the office. Survive the crash.</p></div>
+        <div class="tag"><span style="color:var(--violet)">CO-OP · 2–4</span></div></div>
+    </div>
+    <div class="desc"><b>EVACUATION · PRIMARY MODE</b>
+      <p>It's 4:59 PM. Ride your office chair down four floors of hazards before 5:00. Coffee boosts, water traps, stapler sabotage. Last one out buys the beers.</p></div>
+    <button class="cta" style="min-height:52px;font-size:16px">PLAY SELECTED</button>
+  </div>
+  <div class="ride" style="top:70px">
+    <h3>YOUR RIDE</h3>
+    <div class="stage"><div class="ring"></div><div class="chair">🪑</div></div>
+    <div class="meta"><span class="pill o">JUMP ×1.0</span><span class="pill c">GRIP ×1.0</span><span class="pill c">BOOST ×1.0</span></div>
+  </div>
+</div>
+
+<div class="cap">A3 — Settings (sliders fixed)</div>
+<div class="board" id="s3">
+  <div class="sky" style="filter:brightness(.5)"></div>
+  <div class="dim"></div>
+  <div class="set-panel">
+    <div class="inner">
+      <div class="head"><h2>SETTINGS</h2><span style="color:var(--faint);font-size:12px">AUTOSAVED</span></div>
+      <div class="sec"><h3>VIDEO</h3>
+        <div class="row"><div class="lbl"><span>GRAPHICS QUALITY</span><em>STANDARD</em></div>
+          <select><option>STANDARD</option></select></div>
+      </div>
+      <div class="sec"><h3>AUDIO</h3>
+        <div class="row"><div class="lbl"><span>MASTER</span><em>80</em></div>
+          <input type="range" style="--v:80%"></div>
+        <div class="row"><div class="lbl"><span>MUSIC</span><em>25</em></div>
+          <input type="range" style="--v:25%"></div>
+        <div class="row"><div class="lbl"><span>SFX</span><em>55</em></div>
+          <input type="range" style="--v:55%"></div>
+      </div>
+      <div class="sec"><h3>ACCESSIBILITY</h3>
+        <div class="tgl"><span>SCREEN SHAKE</span><div class="switch"></div></div>
+        <div class="tgl" style="margin-top:10px"><span>REDUCED FLASHING</span><div class="switch on"></div></div>
+      </div>
+    </div>
+    <div class="set-foot"><button class="back" style="width:100%;min-height:46px">BACK</button></div>
+  </div>
+</div>
+
+<div class="cap">A4 — How to Play overlay (CTA is now the most orange thing)</div>
+<div class="board" id="s4">
+  <div class="sky" style="filter:brightness(.45) saturate(.8)"></div>
+  <div class="frame" style="opacity:.5"><div class="hbar"></div></div>
+  <div class="dim"></div>
+  <div class="hud-timer">0:47</div>
+  <div class="how">
+    <div class="head"><h2>HOW IT WORKS</h2><span class="pill o">3 STEPS</span></div>
+    <div class="steps">
+      <div class="step"><i>🏁</i><b>DRIVE</b><p>Steer the chair. Coffee is boost.</p></div>
+      <div class="step"><i>🛗</i><b>CLIMB</b><p>Elevator pads lift you up a floor.</p></div>
+      <div class="step"><i>🚪</i><b>ESCAPE</b><p>Exit before 5:00 PM. Or else.</p></div>
+    </div>
+    <div class="cols">
+      <div><h5>KEYBOARD &amp; MOUSE</h5><ul>
+        <li><b>WASD / ARROWS</b><span>MOVE</span></li>
+        <li><b>SHIFT</b><span>BOOST</span></li>
+        <li><b>SPACE</b><span>ACTION</span></li>
+        <li><b>E</b><span>SABOTAGE</span></li></ul></div>
+      <div><h5>CONTROLLER</h5><ul>
+        <li><b>LEFT STICK</b><span>MOVE</span></li>
+        <li><b>RT</b><span>BOOST</span></li>
+        <li><b>A / CROSS</b><span>ACTION</span></li>
+        <li><b>X / SQUARE</b><span>SABOTAGE</span></li></ul></div>
+    </div>
+    <div class="fine">Timer and world are paused until you start.</div>
+    <button class="cta">I'M OUT — START</button>
+  </div>
+</div>
+
+</body>
+</html>
