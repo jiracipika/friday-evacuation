@@ -1,16 +1,6 @@
-# PropMaterials.gd — shared procedural materials for props (Phase 2).
-#
-# Desks, file cabinets, vending machines, plants, elevators all used to
-# build flat-color or lone-noise materials ad hoc. This script owns three
-# reusable surface families, each with a DERIVED NORMAL MAP so props read
-# with real depth under the ceiling lights:
-#   wood_planks()   — desk wood: plank seams + grain streaks
-#   brushed_metal() — cabinets/vending: fine horizontal brushing
-#   plastic()       — chair shells/trash bins: matte, faint grain
-#
-# All textures 256px, generated once, cached statically (same policy as
-# WallMaterials). Mobile-friendly: no extra passes, normal rides the
-# existing material.
+# Shared, deterministic prop surfaces. Broad grain and restrained relief keep
+# furniture readable at race distance (docs/redesign/step1/ART-BIBLE.md).
+# All maps are cached 256px tiles with mipmaps; no additional draw passes.
 class_name PropMaterials
 extends RefCounted
 
@@ -18,110 +8,107 @@ const TEX := 256
 static var _cache: Dictionary = {}
 
 
-## Shared height->material pipeline: build albedo + normal in one go.
-## `paint(buf, x, y)` fills the caller's albedo color at (x, y); the
-## caller ALSO writes the height via `set_h` so structure stays in sync.
 static func _build_material(height: PackedFloat32Array, albedo: Image,
-		tex_size: int, normal_strength: float) -> StandardMaterial3D:
+		roughness: Image, normal_strength: float) -> StandardMaterial3D:
 	var NormalGen: GDScript = load("res://scripts/NormalMapGen.gd")
-	var ntex: ImageTexture = NormalGen.normal_texture(height, tex_size, tex_size, normal_strength)
-	# A mipmapped sampler cannot invent mip levels on ImageTexture.
+	# Wrapped derivatives match the periodic albedo/roughness at tile edges.
+	var ntex: ImageTexture = NormalGen.normal_texture(height, TEX, TEX, normal_strength, true)
 	albedo.generate_mipmaps()
-	var atex := ImageTexture.create_from_image(albedo)
+	roughness.generate_mipmaps()
 	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = atex
+	mat.albedo_texture = ImageTexture.create_from_image(albedo)
+	mat.roughness_texture = ImageTexture.create_from_image(roughness)
+	mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+	# The map stores absolute roughness; the scalar must not darken it.
+	mat.roughness = 1.0
 	mat.normal_enabled = true
 	mat.normal_texture = ntex
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	return mat
 
 
-## Desk wood: horizontal planks (32px each) with 1px seams and vertical
-## grain streaks. Warm walnut base.
+## Laminate boards: grain follows the long horizontal axis, with gently
+## wandering fibers and quiet joins. No pixel noise or baked highlights.
 static func wood_planks() -> StandardMaterial3D:
 	if _cache.has("wood"):
 		return _cache["wood"]
 	var NormalGen: GDScript = load("res://scripts/NormalMapGen.gd")
-	var height: PackedFloat32Array = NormalGen.height_buffer(TEX, TEX, 0.5)
+	var height: PackedFloat32Array = NormalGen.height_buffer(TEX, TEX)
 	var albedo := Image.create(TEX, TEX, false, Image.FORMAT_RGB8)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 8101
+	var roughness := Image.create(TEX, TEX, false, Image.FORMAT_L8)
+	var base := Color("a86f39")
 	for y in TEX:
-		var plank := float(y) / 32.0
-		var plank_id := int(plank)
-		var in_seam := (y % 32) < 1
-		# Per-plank tone offset — each plank slightly different warmth.
-		var tone := 0.9 + 0.2 * absf(sin(float(plank_id) * 12.9898))
+		var v := float(y) / TEX
+		var board := y / 64
+		var tone := sin(float(board) * 2.4) * 0.025
+		var edge := mini(y % 64, 64 - y % 64)
+		var joint := 1.0 - smoothstep(0.0, 2.0, float(edge))
 		for x in TEX:
-			var col := Color(0.34, 0.23, 0.13)
-			col = col.lightened(0.06 * (tone - 1.0) * 8.0)
-			# Grain streaks: sin-based vertical bands + per-pixel jitter.
-			var grain := sin(float(x) * 0.55 + float(plank_id) * 3.7) * 0.03
-			var n := (rng.randf() - 0.5) * 0.05
-			var c := clampf(col.r + grain + n, 0.0, 1.0)
-			var h := 0.5 + grain
-			if in_seam:
-				c *= 0.55
-				h = 0.34  # seam groove
-			albedo.set_pixel(x, y, Color(c, c * 0.82, c * 0.6))
-			NormalGen.set_height(height, TEX, TEX, x, y, h)
-	# NormalMapGen multiplies strength by texture resolution. At 256px,
-	# 1.2 saturated wood ridges sideways; use shallow physical relief.
-	var mat := _build_material(height, albedo, TEX, 0.018)
-	mat.normal_scale = 0.25
-	mat.roughness = 0.78
+			var u := float(x) / TEX
+			var bend := sin(TAU * u) * 0.36 + sin(TAU * (2.0 * u + v)) * 0.12
+			var grain := sin(TAU * 12.0 * v + bend)
+			var fiber := sin(TAU * 28.0 * v + bend * 2.0)
+			var variation := tone + grain * 0.035 + fiber * 0.012 - joint * 0.06
+			albedo.set_pixel(x, y, Color(base.r, base.g, base.b) * (1.0 + variation))
+			height[x + y * TEX] = 0.5 + grain * 0.018 + fiber * 0.004 - joint * 0.045
+			var r := 0.56 + grain * 0.025 + joint * 0.04
+			roughness.set_pixel(x, y, Color(r, r, r))
+	var mat := _build_material(height, albedo, roughness, 0.015)
+	mat.normal_scale = 0.10
 	_cache["wood"] = mat
 	return mat
 
 
-## Brushed metal: horizontal micro-scratches, cool gray, slight sheen.
+## Exposed metal: broad directional brushing under a neutral cool base.
+## Relief is shallow; the old resolution-scaled 0.9 strength made ridges
+## almost tangent to the surface and broke up the manufactured silhouette.
 static func brushed_metal() -> StandardMaterial3D:
 	if _cache.has("metal"):
 		return _cache["metal"]
 	var NormalGen: GDScript = load("res://scripts/NormalMapGen.gd")
-	var height: PackedFloat32Array = NormalGen.height_buffer(TEX, TEX, 0.5)
+	var height: PackedFloat32Array = NormalGen.height_buffer(TEX, TEX)
 	var albedo := Image.create(TEX, TEX, false, Image.FORMAT_RGB8)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 8203
+	var roughness := Image.create(TEX, TEX, false, Image.FORMAT_L8)
+	var base := Color("929ca2")
 	for y in TEX:
-		# Per-row brightness: brushing runs horizontally.
-		var row := 0.5 + (rng.randf() - 0.5) * 0.08
+		var v := float(y) / TEX
+		var brush := sin(TAU * 16.0 * v) * 0.65 + sin(TAU * 29.0 * v) * 0.35
 		for x in TEX:
-			var n := (rng.randf() - 0.5) * 0.05
-			var v := clampf(0.58 + row - 0.58 + n, 0.0, 1.0)
-			var c := Color(v, v * 1.02, v * 1.08)  # cool tint
-			albedo.set_pixel(x, y, c)
-			# Brush ridges: rows themselves are the height variation.
-			NormalGen.set_height(height, TEX, TEX, x, y, 0.5 + (row - 0.5) * 4.0)
-	var mat := _build_material(height, albedo, TEX, 0.9)
-	mat.roughness = 0.35
-	mat.metallic = 0.75
+			var u := float(x) / TEX
+			var drift := sin(TAU * (u + 2.0 * v))
+			albedo.set_pixel(x, y, base * (1.0 + brush * 0.018 + drift * 0.006))
+			height[x + y * TEX] = 0.5 + brush * 0.012
+			var r := 0.32 + brush * 0.025 + drift * 0.008
+			roughness.set_pixel(x, y, Color(r, r, r))
+	var mat := _build_material(height, albedo, roughness, 0.018)
+	mat.normal_scale = 0.04
+	mat.metallic = 1.0
 	_cache["metal"] = mat
 	return mat
 
 
-## Matte plastic: near-flat with faint orange-peel grain. `tint` controls
-## the color (chair shell, bin, keyboard base...).
+## Molded plastic: broad, almost invisible molded waviness. Color stays
+## close to its assigned tint instead of accumulating noisy pale speckles.
 static func plastic(tint: Color) -> StandardMaterial3D:
 	var key := "plastic_" + tint.to_html(false)
 	if _cache.has(key):
 		return _cache[key]
 	var NormalGen: GDScript = load("res://scripts/NormalMapGen.gd")
-	var height: PackedFloat32Array = NormalGen.height_buffer(TEX, TEX, 0.5)
+	var height: PackedFloat32Array = NormalGen.height_buffer(TEX, TEX)
 	var albedo := Image.create(TEX, TEX, false, Image.FORMAT_RGB8)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 8307
+	var roughness := Image.create(TEX, TEX, false, Image.FORMAT_L8)
 	for y in TEX:
+		var v := float(y) / TEX
 		for x in TEX:
-			var n := (rng.randf() - 0.5) * 0.04
-			albedo.set_pixel(x, y, Color(
-				clampf(tint.r + n, 0.0, 1.0),
-				clampf(tint.g + n, 0.0, 1.0),
-				clampf(tint.b + n, 0.0, 1.0)))
-			NormalGen.set_height(height, TEX, TEX, x, y, 0.5 + n)
-	var mat := _build_material(height, albedo, TEX, 0.5)
-	mat.roughness = 0.85
-	mat.metallic = 0.0
+			var u := float(x) / TEX
+			var wave := sin(TAU * (3.0 * u + 2.0 * v)) * 0.6 \
+				+ sin(TAU * (5.0 * v - 2.0 * u)) * 0.4
+			albedo.set_pixel(x, y, Color(tint.r, tint.g, tint.b) * (1.0 + wave * 0.012))
+			height[x + y * TEX] = 0.5 + wave * 0.018
+			var r := 0.48 + wave * 0.02
+			roughness.set_pixel(x, y, Color(r, r, r))
+	var mat := _build_material(height, albedo, roughness, 0.025)
+	mat.normal_scale = 0.08
 	_cache[key] = mat
 	return mat
 

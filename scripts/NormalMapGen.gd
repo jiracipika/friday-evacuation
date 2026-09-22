@@ -13,7 +13,8 @@
 #   var tex := NormalMapGen.normal_texture(height, strength)
 #
 # Height values are 0..1 floats stored in a PackedFloat32Array (row-major,
-# x + y * width). `strength` scales the bump; 1.0 is subtle, 3.0 is deep.
+# x + y * width). `strength` is multiplied by the smaller texture dimension; use small
+# values (e.g. 0.015 at 256px) for shallow prop relief.
 class_name NormalMapGen
 extends RefCounted
 
@@ -53,21 +54,22 @@ static func noise(buf: PackedFloat32Array, width: int, height: int,
 				buf[x + y * width] + (rng.randf() - 0.5) * amount, 0.0, 1.0)
 
 
-## Sobel the height buffer into a tangent-space normal map.
+## Derive central-difference tangent-space normals from a height buffer.
+## Set seamless for periodic tiles; other callers retain clamped edges.
 ## world_scale maps texel steps to world units per tile — panels that
 ## stretch over 5m need larger world_scale than a 1m tile for the same
 ## visual strength, so callers tune strength instead.
 static func normal_texture(buf: PackedFloat32Array, width: int, height: int,
-		strength := 1.0) -> ImageTexture:
+		strength := 1.0, seamless := false) -> ImageTexture:
 	var img := Image.create(width, height, false, Image.FORMAT_RGB8)
 	var s := strength * float(mini(width, height))
 	img.fill(Color(0.5, 0.5, 1.0))  # neutral baseline; only deviations written
 	for y in height:
-		var y_up := maxi(y - 1, 0)
-		var y_dn := mini(y + 1, height - 1)
+		var y_up := posmod(y - 1, height) if seamless else maxi(y - 1, 0)
+		var y_dn := (y + 1) % height if seamless else mini(y + 1, height - 1)
 		for x in width:
-			var x_l := maxi(x - 1, 0)
-			var x_r := mini(x + 1, width - 1)
+			var x_l := posmod(x - 1, width) if seamless else maxi(x - 1, 0)
+			var x_r := (x + 1) % width if seamless else mini(x + 1, width - 1)
 			var dx := (buf[x_r + y * width] - buf[x_l + y * width]) * 2.0
 			var dy := (buf[x + y_dn * width] - buf[x + y_up * width]) * 2.0
 			if dx == 0.0 and dy == 0.0:

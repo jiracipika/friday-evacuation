@@ -45,6 +45,39 @@ func _run() -> void:
 	check(plast == plast2, "plastic cached per tint")
 	check(plast != plast_red, "different tints = different materials")
 
+	# Every sampled surface needs actual mip levels and a restrained normal.
+	# This catches the old metal/plastic slopes that saturated toward +/-X/Y.
+	for mat in [wood, metal, plast]:
+		check(mat.roughness_texture != null, "roughness map wired")
+		for tex in [mat.albedo_texture, mat.normal_texture, mat.roughness_texture]:
+			check(tex.get_image().has_mipmaps(), "surface map has mipmaps")
+		var normals: Image = mat.normal_texture.get_image()
+		var min_z := 1.0
+		for y in 256:
+			for x in 256:
+				min_z = minf(min_z, normals.get_pixel(x, y).b * 2.0 - 1.0)
+		check(min_z > 0.90, "normal relief stays shallow (min Z %.3f)" % min_z)
+		var rough: Image = mat.roughness_texture.get_image()
+		var low := 1.0
+		var high := 0.0
+		for y in range(0, 256, 3):
+			for x in range(0, 256, 3):
+				var value := rough.get_pixel(x, y).r
+				low = minf(low, value)
+				high = maxf(high, value)
+		check(high - low > 0.02 and high - low < 0.15,
+			"roughness varies subtly (%.3f..%.3f)" % [low, high])
+
+	# Integer-frequency fields must tile: the boundary step should remain
+	# comparable to ordinary adjacent texels, without a visible hard stripe.
+	for mat in [metal, plast]:
+		var img: Image = mat.albedo_texture.get_image()
+		var seam_delta := 0.0
+		for i in 256:
+			seam_delta = maxf(seam_delta, absf(img.get_pixel(0, i).r - img.get_pixel(255, i).r))
+			seam_delta = maxf(seam_delta, absf(img.get_pixel(i, 0).r - img.get_pixel(i, 255).r))
+		check(seam_delta < 0.02, "periodic surface has no hard tile seam")
+
 	# Normal maps deviate from neutral: sample many pixels, expect some
 	# with R or G away from 0.5.
 	var nimg: Image = wood.normal_texture.get_image()
