@@ -32,6 +32,8 @@ func _init() -> void:
 		"res://scripts/CreditsScreen.gd",
 		"res://scripts/Settings.gd",
 		"res://scripts/SettingsRoundTripTest.gd",
+		"res://scripts/SettingsRedesignTest.gd",
+		"res://scripts/OfficeArchitecture.gd",
 		"res://scripts/NormalMapGen.gd",
 		"res://scripts/NormalMapSmokeTest.gd",
 		"res://scripts/PropMaterials.gd",

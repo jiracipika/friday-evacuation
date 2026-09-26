@@ -44,7 +44,10 @@ InputPrefsSmokeTest ControlsOverlaySmokeTest SettingsRoundTripTest \
 NormalMapSmokeTest PropMaterialsSmokeTest LevelLayoutSmokeTest \
 PreMatchModalSmokeTest GamepadSupportTest FloorCullingTest ArtLightingTest \
 ArtMaterialsTest ArtSurfaceReadabilityTest ArtPropsTest ArtHUDTest \
-MenuDepartureSmokeTest LoadingFlowSmokeTest""".split()
+MenuDepartureSmokeTest LoadingFlowSmokeTest \
+MovementFeelTest ModeSelectRedesignTest MenuHomeRedesignTest \
+MenuBackdropPropsTest PadNavSmokeTest ArtBlenderPropsTest \
+SettingsRedesignTest OfficeArchitectureSmokeTest""".split()
 
 # Default log root lives in the repo (durable), not /tmp.
 DEFAULT_LOG_DIR = os.path.join(
