@@ -4,7 +4,7 @@ extends CanvasLayer
 
 signal closed
 
-const ACCENT := Color("ff9a1a")
+const UI_THEME = preload("res://scripts/UITheme.gd")
 
 const CREDITS := [
 	["FRIDAY 5PM: EVACUATION", ""],
@@ -37,17 +37,34 @@ func _build_ui() -> void:
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(bg)
 
+	# S-H: panel + tape header on the ink field; role lines become orange
+	# micro caps, names TEXT, per the After-Hours spec-sheet pattern.
+	var panel = PanelContainer.new()
+	panel.name = "CreditsPanel"
+	var panel_style := UI_THEME.panel_style(UI_THEME.color(UI_THEME.ORANGE), true)
+	panel_style.bg_color = UI_THEME.color(UI_THEME.SURFACE_RAISED, 0.98)
+	panel_style.content_margin_top = 0.0
+	panel.add_theme_stylebox_override("panel", panel_style)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(520, 0)
+	root.add_child(panel)
+
 	var box = VBoxContainer.new()
-	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	box.position = Vector2(-260, -260)
-	box.custom_minimum_size = Vector2(520, 520)
-	root.add_child(box)
+	box.add_theme_constant_override("separation", 10)
+	panel.add_child(box)
+
+	var tape: Control = UI_THEME.TapeStrip.new()
+	tape.name = "TapeStrip"
+	tape.custom_minimum_size = Vector2(0, 10)
+	box.add_child(tape)
 
 	var title = Label.new()
 	title.text = "CREDITS"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 40)
-	title.add_theme_color_override("font_color", ACCENT)
+	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT))
 	box.add_child(title)
 
 	for entry in CREDITS:
@@ -55,12 +72,17 @@ func _build_ui() -> void:
 		label.text = entry[0] if entry[1] == "" else "%s\n%s" % [entry[0], entry[1]]
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		label.custom_minimum_size = Vector2(520, 0)
-		label.add_theme_font_size_override("font_size", 18 if entry[1] == "" else 16)
+		label.custom_minimum_size = Vector2(460, 0)
+		label.add_theme_font_size_override("font_size", 18 if entry[1] == "" else 14)
 		if entry[1] == "":
-			label.add_theme_color_override("font_color", Color(1, 1, 1, 0.9 if entry[0].begins_with("FRIDAY") else 0.7))
+			var is_brand: bool = entry[0].begins_with("FRIDAY")
+			label.add_theme_color_override("font_color",
+				UI_THEME.color(UI_THEME.PAPER) if is_brand else UI_THEME.color(UI_THEME.TEXT_FAIR))
+			if is_brand:
+				label.add_theme_font_size_override("font_size", 22)
 		else:
-			label.add_theme_color_override("font_color", Color(1, 1, 1, 0.8))
+			# Role headers read as orange micro caps above the name.
+			label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT))
 		box.add_child(label)
 
 	var back = Button.new()
@@ -68,6 +90,7 @@ func _build_ui() -> void:
 	back.custom_minimum_size = Vector2(0, 52)
 	back.add_theme_font_size_override("font_size", 20)
 	back.pressed.connect(_close)
+	UI_THEME.apply_utility(back, UI_THEME.color(UI_THEME.VIOLET))
 	box.add_child(back)
 
 func _close() -> void:

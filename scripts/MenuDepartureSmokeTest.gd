@@ -212,6 +212,18 @@ func _run() -> void:
 	await process_frame
 	check(main.lobby_overlay != null and main.lobby_overlay.visible,
 		"PLAY WITH FRIENDS opens the existing LAN lobby")
+	check(main.lobby_overlay.find_child("TapeStrip*", true, false) != null,
+		"lobby carries the S-H tape header")
+	var lobby_scroll: Control = main.lobby_overlay.find_child("LobbyScroll", true, false)
+	check(lobby_scroll != null, "lobby body scrolls (content min 858px > 720 viewport)")
+	for child in main.lobby_overlay.get_children():
+		if child is PanelContainer:
+			check(child.size.y <= main.lobby_overlay.get_viewport_rect().size.y - 38.0,
+				"lobby panel fits the viewport (%.0f)" % child.size.y)
+	var lobby_host: Button = main.lobby_overlay.host_button
+	var host_style: StyleBoxFlat = lobby_host.get_theme_stylebox("normal")
+	check(host_style != null and host_style.bg_color.is_equal_approx(Color("ff9a1a")),
+		"HOST reads as the primary orange action")
 	main.lobby_overlay.close_requested.emit()
 	await process_frame
 	check(main.lobby_overlay == null, "lobby BACK closes cleanly")
@@ -224,6 +236,8 @@ func _run() -> void:
 	await process_frame
 	check(main.credits_overlay != null and main.credits_overlay is CanvasLayer,
 		"CREDITS opens a real CanvasLayer credits overlay")
+	check(main.credits_overlay.find_child("TapeStrip*", true, false) != null,
+		"credits carries the S-H tape header")
 	var credits_dupe = main.credits_overlay
 	main._open_credits()
 	check(main.credits_overlay == credits_dupe and main.credits_overlay.get_children().size() == 1,

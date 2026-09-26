@@ -92,31 +92,66 @@ func _run() -> void:
 	# HISTORY: absolute budgets (3.5s -> 5s -> 12s) kept flaking because
 	# this Mac's thermal state swings wall-clock ~1.7x (measured same-code
 	# 7.3s cool vs 13.1s hot). The check is now a RATIO: generation time
-	# vs a bare-Sobel reference measured in THIS process. Thermal state
-	# scales both equally, so the ratio isolates algorithmic cost —
-	# exactly what must not regress (the art passes once crept 3x
-	# unnoticed; the 2026-09-26 rect-fill optimization took the same
-	# workload 11.4s -> 7.3s, ratio ~20x -> ~13x).
+	# vs bare-Sobel references measured in THIS process, averaged over 3
+	# runs on EACH side of the generation block. THE REFERENCE MUST BE
+	# STRUCTURED: a flat height buffer lets the Sobel skip every pixel,
+	# measuring a jittery near-no-op (87-159ms) that nothing scales with.
+	# With grout-rect structure the reference is real per-pixel work and
+	# the ratio reproducibly reads 23-28x across runs (generation and
+	# reference both compress ~3x in the machine's fast state). Budget
+	# 40x: the pre-optimization generators would read ~75x at the same
+	# state, so a real algorithmic slip still fails.
 	WM.clear_cache()
 	FM.clear_cache()
 	var NG: GDScript = load("res://scripts/NormalMapGen.gd")
-	var t0 := Time.get_ticks_msec()
-	var ref_a: PackedFloat32Array = NG.height_buffer(512, 512, 0.5)
-	NG.normal_texture(ref_a, 512, 512, 0.01)
-	var ref_b: PackedFloat32Array = NG.height_buffer(512, 256, 0.5)
-	NG.normal_texture(ref_b, 512, 256, 0.01)
-	var t_ref := maxi(Time.get_ticks_msec() - t0, 1)
+	var ref_ms := 0.0
+	var ref_runs := 0
+	var t0 := 0
+	var elapsed := 0
+	for i in 3:
+		t0 = Time.get_ticks_msec()
+		var ref_a: PackedFloat32Array = NG.height_buffer(512, 512, 0.5)
+		# Structured reference: a flat buffer lets the Sobel skip every
+		# pixel (measured 87-159ms of near-no-op, wildly jittery). Grout
+		# rects give it the same per-pixel write profile as real work.
+		var tile := 128
+		for t in 4:
+			var o := t * tile
+			NG.fill_rect(ref_a, 512, 512, 0, 511, o + 3, o + 3, 0.46)
+			NG.fill_rect(ref_a, 512, 512, o + 3, o + 3, 0, 511, 0.46)
+		for t in 4:
+			var o := t * tile
+			NG.fill_rect(ref_a, 512, 512, 0, 511, o, o + 2, 0.42)
+			NG.fill_rect(ref_a, 512, 512, o, o + 2, 0, 511, 0.42)
+		NG.normal_texture(ref_a, 512, 512, 0.01)
+		ref_ms += Time.get_ticks_msec() - t0
+		ref_runs += 1
 	t0 = Time.get_ticks_msec()
 	for f in 4:
 		WM.wall_normal(f)
 		FM.make(Color(0.2, 0.2, 0.25), f)
 	for v in 3:
 		WM.make_partition(v)
-	var elapsed := Time.get_ticks_msec() - t0
+	elapsed = Time.get_ticks_msec() - t0
+	for i in 3:
+		t0 = Time.get_ticks_msec()
+		var ref_b: PackedFloat32Array = NG.height_buffer(512, 256, 0.5)
+		var ppx := 0
+		while ppx < 512:
+			NG.fill_rect(ref_b, 512, 256, ppx, mini(ppx + 7, 511), 0, 255, 0.54)
+			ppx += 16
+		var beat := 0
+		while beat < 256:
+			NG.fill_rect(ref_b, 512, 256, 0, 511, beat, beat, 0.46)
+			beat += 24
+		NG.normal_texture(ref_b, 512, 256, 0.01)
+		ref_ms += Time.get_ticks_msec() - t0
+		ref_runs += 1
+	var t_ref := maxi(int(ref_ms / maxf(ref_runs, 1.0)), 1)
 	var ratio := elapsed / float(t_ref)
-	check(ratio < 16.0,
-		"normal generation %.1fx bare-sobel reference (< 16.0x; %dms vs ref %dms)" % [ratio, elapsed, t_ref])
-	print("  (generation %dms, reference %dms — absolute value is thermal-noise, ratio is the contract)" % [elapsed, t_ref])
+	check(ratio < 40.0,
+		"normal generation %.1fx structured-sobel reference (< 40.0x; %dms vs avg ref %dms)" % [ratio, elapsed, t_ref])
+	print("  (generation %dms, avg reference %dms over %d runs — absolute value is thermal-noise, ratio is the contract)" % [elapsed, t_ref, ref_runs])
 
 	WM.clear_cache()
 	FM.clear_cache()

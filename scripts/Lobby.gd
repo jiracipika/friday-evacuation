@@ -1,4 +1,9 @@
+# S-H: "After Hours" restyle — UITheme tokens, tape header, section
+# micro-labels, styled buttons/edits. Behavior and node contract unchanged
+# (signals, member vars, Network wiring) — MenuDepartureSmokeTest pins it.
 extends Control
+
+const UI_THEME = preload("res://scripts/UITheme.gd")
 
 signal host_requested
 signal join_requested(address: String)
@@ -26,25 +31,56 @@ func _ready() -> void:
 	backdrop.color = Color(0.02, 0.02, 0.04, 0.96)
 	add_child(backdrop)
 	var panel = PanelContainer.new()
-	panel.position = Vector2(0.5 * get_viewport_rect().size.x - 270, 0.5 * get_viewport_rect().size.y - 220)
-	panel.size = Vector2(540, 440)
+	var panel_style := UI_THEME.panel_style(UI_THEME.color(UI_THEME.ORANGE), true)
+	panel_style.bg_color = UI_THEME.color(UI_THEME.SURFACE_RAISED, 0.98)
+	panel_style.content_margin_top = 0.0
+	panel.add_theme_stylebox_override("panel", panel_style)
+	# MEASURED: the lobby content min is ~858px tall — it overflowed the
+	# 720p viewport even before the restyle, leaving READY/START/BACK
+	# unreachable. The panel now pins to the viewport height minus 20px
+	# margins and the body scrolls (same pattern as Settings).
+	panel.position = Vector2(0.5 * get_viewport_rect().size.x - 270, 20)
+	panel.size = Vector2(540, get_viewport_rect().size.y - 40)
 	add_child(panel)
 	var box = VBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)
 	panel.add_child(box)
+	var tape: Control = UI_THEME.TapeStrip.new()
+	tape.name = "TapeStrip"
+	tape.custom_minimum_size = Vector2(0, 10)
+	box.add_child(tape)
 	var title = Label.new()
 	title.text = "MULTIPLAYER LOBBY"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT))
 	box.add_child(title)
 	status_label = Label.new()
 	status_label.text = "Choose HOST or enter a LAN address to JOIN."
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_label.add_theme_font_size_override("font_size", 12)
+	status_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_FAIR))
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(status_label)
+	# Scrollable body: everything below the header lives here.
+	var body := ScrollContainer.new()
+	body.name = "LobbyScroll"
+	body.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_child(body)
+	var body_box := VBoxContainer.new()
+	body_box.name = "BodyBox"
+	body_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_box.add_theme_constant_override("separation", 12)
+	body.add_child(body_box)
+	box = body_box
 
 	# --- Identity: name + color (Phase 5) ---
 	var gm = get_node_or_null("/root/GameManager")
+	box.add_child(UI_THEME.make_section_header("IDENTITY"))
 	name_edit = LineEdit.new()
+	_style_edit(name_edit)
 	name_edit.placeholder_text = "Your name"
 	name_edit.text = gm.player_name if gm else "Player1"
 	name_edit.max_length = 16
@@ -74,7 +110,9 @@ func _ready() -> void:
 			color_row.add_child(swatch)
 			swatch_buttons.append(swatch)
 	_mark_selected_swatch()
+	box.add_child(UI_THEME.make_section_header("JOIN BY ADDRESS"))
 	address_edit = LineEdit.new()
+	_style_edit(address_edit)
 	address_edit.placeholder_text = "LAN address (default: 127.0.0.1)"
 	address_edit.text = "127.0.0.1"
 	box.add_child(address_edit)
@@ -108,6 +146,7 @@ func _ready() -> void:
 	var scan = Button.new()
 	scan.text = "SCAN LOCAL WI-FI"
 	scan.pressed.connect(_scan_lan)
+	UI_THEME.apply_utility(scan, UI_THEME.color(UI_THEME.CYAN))
 	box.add_child(scan)
 	host_list = ItemList.new()
 	host_list.custom_minimum_size = Vector2(0, 70)
@@ -118,11 +157,13 @@ func _ready() -> void:
 	host_button.text = "HOST"
 	host_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	host_button.pressed.connect(_host)
+	UI_THEME.apply_primary(host_button)
 	row.add_child(host_button)
 	join_button = Button.new()
 	join_button.text = "JOIN"
 	join_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	join_button.pressed.connect(_join)
+	UI_THEME.apply_secondary(join_button, UI_THEME.color(UI_THEME.CYAN))
 	row.add_child(join_button)
 	box.add_child(row)
 	player_list = ItemList.new()
@@ -132,15 +173,18 @@ func _ready() -> void:
 	ready_button.text = "READY UP"
 	ready_button.disabled = true
 	ready_button.pressed.connect(_toggle_ready)
+	UI_THEME.apply_secondary(ready_button, UI_THEME.color(UI_THEME.LIME))
 	box.add_child(ready_button)
 	start_button = Button.new()
 	start_button.text = "START MATCH (HOST)"
 	start_button.disabled = true
 	start_button.pressed.connect(_start_match)
+	UI_THEME.apply_primary(start_button)
 	box.add_child(start_button)
 	var back = Button.new()
 	back.text = "BACK"
 	back.pressed.connect(close_requested.emit)
+	UI_THEME.apply_utility(back, UI_THEME.color(UI_THEME.VIOLET))
 	box.add_child(back)
 	network = get_node_or_null("/root/Network")
 	if network:
@@ -156,6 +200,24 @@ func _ready() -> void:
 		network.match_started.connect(_on_match_started)
 		network.discover_lan_hosts()
 	_refresh_players()
+
+## S-H: dark LineEdit with ORANGE focus ring.
+func _style_edit(edit: LineEdit) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = UI_THEME.color(UI_THEME.SURFACE)
+	normal.set_corner_radius_all(8)
+	normal.content_margin_left = 10.0
+	normal.content_margin_right = 10.0
+	normal.content_margin_top = 8.0
+	normal.content_margin_bottom = 8.0
+	edit.add_theme_stylebox_override("normal", normal)
+	var focus := normal.duplicate()
+	focus.border_color = UI_THEME.color(UI_THEME.ORANGE)
+	focus.set_border_width_all(1)
+	edit.add_theme_stylebox_override("focus", focus)
+	edit.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT))
+	edit.add_theme_color_override("font_placeholder_color", UI_THEME.color(UI_THEME.TEXT_FAIR))
+	edit.custom_minimum_size = Vector2(0, 40)
 
 func _on_name_changed(new_text: String) -> void:
 	var gm = get_node_or_null("/root/GameManager")
