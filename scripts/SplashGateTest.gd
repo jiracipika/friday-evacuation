@@ -27,6 +27,18 @@ func _wait_frames(n: int) -> void:
 	for i in n:
 		await process_frame
 
+## The dismissal fade is a 0.45s REAL-TIME tween, and headless Godot runs
+## uncapped (~1ms deltas), so the free lands after ~450+ process frames on
+## an idle fast machine but far fewer under CPU load — a fixed frame wait
+## is load-inverted flake (passes busy, fails idle). Wait until the layer
+## is actually gone, bounded by a generous frame budget.
+func _wait_freed(parent: Control, budget_frames := 2000) -> bool:
+	for i in budget_frames:
+		if _count_splash(parent) == 0:
+			return true
+		await process_frame
+	return _count_splash(parent) == 0
+
 func _count_splash(parent: Control) -> int:
 	var count := 0
 	for child in parent.get_children():
@@ -77,7 +89,7 @@ func _run() -> void:
 
 	# --- dismiss via ui_accept (keyboard Enter/Space share the action) ---
 	await _press_accept()
-	await _wait_frames(40)  # fade tween is 0.45s ~ 27+ frames
+	ok(await _wait_freed(parent), "splash freed after ui_accept")
 	ok(_count_splash(parent) == 0, "splash freed after ui_accept (got %d)" % _count_splash(parent))
 
 	# --- re-mount + dismiss via _dismiss (the click/tap path) ---
@@ -87,7 +99,7 @@ func _run() -> void:
 	ok(layer != null, "splash re-mounted for click test")
 	if layer != null:
 		layer._dismiss()
-		await _wait_frames(40)
+		ok(await _wait_freed(parent), "splash freed (bounded wait)")
 		ok(_count_splash(parent) == 0, "splash freed after _dismiss (click/tap path)")
 
 	# --- joypad A: wired to ui_accept via SplashScreen's own binding ---
@@ -109,7 +121,7 @@ func _run() -> void:
 	ev2.button_index = JOY_BUTTON_A
 	ev2.pressed = false
 	Input.parse_input_event(ev2)
-	await _wait_frames(40)
+	ok(await _wait_freed(parent), "splash freed (bounded wait)")
 	ok(_count_splash(parent) == 0, "splash freed after joypad A (got %d)" % _count_splash(parent))
 
 	_finish()

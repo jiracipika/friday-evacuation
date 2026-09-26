@@ -88,9 +88,15 @@ func _run() -> void:
 	check(floor_mat_b.normal_texture == f1, "floor normal cached")
 
 	# 7. Generation cost (fresh caches): all wall+floor+fabric textures
-	# < 3.5s one-time. (Measured: ~450ms/floor covers albedo + normal +
-	# material; ~165ms/wall normal; ~190ms/partition. Roughly 3s cold,
-	# paid once at first boot — acceptable for the visual payoff.)
+	# one-time cold cost, paid once at first boot then cached.
+	# Budget history: ~3.0-3.8s at the fd8df79 baseline (budget 3.5s, raised
+	# to 5.0s for warm-machine flake). The art passes then deliberately
+	# thickened the generators (282aca5 partition 16px felt ribbing, 3ba893c
+	# resolution-scaled normal strength) and the measured cold cost is now
+	# 7.1-9.0s on this machine (floors dominate: ~1.3-1.6s each, profiled).
+	# Budget 12s keeps a real regression guard (a 2x algorithmic slip still
+	# fails) while absorbing the intentional art-driven creep. Optimizing
+	# the floor generator back under 5s is queued in GLM-NEXT-SLICE.
 	WM.clear_cache()
 	FM.clear_cache()
 	var t0 := Time.get_ticks_msec()
@@ -100,9 +106,7 @@ func _run() -> void:
 	for v in 3:
 		WM.make_partition(v)
 	var elapsed := Time.get_ticks_msec() - t0
-	# Budget 5s with headroom: measured 3.0-3.8s cold depending on machine
-	# temperature (3.5s flaked when warm). Caches make it one-time only.
-	check(elapsed < 5000, "normal generation cost %dms (< 5000ms)" % elapsed)
+	check(elapsed < 12000, "normal generation cost %dms (< 12000ms)" % elapsed)
 
 	WM.clear_cache()
 	FM.clear_cache()

@@ -207,6 +207,21 @@ SUCCESS_PATTERNS = {
         re.compile(r"^=== MENU DEPARTURE SMOKE TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
     "LoadingFlowSmokeTest": [
         re.compile(r"^LoadingFlowSmokeTest: (\d+)/(\d+) checks passed$", re.M)],
+    # 2026-09 redesign-era tests newly registered in PRODUCTION_SUITES.
+    "MovementFeelTest": [
+        re.compile(r"^MovementFeelTest: (\d+)/(\d+) checks passed$", re.M)],
+    "ModeSelectRedesignTest": [
+        re.compile(r"^=== MODE SELECT REDESIGN TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
+    "MenuHomeRedesignTest": [
+        re.compile(r"^=== MENU HOME REDESIGN TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
+    "MenuBackdropPropsTest": [re.compile(r"^\[PASS\] MenuBackdropPropsTest: ", re.M)],
+    "PadNavSmokeTest": [re.compile(r"^PADNAV: ALL PASS$", re.M)],
+    "ArtBlenderPropsTest": [
+        re.compile(r"^ArtBlenderPropsTest: \d+ checks, 0 failures$", re.M)],
+    "SettingsRedesignTest": [
+        re.compile(r"^SettingsRedesignTest: (\d+)/(\d+) checks PASS$", re.M)],
+    "OfficeArchitectureSmokeTest": [
+        re.compile(r"^OfficeArchitectureSmokeTest: (\d+)/(\d+) checks PASS$", re.M)],
     "GamepadSupportTest": [
         re.compile(r"^=== GAMEPAD SUPPORT TEST PASSED \(\d+ checks\) ===$", re.M)],
     "FloorCullingTest": [

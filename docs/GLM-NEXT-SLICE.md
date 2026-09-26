@@ -94,3 +94,18 @@ temporarily). Commit + push only after the ladder is green.
 - Do not touch pitch-therapy/pitchforge (excluded project).
 - Real-device QA (Android/iPhone touch feel) needs the user's hardware.
 - Two-machine LAN QA same.
+
+## Queued (2026-09-26 session): texture-generation cost creep
+
+The cold-boot normal/albedo generation measured ~3.0-3.8s at the fd8df79
+baseline and now measures 7.1-9.0s (NormalMapSmokeTest budget raised
+5s -> 12s with the history in its comments; caches make it one-time).
+Profile on this machine: FloorMaterials.make ~1.3-1.6s PER FLOOR
+(4 floors), WallMaterials.make_partition ~600-680ms (3 variants),
+wall_normal ~250-490ms. The creep came from intentional art changes
+(282aca5 partition 16px felt ribbing, 3ba893c resolution-scaled normal
+strength) multiplying per-pixel set_height() traffic. Suggested win:
+regenerate floors via the NormalMapGen set_height fast path only for
+non-flat pixels (pre-fill + skip flat), or halve floor texture
+resolution with uv1_scale compensation. Target: back under 5s total
+without changing rendered pixels.
