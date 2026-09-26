@@ -39,7 +39,14 @@ func _process(_delta: float) -> bool:
 		0: # menu just created — verify paused state and panel
 			_check(current.get_node_or_null("PauseMenu") is CanvasLayer, "%s: pause menu added" % current.name)
 			_check(paused, "%s: tree paused while menu open" % current.name)
-			_check(menu.get_node_or_null("PauseRoot/PausePanel") is Control, "%s: pause panel exists" % current.name)
+			# S-F: panel now lives under PauseRoot/PauseCenter/PausePanel
+			# (CenterContainer centering; CanvasLayer children have no
+			# sized parent, PRESET_CENTER drifts).
+			var panel: Control = menu.get_node_or_null("PauseRoot/PauseCenter/PausePanel")
+			_check(panel is Control, "%s: pause panel exists" % current.name)
+			if panel is Control:
+				_check(panel.find_child("TapeStrip*", true, false) != null,
+					"%s: hazard-tape header present" % current.name)
 			menu._open_settings()
 			stage = 1
 		1: # settings overlay open

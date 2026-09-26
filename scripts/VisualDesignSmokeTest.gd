@@ -26,6 +26,20 @@ func _init() -> void:
 		failures.append("primary button typography too small")
 	button.free()
 
+	# S-F primitives: TapeStrip draws the yellow ground, MeterBar clamps
+	# fill and honors the reference tick.
+	var tape = UIThemeScript.TapeStrip.new()
+	tape.size = Vector2(200, 10)
+	tape._draw()
+	var meter = UIThemeScript.MeterBar.new()
+	meter.size = Vector2(170, 8)
+	meter.maximum = 10.0
+	meter.tick = 6.0
+	meter.value = 25.0  # clamps fill to full width, must not throw
+	if meter.value != 25.0:
+		failures.append("meter value setter lost assignment")
+	meter._draw()
+
 	if failures.is_empty():
 		print("[PASS] Friday visual system: 8-character roster + shared UI theme")
 		quit(0)

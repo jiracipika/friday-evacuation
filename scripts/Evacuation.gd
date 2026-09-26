@@ -2067,11 +2067,89 @@ func _style_results_panel() -> void:
 		results_panel.add_theme_stylebox_override("panel", UIT.panel_style(UIT.color(UIT.ORANGE), true))
 	var vbox = results_panel.get_node_or_null("VBox")
 	if vbox:
+		vbox.add_theme_constant_override("separation", 10)
+		# S-F tape strip + header row (spec section 7: tape header, stamp).
+		if UIT and not vbox.has_node("TapeStrip"):
+			var tape: Control = UIT.TapeStrip.new()
+			tape.name = "TapeStrip"
+			tape.custom_minimum_size = Vector2(0, 10)
+			vbox.add_child(tape)
+			vbox.move_child(tape, 0)
+		if not vbox.has_node("HeaderRow"):
+			var header := HBoxContainer.new()
+			header.name = "HeaderRow"
+			vbox.add_child(header)
+			vbox.move_child(header, 1)
+			var head_label := Label.new()
+			head_label.text = "RESULTS"
+			head_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			head_label.add_theme_font_size_override("font_size", 22)
+			head_label.add_theme_color_override("font_color", UIT.color(UIT.TEXT))
+			header.add_child(head_label)
+			# FORM EX-02 stamp: red border chip, tilted (R1: red = stamps).
+			var stamp := PanelContainer.new()
+			stamp.name = "FormStamp"
+			var stamp_style := StyleBoxFlat.new()
+			stamp_style.bg_color = Color(0, 0, 0, 0)
+			stamp_style.set_border_width_all(2)
+			stamp_style.border_color = UIT.color(UIT.RED)
+			stamp_style.set_corner_radius_all(4)
+			stamp_style.content_margin_left = 6.0
+			stamp_style.content_margin_right = 6.0
+			stamp_style.content_margin_top = 2.0
+			stamp_style.content_margin_bottom = 2.0
+			stamp.add_theme_stylebox_override("panel", stamp_style)
+			stamp.rotation_degrees = -6.0
+			var stamp_label := Label.new()
+			stamp_label.text = "FORM EX-02"
+			stamp_label.add_theme_font_size_override("font_size", 10)
+			stamp_label.add_theme_color_override("font_color", UIT.color(UIT.RED))
+			stamp.add_child(stamp_label)
+			header.add_child(stamp)
+		# S-F honest stats grid (spec R5: meter + reference tick).
+		if not vbox.has_node("StatsGrid"):
+			var grid := GridContainer.new()
+			grid.name = "StatsGrid"
+			grid.columns = 2
+			grid.add_theme_constant_override("h_separation", 14)
+			grid.add_theme_constant_override("v_separation", 8)
+			vbox.add_child(grid)
+			vbox.move_child(grid, vbox.get_node_or_null("WinnerLabel").get_index() + 1)
+			for spec in [["TOP SPEED", "TopSpeed"], ["TRAPS HIT", "Traps"], ["TIME", "Time"]]:
+				var name_label := Label.new()
+				name_label.text = spec[0]
+				name_label.add_theme_font_size_override("font_size", 13)
+				name_label.add_theme_color_override("font_color", UIT.color(UIT.TEXT_FAIR))
+				grid.add_child(name_label)
+				var row := HBoxContainer.new()
+				row.name = "%sRow" % spec[1]
+				row.add_theme_constant_override("separation", 8)
+				grid.add_child(row)
+				if spec[1] == "TopSpeed":
+					var meter: Control = UIT.MeterBar.new()
+					meter.name = "TopSpeedMeter"
+					meter.custom_minimum_size = Vector2(170, 8)
+					meter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+					meter.maximum = 15.0
+					row.add_child(meter)
+				var value := Label.new()
+				value.name = "%sValue" % spec[1]
+				value.text = "—"
+				value.add_theme_font_size_override("font_size", 13)
+				value.add_theme_color_override("font_color", UIT.color(UIT.TEXT))
+				row.add_child(value)
+		# S-F record pills (LIME per spec).
+		if not vbox.has_node("PillRow"):
+			var pills := HBoxContainer.new()
+			pills.name = "PillRow"
+			pills.alignment = BoxContainer.ALIGNMENT_CENTER
+			pills.add_theme_constant_override("separation", 8)
+			vbox.add_child(pills)
+			vbox.move_child(pills, vbox.get_node_or_null("StatsGrid").get_index() + 1)
 		var winner = vbox.get_node_or_null("WinnerLabel")
 		if winner:
-			winner.add_theme_color_override("font_color", UIT.color("F2C66D") if UIT else Color("F2C66D"))
-			winner.add_theme_color_override("font_outline_color", UIT.color(UIT.BG) if UIT else Color("0A0A0F"))
-			winner.add_theme_constant_override("outline_size", 4)
+			winner.add_theme_color_override("font_color", UIT.color(UIT.TEXT))
+			winner.add_theme_font_size_override("font_size", 26)
 		var rematch = vbox.get_node_or_null("RematchButton")
 		if rematch and UIT:
 			UIT.apply_primary(rematch)
@@ -2080,7 +2158,9 @@ func _style_results_panel() -> void:
 			UIT.apply_secondary(menu, UIT.color(UIT.VIOLET))
 		var stats = vbox.get_node_or_null("StatsLabel")
 		if stats:
-			stats.add_theme_color_override("font_color", UIT.color(UIT.TEXT) if UIT else Color.WHITE)
+			# StatsLabel survives as the muted modifiers caption only.
+			stats.add_theme_color_override("font_color", UIT.color(UIT.TEXT_FAIR))
+			stats.add_theme_font_size_override("font_size", 11)
 	# Responsive: clamp panel to 92% of the visible rect every resize.
 	_clamp_results_panel()
 	results_panel.resized.connect(_clamp_results_panel)
@@ -2107,6 +2187,10 @@ func _end_race() -> void:
 	if local_player:
 		local_player.set_can_move(false)
 
+	# S-F: hoisted so the results populate block can use them even when
+	# StatsManager is absent (meter tick hidden, no pills from records).
+	var prev_top_speed := -1.0
+	var prev_races_valid := false
 	var stats = get_node_or_null("/root/StatsManager")
 	if stats:
 		var won := false
@@ -2115,6 +2199,8 @@ func _end_race() -> void:
 		var prev_best: float = stats.top_speed_ever
 		var prev_races: int = stats.total_races
 		var prev_wins: int = stats.races_won
+		prev_top_speed = prev_best
+		prev_races_valid = prev_races > 0
 		stats.record_race(won, top_speed, 0)
 		new_personal_best = top_speed > prev_best and prev_races > 0
 		# Phase 8A: celebrate skins that this win count just unlocked.
@@ -2134,12 +2220,34 @@ func _end_race() -> void:
 					winner_label.text = "%s WINS!" % winner.name
 				else:
 					winner_label.text = "NO WINNER"
-			if stats_label:
-				stats_label.text = "TOP SPEED: %d km/h\nTRAPS HIT: %d" % [int(top_speed), traps_hit]
+			# S-F honest stats grid + record pills.
+			var meter = vbox.get_node_or_null("StatsGrid/TopSpeedRow/TopSpeedMeter")
+			var speed_value = vbox.get_node_or_null("StatsGrid/TopSpeedRow/TopSpeedValue")
+			if meter:
+				meter.value = top_speed
+				# Reference tick: previous personal best (hidden on the
+				# very first race — nothing to compare against yet).
+				meter.tick = prev_top_speed if prev_races_valid else -1.0
+			if speed_value:
+				speed_value.text = "%d km/h" % int(top_speed)
+			var traps_value = vbox.get_node_or_null("StatsGrid/TrapsRow/TrapsValue")
+			if traps_value:
+				traps_value.text = str(traps_hit)
+			var time_value = vbox.get_node_or_null("StatsGrid/TimeRow/TimeValue")
+			if time_value:
+				if finish_order.size() > 0 and finish_order[0].has("time"):
+					time_value.text = "%.1fs" % float(finish_order[0].time)
+				else:
+					time_value.text = "—"
+			var pill_row = vbox.get_node_or_null("PillRow")
+			if pill_row:
+				for child in pill_row.get_children():
+					child.queue_free()
+				var UIT = load("res://scripts/UITheme.gd")
 				if new_personal_best:
-					stats_label.text += "\n★ NEW TOP-SPEED RECORD ★"
+					pill_row.add_child(_record_pill("★ NEW TOP-SPEED RECORD", UIT))
 				if skin_unlock_names.size() > 0:
-					stats_label.text += "\n◆ NEW CHAIR UNLOCKED: %s — pick it in the menu" % ", ".join(skin_unlock_names)
+					pill_row.add_child(_record_pill("◆ NEW CHAIR: %s" % ", ".join(skin_unlock_names), UIT))
 			# Show active modifiers on the results screen for clarity
 			if sp_modifiers:
 				var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
@@ -2147,7 +2255,9 @@ func _end_race() -> void:
 				for mod in RaceModifiersScript.selected:
 					names.append(RaceModifiersScript.LABELS[mod].split(" — ")[0])
 				if names.size() > 0 and stats_label:
-					stats_label.text += "\nMODIFIERS: " + ", ".join(names)
+					stats_label.text = "MODIFIERS: " + ", ".join(names)
+				elif stats_label:
+					stats_label.text = ""
 
 	# REVIEW FIX: was has_method("confetti_burst") — the function is
 	# `confetti(parent, pos)`, so finish-line confetti never fired.
@@ -2163,6 +2273,24 @@ func _end_race() -> void:
 			pb_a11y.caption("NEW TOP-SPEED RECORD!", 1.5)
 	if skin_unlock_names.size() > 0:
 		_announce_skin_unlocks(skin_unlock_names)
+
+## S-F: LIME record pill (spec section 7 "record pills (LIME)").
+func _record_pill(text: String, UIT) -> PanelContainer:
+	var pill := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(UIT.color(UIT.LIME), 0.16)
+	style.set_corner_radius_all(9)
+	style.content_margin_left = 10.0
+	style.content_margin_right = 10.0
+	style.content_margin_top = 3.0
+	style.content_margin_bottom = 3.0
+	pill.add_theme_stylebox_override("panel", style)
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", UIT.color(UIT.LIME))
+	pill.add_child(label)
+	return pill
 
 ## Phase 8A: caption + announcer hype for fresh chair unlocks.
 func _announce_skin_unlocks(names: Array[String]) -> void:

@@ -112,7 +112,7 @@ func _ready() -> void:
 	panel.add_child(box)
 
 	# S-E hazard-tape strip: the panel's single tape use (spec R7).
-	var tape := TapeStrip.new()
+	var tape: Control = UI_THEME.TapeStrip.new()
 	tape.name = "TapeStrip"
 	tape.custom_minimum_size = Vector2(0, 12)
 	box.add_child(tape)
@@ -388,24 +388,6 @@ func _agree() -> void:
 	get_tree().paused = false
 	Input.mouse_mode = _prev_mouse_mode
 	queue_free()
-
-## Hazard-tape band: yellow 45deg stripes on near-black, drawn (spec R2:
-## no emoji/bitmaps — vector), one use per screen max (R7).
-class TapeStrip extends Control:
-	const YELLOW := Color("f2c230")
-	const GROUND := Color("191411")
-	func _draw() -> void:
-		draw_rect(Rect2(Vector2.ZERO, size), GROUND)
-		var slope := size.y * 1.4
-		var period := slope * 2.0
-		var x := 0.0
-		while x < size.x + period:
-			var poly := PackedVector2Array([
-				Vector2(x - slope, size.y), Vector2(x, 0.0),
-				Vector2(x + slope * 0.7, 0.0), Vector2(x + slope * 0.7 - slope, size.y),
-			])
-			draw_polygon(poly, [YELLOW])
-			x += period
 
 ## 46px circle icon frame with a drawn pictogram (spec R2).
 class PictoIcon extends Control:

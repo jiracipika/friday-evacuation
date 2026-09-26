@@ -190,3 +190,51 @@ static func apply_utility(button: Button, accent: Color = color(CYAN)) -> void:
 	apply_focus(button)
 	button.add_theme_color_override("font_color", color(TEXT, 0.82))
 	button.add_theme_color_override("font_hover_color", color(TEXT))
+
+## S-E/S-F hazard-tape band: yellow 45deg stripes on near-black, drawn
+## (spec R2: vector, no bitmaps/emoji). One use per screen max (R7).
+class TapeStrip extends Control:
+	const YELLOW := Color("f2c230")
+	const GROUND := Color("191411")
+	func _draw() -> void:
+		draw_rect(Rect2(Vector2.ZERO, size), GROUND)
+		var slope := size.y * 1.4
+		var period := slope * 2.0
+		var x := 0.0
+		while x < size.x + period:
+			var poly := PackedVector2Array([
+				Vector2(x - slope, size.y), Vector2(x, 0.0),
+				Vector2(x + slope * 0.7, 0.0), Vector2(x + slope * 0.7 - slope, size.y),
+			])
+			draw_polygon(poly, [YELLOW])
+			x += period
+
+## S-F honest meter (spec R5): track + fill + baseline tick. Fill width is
+## value/max clamped; the tick marks a reference (e.g. previous best) at
+## tick/max. Debuff styling is the caller's job (dashed coral not drawn here).
+class MeterBar extends Control:
+	# Inner classes cannot reach outer-class statics/constants, and a
+	# class_name self-reference breaks raw SceneTree compiles — literals
+	# duplicated here on purpose (keep in sync with SURFACE_HOVER/ORANGE/
+	# TEXT). Track is SURFACE_HOVER: the panel bg is SURFACE_RAISED, and
+	# the original SURFACE track rendered invisible against it.
+	const TRACK := Color("25253a")
+	const FILL := Color("ff9a1a")
+	const TICK := Color("f7f6f2")
+	var value := 0.0: set = _set_value
+	var maximum := 1.0
+	var tick := -1.0  # <0 hides the reference tick
+	func _set_value(v: float) -> void:
+		value = v
+		queue_redraw()
+	func _draw() -> void:
+		var track := Rect2(Vector2.ZERO, size)
+		draw_rect(track, TRACK)
+		var frac := 0.0
+		if maximum > 0.0:
+			frac = clampf(value / maximum, 0.0, 1.0)
+		if frac > 0.0:
+			draw_rect(Rect2(Vector2.ZERO, Vector2(size.x * frac, size.y)), FILL)
+		if tick >= 0.0 and maximum > 0.0:
+			var tx := size.x * clampf(tick / maximum, 0.0, 1.0)
+			draw_rect(Rect2(Vector2(tx - 1.0, 0.0), Vector2(2.0, size.y)), TICK)

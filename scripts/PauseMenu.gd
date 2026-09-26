@@ -46,29 +46,42 @@ func _build_ui() -> void:
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(backdrop)
 
+	# S-F: a CanvasLayer child has no sized parent, so PRESET_CENTER
+	# centering drifts as the panel's min size grows — a full-rect
+	# CenterContainer is the reliable pattern (same fix as PreMatchModal).
+	var center := CenterContainer.new()
+	center.name = "PauseCenter"
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_root.add_child(center)
+
 	_panel = PanelContainer.new()
 	_panel.name = "PausePanel"
 	_panel.custom_minimum_size = Vector2(420, 0)
-	_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	var style := UI_THEME.panel_style(UI_THEME.color(UI_THEME.ORANGE), true)
 	style.border_color = UI_THEME.color(UI_THEME.ORANGE)
 	style.set_corner_radius_all(16)
 	style.content_margin_left = 28.0
 	style.content_margin_right = 28.0
-	style.content_margin_top = 24.0
+	style.content_margin_top = 0.0
 	style.content_margin_bottom = 24.0
 	_panel.add_theme_stylebox_override("panel", style)
-	_root.add_child(_panel)
+	center.add_child(_panel)
 
 	var box = VBoxContainer.new()
 	box.add_theme_constant_override("separation", 16)
 	_panel.add_child(box)
 
+	# S-F: hazard-tape header strip (drawn vector, R7 single use).
+	var tape: Control = UI_THEME.TapeStrip.new()
+	tape.name = "TapeStrip"
+	tape.custom_minimum_size = Vector2(0, 10)
+	box.add_child(tape)
+
 	var title = Label.new()
 	title.text = "PAUSED"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 36)
-	title.add_theme_color_override("font_color", ACCENT)
+	title.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT))
 	box.add_child(title)
 
 	var hint = Label.new()
