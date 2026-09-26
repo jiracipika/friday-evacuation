@@ -35,6 +35,11 @@ jobs:
     outputs:
       build: ${{ steps.decide.outputs.build }}
     steps:
+      - name: Checkout history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Decide whether this push is a checkpoint
         id: decide
         env:
@@ -47,12 +52,8 @@ jobs:
             echo "manual dispatch -> build"
             exit 0
           fi
-          # Shallow clone is enough: `git log` over the pushed range
-          # needs only the new commits. Branch creation (zero BEFORE) or
-          # a force-push without a resolvable range always builds.
-          git init -q .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
-          git fetch -q --depth=64 origin "$SHA"
+          # Branch creation (zero BEFORE) or an unresolvable range always
+          # builds; otherwise scan every pushed commit subject.
           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
             echo "build=true" >> "$GITHUB_OUTPUT"
             echo "new/unknown range -> build"
