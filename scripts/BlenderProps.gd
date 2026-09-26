@@ -58,5 +58,8 @@ static func wall_clock() -> String:
 static func crate() -> String:
 	return "res://models/crate.glb"
 
+static func box_stack() -> String:
+	return "res://models/box_stack.glb"
+
 static func clear_cache() -> void:
 	_cache.clear()

@@ -18,6 +18,7 @@ func _run() -> void:
 	check(props.get_model(props.desk_printer()) != null, "desk printer glb loads")
 	check(props.get_model(props.wall_clock()) != null, "wall clock glb loads")
 	check(props.get_model(props.crate()) != null, "crate glb loads")
+	check(props.get_model(props.box_stack()) != null, "box stack glb loads")
 	var root_node := Node3D.new()
 	root.add_child(root_node)
 	for packed: PackedScene in [vending, cooler]:

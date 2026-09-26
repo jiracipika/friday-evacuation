@@ -36,6 +36,16 @@ func _run() -> void:
 	var areas: Array = []
 	evac.get_tree() == null  # noop
 	_collect(evac, static_bodies, areas)
+	# World-density parity: count Blender dressing per floor (y/6).
+	var blender_per_floor := [0, 0, 0, 0]
+	var stack := [evac]
+	while not stack.is_empty():
+		var node = stack.pop_back()
+		for child in node.get_children():
+			stack.append(child)
+		if node.scene_file_path != null and str(node.scene_file_path).begins_with("res://models/"):
+			var fi := clampi(int(node.global_position.y / 6.0), 0, 3)
+			blender_per_floor[fi] += 1
 
 	var has_partition := false
 	var has_plant := false
@@ -70,6 +80,10 @@ func _run() -> void:
 	check(has_crate, "floor 3 crates present")
 	check(has_round_table, "floor 4 round tables present")
 	check(has_car, "floor 4 parked cars present")
+	check(blender_per_floor[0] >= 4, "floor 1 blender dressing present (%d)" % blender_per_floor[0])
+	check(blender_per_floor[1] >= 5, "floor 2 blender dressing parity (%d)" % blender_per_floor[1])
+	check(blender_per_floor[2] >= 3, "floor 3 box stacks on walkways (%d)" % blender_per_floor[2])
+	check(blender_per_floor[3] >= 5, "floor 4 dressing parity — plants/printers/stacks (%d)" % blender_per_floor[3])
 
 	# --- 2. Floor 3 gaps: no full 40x40 slab at y=12 --------------------
 	var full_slab_at_12 := false

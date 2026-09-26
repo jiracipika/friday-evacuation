@@ -592,6 +592,10 @@ func _theme_floor2_open_office() -> void:
 	var BlenderProps: GDScript = load("res://scripts/BlenderProps.gd")
 	for vm_pos in [Vector3(-17, y, -17), Vector3(17, y, 17)]:
 		BlenderProps.spawn(self, BlenderProps.vending_machine(), vm_pos, PI * 0.25)
+	# World-density pass: potted plants flank the opposite corners, reading
+	# against the dusk window bands (non-colliding — chairs pass freely).
+	for plant_pos in [Vector3(-17, y, 17), Vector3(17, y, -17)]:
+		BlenderProps.spawn(self, BlenderProps.potted_plant(), plant_pos, PI * 0.25)
 	# Wall clock pinned at 5:00 on the north wall — the whole game's reason
 	# to race, readable from the conference tables.
 	BlenderProps.spawn(self, BlenderProps.wall_clock(), Vector3(0, y + 3.6, -19.7), 0.0)
@@ -642,6 +646,17 @@ func _make_surface_zone(friction_mult: float, zone_size: Vector3, tint_color: Co
 ## concrete landings, warning stripes, and crates as obstacles.
 func _theme_floor3_stairwell() -> void:
 	var y := 12.0
+	# World-density pass: cardboard stacks on the perimeter walkways, kept
+	# inside the landing rects (x within 40x5 strips => |z| in [15.5,19.5])
+	# and clear of the stripe/elevator sightlines. Non-colliding dressing.
+	var BlenderProps: GDScript = load("res://scripts/BlenderProps.gd")
+	if BlenderProps:
+		for stack_spec in [
+			{"pos": Vector3(-14, y, 17.6), "rot": 0.3},
+			{"pos": Vector3(10, y, -17.6), "rot": -0.25},
+			{"pos": Vector3(17.6, y, -8), "rot": 1.35},
+		]:
+			BlenderProps.spawn(self, BlenderProps.box_stack(), stack_spec["pos"], stack_spec["rot"])
 	for slab in _floor3_landing_layout():
 		var landing := StaticBody3D.new()
 		landing.position = Vector3(slab["x"], y, slab["z"])
@@ -782,6 +797,20 @@ func _theme_floor4_cafeteria_and_lot() -> void:
 		car.position = car_spec["pos"]
 		car.rotation.y = car_spec["rot"]
 		add_child(car)
+	# World-density pass (dressing parity with floor 1): corner plants
+	# against the dusk bands, printers as cafeteria sideboard clutter,
+	# and cardboard stacks flanking the lot entrance. All non-colliding.
+	var blender: GDScript = load("res://scripts/BlenderProps.gd")
+	if blender:
+		for plant_pos in [Vector3(-13.5, y, -13.5), Vector3(13.5, y, -13.5)]:
+			blender.spawn(self, blender.potted_plant(), plant_pos, PI * 0.25)
+		for printer_pos in [Vector3(-9, y, -9.4), Vector3(9, y, 9.4)]:
+			blender.spawn(self, blender.desk_printer(), printer_pos, PI)
+		for stack_spec in [
+			{"pos": Vector3(-6, y, 12), "rot": 0.15},
+			{"pos": Vector3(6, y, 12), "rot": -0.2},
+		]:
+			blender.spawn(self, blender.box_stack(), stack_spec["pos"], stack_spec["rot"])
 
 func _make_round_table() -> StaticBody3D:
 	var table := StaticBody3D.new()
@@ -1436,14 +1465,42 @@ func _tick_light_flicker(delta: float) -> void:
 	var lens: MeshInstance3D = target.get_child(0)
 	var mat: StandardMaterial3D = lens.material_override.duplicate()
 	lens.material_override = mat
+	# Matched light pulse: the troffer's own grid OmniLight sits at the
+	# same (x,z) one row below the panel — dim it with the same rhythm.
+	# Reuses an existing light, so the nine-light floor budget holds
+	# (ArtLightingTest) and floor culling keeps everything grouped.
+	var sibling_light: OmniLight3D = null
+	var group: Node = target.get_parent()
+	if group:
+		var panel_xz := Vector2(target.position.x, target.position.z)
+		for candidate in group.find_children("*", "OmniLight3D", true, false):
+			var light_pos := Vector2(candidate.position.x, candidate.position.z)
+			if light_pos.distance_to(panel_xz) < 0.5:
+				sibling_light = candidate
+				break
+	var base_energy := 1.25
+	if sibling_light:
+		base_energy = sibling_light.light_energy
 	var tw := create_tween()
 	tw.tween_callback(func(): mat.emission_energy_multiplier = 0.15)
+	tw.tween_callback(func():
+		if sibling_light and is_instance_valid(sibling_light):
+			sibling_light.light_energy = 0.1)
 	tw.tween_interval(randf_range(0.04, 0.12))
 	tw.tween_callback(func(): mat.emission_energy_multiplier = 1.4)
+	tw.tween_callback(func():
+		if sibling_light and is_instance_valid(sibling_light):
+			sibling_light.light_energy = base_energy)
 	tw.tween_interval(randf_range(0.03, 0.09))
 	tw.tween_callback(func(): mat.emission_energy_multiplier = 0.3)
+	tw.tween_callback(func():
+		if sibling_light and is_instance_valid(sibling_light):
+			sibling_light.light_energy = 0.2)
 	tw.tween_interval(0.05)
 	tw.tween_callback(func(): mat.emission_energy_multiplier = 1.4)
+	tw.tween_callback(func():
+		if sibling_light and is_instance_valid(sibling_light):
+			sibling_light.light_energy = base_energy)
 
 ## Drop-ceiling grid: dark T-bar panels between light fixtures.
 ## Bars cast NO shadows — thin geometry at ceiling height smears long
