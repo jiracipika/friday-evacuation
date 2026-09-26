@@ -43,9 +43,44 @@ func _run() -> void:
 	check(paused, "tree paused while modal is up")
 	var modal: Node = evc.get_node_or_null("PreMatchModal")
 	check(modal != null, "modal mounted in Evacuation")
+	var legacy_hud: CanvasLayer = null
 	if modal:
-		check(modal.agree_button != null and modal.agree_button.text.begins_with("I AGREE"),
-			"agree button present with I AGREE text")
+		check(modal.agree_button != null and modal.agree_button.text.begins_with("CLOCK OUT"),
+			"agree button present with CLOCK OUT text")
+		# --- S-E structure (FINAL-SPEC section 6 / board f4-howto) ---------
+		check(modal.find_child("TapeStrip", true, false) != null,
+			"hazard-tape strip present")
+		check(modal.find_child("Scrim", true, false) != null
+			and absf(modal.find_child("Scrim", true, false).color.a - 0.8) < 0.01,
+			"scrim at spec alpha 0.8")
+		var meta: Label = modal.find_child("StepsMeta", true, false)
+		check(meta != null and meta.text == "3 STEPS",
+			"step-count meta derived from objective lines (got %s)"
+				% (meta.text if meta else "<none>"))
+		var cards := modal.find_children("StepCard*", "PanelContainer", true, false)
+		check(cards.size() == 3, "three step cards (got %d)" % cards.size())
+		var parsed_titles := []
+		for c in cards:
+			var labels: Array = c.find_children("*", "Label", true, false)
+			for l in labels:
+				if l.text == "DRIVE" or l.text == "CLIMB" or l.text == "ESCAPE":
+					parsed_titles.append(l.text)
+		check(parsed_titles == ["DRIVE", "CLIMB", "ESCAPE"],
+			"'TITLE — copy' lines parsed into card titles %s" % [parsed_titles])
+		var pictos := modal.find_children("Picto", "Control", true, false)
+		check(pictos.size() == 3, "drawn pictograms present (got %d)" % pictos.size())
+		var keycaps := modal.find_children("Keycap*", "PanelContainer", true, false)
+		var pad_chips := modal.find_children("PadChip*", "PanelContainer", true, false)
+		check(keycaps.size() >= 10, "keyboard keycap chips present (%d)" % keycaps.size())
+		check(pad_chips.size() == 7, "controller pad circles present (%d)" % pad_chips.size())
+		var hint: Label = modal.find_child("CtaHint", true, false)
+		check(hint != null and "SPACE" in hint.text, "CTA carries the SPACE / A hint")
+		# Spec: HUD timer hidden while the modal is up, restored on agree.
+		legacy_hud = evc.get_node_or_null("UI")
+		check(legacy_hud != null and not legacy_hud.visible,
+			"legacy HUD layer hidden while modal is up")
+		check(evc.hud_ext != null and not evc.hud_ext.visible,
+			"extended HUD layer hidden while modal is up")
 	# Countdown must NOT have started ticking (timer frozen while paused).
 	var ev_script: Node = evc
 	var timer_before: float = ev_script.timer
@@ -61,6 +96,8 @@ func _run() -> void:
 	await _agree_and_settle(evc)
 	check(not paused, "tree unpaused after I AGREE")
 	check(evc.get_node_or_null("PreMatchModal") == null, "modal freed after agree")
+	check(legacy_hud != null and legacy_hud.visible and evc.hud_ext.visible,
+		"HUD layers restored after agreement")
 	var timer_running_before: float = ev_script.timer
 	await create_timer(0.4).timeout
 	var timer_running_after: float = ev_script.timer
