@@ -89,24 +89,34 @@ func _run() -> void:
 
 	# 7. Generation cost (fresh caches): all wall+floor+fabric textures
 	# one-time cold cost, paid once at first boot then cached.
-	# Budget history: ~3.0-3.8s at the fd8df79 baseline (budget 3.5s, raised
-	# to 5.0s for warm-machine flake). The art passes then deliberately
-	# thickened the generators (282aca5 partition 16px felt ribbing, 3ba893c
-	# resolution-scaled normal strength) and the measured cold cost is now
-	# 7.1-9.0s on this machine (floors dominate: ~1.3-1.6s each, profiled).
-	# Budget 12s keeps a real regression guard (a 2x algorithmic slip still
-	# fails) while absorbing the intentional art-driven creep. Optimizing
-	# the floor generator back under 5s is queued in GLM-NEXT-SLICE.
+	# HISTORY: absolute budgets (3.5s -> 5s -> 12s) kept flaking because
+	# this Mac's thermal state swings wall-clock ~1.7x (measured same-code
+	# 7.3s cool vs 13.1s hot). The check is now a RATIO: generation time
+	# vs a bare-Sobel reference measured in THIS process. Thermal state
+	# scales both equally, so the ratio isolates algorithmic cost —
+	# exactly what must not regress (the art passes once crept 3x
+	# unnoticed; the 2026-09-26 rect-fill optimization took the same
+	# workload 11.4s -> 7.3s, ratio ~20x -> ~13x).
 	WM.clear_cache()
 	FM.clear_cache()
+	var NG: GDScript = load("res://scripts/NormalMapGen.gd")
 	var t0 := Time.get_ticks_msec()
+	var ref_a: PackedFloat32Array = NG.height_buffer(512, 512, 0.5)
+	NG.normal_texture(ref_a, 512, 512, 0.01)
+	var ref_b: PackedFloat32Array = NG.height_buffer(512, 256, 0.5)
+	NG.normal_texture(ref_b, 512, 256, 0.01)
+	var t_ref := maxi(Time.get_ticks_msec() - t0, 1)
+	t0 = Time.get_ticks_msec()
 	for f in 4:
 		WM.wall_normal(f)
 		FM.make(Color(0.2, 0.2, 0.25), f)
 	for v in 3:
 		WM.make_partition(v)
 	var elapsed := Time.get_ticks_msec() - t0
-	check(elapsed < 12000, "normal generation cost %dms (< 12000ms)" % elapsed)
+	var ratio := elapsed / float(t_ref)
+	check(ratio < 16.0,
+		"normal generation %.1fx bare-sobel reference (< 16.0x; %dms vs ref %dms)" % [ratio, elapsed, t_ref])
+	print("  (generation %dms, reference %dms — absolute value is thermal-noise, ratio is the contract)" % [elapsed, t_ref])
 
 	WM.clear_cache()
 	FM.clear_cache()

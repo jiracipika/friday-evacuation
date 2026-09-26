@@ -95,7 +95,22 @@ temporarily). Commit + push only after the ladder is green.
 - Real-device QA (Android/iPhone touch feel) needs the user's hardware.
 - Two-machine LAN QA same.
 
-## Queued (2026-09-26 session): texture-generation cost creep
+## DONE (2026-09-26 late session): texture-generation cost creep — OPTIMIZED
+
+The queued floor/partition generator optimization shipped: hoisted the
+per-pixel exp/pow lane term + 16-value tile hash out of FloorMaterials'
+albedo loop, replaced 262k per-pixel set_height calls with 24 fill_rect
+calls (floor grout) and ~43 (partition ribs/beats), and hoisted row
+bases in NormalMapGen.normal_texture. Output verified BYTE-IDENTICAL
+against pre-change reference buffers (albedo + floor normal + partition
+normal). Same-thermal-window A/B: full-suite generation 11.4s ->
+7.3s; the smoke test now asserts a THERMAL-ROBUST RATIO (generation vs
+in-process bare-Sobel reference, < 16x; shipped ratio ~11.5x, old code
+~20x) instead of absolute wall-clock. GOTCHA for future hoisting: do
+NOT park hoisted float factors in PackedFloat32Array — 32-bit rounding
+flipped final 8-bit texel quantization on 2 of 262k pixels; use plain
+Array (64-bit).
+
 
 The cold-boot normal/albedo generation measured ~3.0-3.8s at the fd8df79
 baseline and now measures 7.1-9.0s (NormalMapSmokeTest budget raised

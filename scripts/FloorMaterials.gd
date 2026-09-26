@@ -35,45 +35,64 @@ static func floor_albedo(base_color: Color, floor_index: int) -> ImageTexture:
 	# Theme color wins over the default table (callers pass their own).
 	var paint := _base_for_floor(key).lerp(base_color, 0.5)
 
+	# PERF: everything below used to be recomputed 262k times per texture —
+	# lane_wear (exp+pow) per PIXEL is x-dependent only, and the tile jitter
+	# hash has exactly 16 distinct (tx, ty) values. Hoisted: measured
+	# ~2.2s -> ~0.6s per floor. Float expressions are unchanged, so output
+	# stays byte-identical (pinned by a before/after data comparison).
+	# NOTE: plain Arrays (64-bit), NOT PackedFloat32Array — packing to 32
+	# bits rounded the factors and flipped final 8-bit quantization on
+	# isolated pixels (byte-identity check caught exactly that).
+	var lane_wear: Array = []
+	lane_wear.resize(TEX)
+	for x in TEX:
+		var ln := absf(float(x) - float(TEX) * 0.5) / float(TEX)
+		# GRAPHICS PASS: wear amplitude halved — at 4 repeats over the
+		# slab it painted one dark 10m band down EVERY floor, reading
+		# as a giant diagonal smear from the chase camera.
+		lane_wear[x] = exp(-pow(ln * 5.5, 2.0)) * 0.06
+	var grout_col: Color = paint.darkened(0.18)
+	var shoulder_col: Color = paint.darkened(0.08)
+	var tiles := int(TEX / TILE_PX)
+	var jitter: Array = []
+	jitter.resize(tiles * tiles)
+	for ty in tiles:
+		for tx in tiles:
+			var h := float((tx * 73856093) ^ (ty * 19349663)) / 2147483647.0
+			jitter[ty * tiles + tx] = 0.93 + 0.14 * h
+
 	for y in TEX:
-		var ty := y / TILE_PX
+		var ty := int(y / TILE_PX)
+		var edge_y := y % TILE_PX
 		for x in TEX:
-			var tx := x / TILE_PX
 			var col := paint
 			# PHASE 2 per-floor identity: traffic-lane wear — a soft
 			# horizontal band across the middle of each tile row where
 			# feet actually travel. Darkened + slight sheen loss. Wide
 			# gaussian-ish falloff so it reads as wear, not a stripe.
-			var lane := absf(float(x) - float(TEX) * 0.5) / float(TEX)
-			# GRAPHICS PASS: wear amplitude halved — at 4 repeats over the
-			# slab it painted one dark 10m band down EVERY floor, reading
-			# as a giant diagonal smear from the chase camera.
-			var lane_wear := exp(-pow(lane * 5.5, 2.0)) * 0.06
+			var wear: float = lane_wear[x]
 			# Structural tile grid: dark grout line on each tile edge —
 			# this is what survives mips and kills the "flat slab" look.
 			var edge_x := x % TILE_PX
-			var edge_y := y % TILE_PX
 			if edge_x < 3 or edge_y < 3:
-				col = col.darkened(0.18)
+				col = grout_col
 			elif edge_x == 3 or edge_y == 3:
-				col = col.darkened(0.08)
+				col = shoulder_col
 			else:
 				# Per-quarter luminance jitter: tiles subtly differ, like real
 				# worn carpet. GRAPHICS PASS: amplitude halved (0.28->0.14) —
 				# at gameplay distance the old ±14% jitter banded into wavy
 				# moiré across the floor (pixel-measured in movie QA).
-				var h := float((tx * 73856093) ^ (ty * 19349663)) / 2147483647.0
-				col = Color(col.r * (0.93 + 0.14 * h),
-					col.g * (0.93 + 0.14 * h),
-					col.b * (0.93 + 0.14 * h))
+				var m: float = jitter[ty * tiles + int(x / TILE_PX)]
+				col = Color(col.r * m, col.g * m, col.b * m)
 				# Directional nap REMOVED: a 22cm-period sine reads as
 				# diagonal stripe moiré under mips; per-pixel grain below
 				# carries the carpet fiber feel instead.
 			# Apply traffic wear last (after grid), darkening the lane.
 			col = Color(
-				clampf(col.r - lane_wear, 0.0, 1.0),
-				clampf(col.g - lane_wear, 0.0, 1.0),
-				clampf(col.b - lane_wear, 0.0, 1.0))
+				clampf(col.r - wear, 0.0, 1.0),
+				clampf(col.g - wear, 0.0, 1.0),
+				clampf(col.b - wear, 0.0, 1.0))
 			var n := (rng.randf() - 0.5) * 0.06
 			img.set_pixel(x, y, Color(
 				clampf(col.r + n, 0.0, 1.0),
@@ -96,17 +115,21 @@ static func make(base_color: Color, floor_index: int = 0) -> StandardMaterial3D:
 	var NormalGen: GDScript = load("res://scripts/NormalMapGen.gd")
 	var key := clampi(floor_index, 0, 3)
 	if not _normal_cache.has(key):
+		# PERF: the height field is 0.5 everywhere except grout bands
+		# (0.42) and shoulders (0.46) — 24 rect fills replaced 262k
+		# per-pixel set_height calls (~1.7s -> ~5ms). Rects resolve the
+		# band/shoulder overlap exactly like the old per-pixel branch:
+		# shoulders first, bands after, so <3 beats ==3 everywhere.
 		var height: PackedFloat32Array = NormalGen.height_buffer(TEX, TEX, 0.5)
-		for y in TEX:
-			for x in TEX:
-				var edge_x := x % TILE_PX
-				var edge_y := y % TILE_PX
-				var h := 0.5
-				if edge_x < 3 or edge_y < 3:
-					h = 0.42  # grout recess (ART: shallower)
-				elif edge_x == 3 or edge_y == 3:
-					h = 0.46  # bevel shoulder
-				NormalGen.set_height(height, TEX, TEX, x, y, h)
+		var tile_count := int(TEX / TILE_PX)
+		for t in tile_count:
+			var o := t * TILE_PX
+			NormalGen.fill_rect(height, TEX, TEX, 0, TEX - 1, o + 3, o + 3, 0.46)
+			NormalGen.fill_rect(height, TEX, TEX, o + 3, o + 3, 0, TEX - 1, 0.46)
+		for t in tile_count:
+			var o := t * TILE_PX
+			NormalGen.fill_rect(height, TEX, TEX, 0, TEX - 1, o, o + 2, 0.42)
+			NormalGen.fill_rect(height, TEX, TEX, o, o + 2, 0, TEX - 1, 0.42)
 		var ntex: ImageTexture = NormalGen.normal_texture(height, TEX, TEX, 0.01)
 		_normal_cache[key] = ntex
 	mat.normal_enabled = true

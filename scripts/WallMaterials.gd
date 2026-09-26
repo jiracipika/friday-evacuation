@@ -189,15 +189,19 @@ static func make_partition(variant: int = 0) -> StandardMaterial3D:
 	var NormalGen: GDScript = load("res://scripts/NormalMapGen.gd")
 	var key := 100 + clampi(variant, 0, 2)
 	if not _normal_cache.has(key):
+		# PERF: ribs (x%16<8 -> 0.54) and weave beats (y%24==0 -> 0.46)
+		# filled as rects — ~43 fill_rect calls replaced 131k per-pixel
+		# set_height calls. Beats stay AFTER ribs so a beat row overrides
+		# the rib value on its row, exactly like the old two ifs.
 		var height: PackedFloat32Array = NormalGen.height_buffer(TEX_W, TEX_H, 0.5)
-		for y in TEX_H:
-			for x in TEX_W:
-				var h := 0.5
-				if (x % 16) < 8:
-					h = 0.54  # broad felt rib
-				if y % 24 == 0:
-					h = 0.46  # weave beat
-				NormalGen.set_height(height, TEX_W, TEX_H, x, y, h)
+		var px := 0
+		while px < TEX_W:
+			NormalGen.fill_rect(height, TEX_W, TEX_H, px, mini(px + 7, TEX_W - 1), 0, TEX_H - 1, 0.54)
+			px += 16
+		var beat := 0
+		while beat < TEX_H:
+			NormalGen.fill_rect(height, TEX_W, TEX_H, 0, TEX_W - 1, beat, beat, 0.46)
+			beat += 24
 		var ntex: ImageTexture = NormalGen.normal_texture(height, TEX_W, TEX_H, 0.012)
 		_normal_cache[key] = ntex
 	mat.normal_enabled = true
