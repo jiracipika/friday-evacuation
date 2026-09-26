@@ -29,6 +29,63 @@ const UI_THEME = preload("res://scripts/UITheme.gd")
 
 const TIME_SCALE_LABELS := ["0.75x (SLOWER)", "1.0x (NORMAL)", "1.25x (FASTER)"]
 
+class MeterTrack extends Control:
+	## S-D slider fill: StyleBoxFlat grooves can't do partial fill and
+	## HSlider has none either, so each HSlider is wrapped in this Control
+	## which _draw()s the two-part track BEHIND the (transparent-groove)
+	## native slider. Wrapper is mouse-IGNORE: input passes to the child.
+	var slider: HSlider
+	var _bg := StyleBoxFlat.new()
+	var _fill_a := StyleBoxFlat.new()
+	var _fill_b := StyleBoxFlat.new()
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(0, 28)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_bg.bg_color = Color("262638")
+		_bg.set_corner_radius_all(3)
+		_fill_a.bg_color = Color("ff9a1a")  # ORANGE
+		_fill_a.set_corner_radius_all(3)
+		_fill_b.bg_color = Color("ffbd4a")  # ORANGE_BRIGHT
+		_fill_b.set_corner_radius_all(3)
+
+	func _ready() -> void:
+		slider.value_changed.connect(func(_v): queue_redraw())
+		slider.resized.connect(queue_redraw)
+
+	func track_rect() -> Rect2:
+		var h := 6.0
+		return Rect2(0.0, (size.y - h) * 0.5, size.x, h)
+
+	func get_fill_fraction() -> float:
+		if slider == null or slider.max_value <= slider.min_value:
+			return 0.0
+		return clampf((slider.value - slider.min_value) / (slider.max_value - slider.min_value), 0.0, 1.0)
+
+	func get_fill_width() -> float:
+		return get_fill_fraction() * track_rect().size.x
+
+	func _draw() -> void:
+		var track := track_rect()
+		draw_style_box(_bg, track)
+		var w := get_fill_width()
+		if w <= 0.0:
+			return
+		var split := w * 0.6  # cheap two-rect ORANGE -> ORANGE_BRIGHT gradient
+		draw_style_box(_fill_a, Rect2(track.position, Vector2(split, track.size.y)))
+		draw_style_box(_fill_b, Rect2(track.position + Vector2(split, 0.0), Vector2(w - split, track.size.y)))
+
+## S-D scroll fade: 6 stacked INK rects, alpha 0.0 (top) -> 0.9 (bottom).
+class ScrollFade extends Control:
+	const STEPS := 6
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var h := size.y / STEPS
+		for i in STEPS:
+			var a := 0.9 * float(i) / float(STEPS - 1)
+			draw_rect(Rect2(0.0, i * h, size.x, h), Color(0.137, 0.075, 0.012, a))  # INK
+
 ## Safe bool read for cfg values: GDScript's bool() CRASHES on String
 ## values ("Nonexistent 'bool' constructor") and a hand-edited cfg can
 ## hold "yes"/"no". Non-bool -> default.
@@ -53,9 +110,16 @@ func _build_ui() -> void:
 	add_child(backdrop)
 
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(520, 620)
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.position = Vector2(-260, -310)
+	# S-D portrait: below 560px the desktop 520px panel cannot fit, so it
+	# becomes a full-bleed sheet; the body scroll + row ellipsis absorb the
+	# remaining squeeze. Desktop keeps the centered 520x620 card.
+	if get_viewport_rect().size.x < 560.0:
+		panel.custom_minimum_size = Vector2(0, 620)
+		panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 12)
+	else:
+		panel.custom_minimum_size = Vector2(520, 620)
+		panel.set_anchors_preset(Control.PRESET_CENTER)
+		panel.position = Vector2(-260, -310)
 	add_child(panel)
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color("1c1c2e")
@@ -75,12 +139,21 @@ func _build_ui() -> void:
 	column.add_theme_constant_override("separation", 12)
 	panel.add_child(column)
 
+	# S-D header: title row carries the autosave indicator (LIME, tracked).
+	var title_row := HBoxContainer.new()
+	column.add_child(title_row)
 	var title = Label.new()
 	title.text = "SETTINGS"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.add_theme_font_size_override("font_size", 32)
 	title.add_theme_color_override("font_color", Color("ff9a1a"))
-	column.add_child(title)
+	title_row.add_child(title)
+	var autosave = Label.new()
+	autosave.name = "AutosaveLabel"
+	autosave.text = "● AUTOSAVED"
+	autosave.add_theme_font_size_override("font_size", 11)
+	autosave.add_theme_color_override("font_color", Color("b9f34a"))
+	title_row.add_child(autosave)
 
 	# Scrollable body: the input section (sensitivity + mouse + controller
 	# prefs) grew the panel past 720p, so rows live in a ScrollContainer
@@ -89,6 +162,13 @@ func _build_ui() -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	column.add_child(scroll)
+	# S-D scroll fade: 6-step INK gradient pinned to the bottom edge.
+	var scroll_fade := ScrollFade.new()
+	scroll_fade.name = "ScrollFade"
+	scroll_fade.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	scroll_fade.offset_top = -26.0
+	scroll_fade.z_index = 10
+	column.add_child(scroll_fade)
 	var box = VBoxContainer.new()
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 16)
@@ -98,18 +178,21 @@ func _build_ui() -> void:
 	quality_option = OptionButton.new()
 	quality_option.add_item("STANDARD")
 	quality_option.add_item("ENHANCED")
+	quality_option.clip_text = true
+	quality_option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	UI_THEME.style_option_button(quality_option)
 	_add_setting(box, "GRAPHICS QUALITY", quality_option)
 	quality_option.item_selected.connect(func(_index): _apply_settings())
 
 	box.add_child(UI_THEME.make_section_header("AUDIO"))
 	master_slider = _make_slider()
-	_add_setting(box, "MASTER VOLUME", master_slider)
+	_add_slider_setting(box, "MASTER VOLUME", master_slider)
 	master_slider.value_changed.connect(func(_value): _apply_settings())
 	music_slider = _make_slider()
-	_add_setting(box, "MUSIC VOLUME", music_slider)
+	_add_slider_setting(box, "MUSIC VOLUME", music_slider)
 	music_slider.value_changed.connect(func(_value): _apply_settings())
 	sfx_slider = _make_slider()
-	_add_setting(box, "SFX VOLUME", sfx_slider)
+	_add_slider_setting(box, "SFX VOLUME", sfx_slider)
 	sfx_slider.value_changed.connect(func(_value): _apply_settings())
 
 	box.add_child(UI_THEME.make_section_header("ACCESSIBILITY"))
@@ -117,47 +200,50 @@ func _build_ui() -> void:
 	shake_toggle.text = "ENABLE SCREEN SHAKE"
 	shake_toggle.button_pressed = _cfg_bool(config, "accessibility", "screen_shake", true)
 	UI_THEME.styled_checkbutton(shake_toggle)
-	box.add_child(shake_toggle)
+	_add_toggle_row(box, shake_toggle)
 	shake_toggle.toggled.connect(func(_value): _apply_settings())
 
 	flash_toggle = CheckButton.new()
 	flash_toggle.text = "ENABLE FLASH EFFECTS"
 	flash_toggle.button_pressed = _cfg_bool(config, "accessibility", "flash_effects", true)
 	UI_THEME.styled_checkbutton(flash_toggle)
-	box.add_child(flash_toggle)
+	_add_toggle_row(box, flash_toggle)
 	flash_toggle.toggled.connect(func(_value): _apply_settings())
 
 	ghost_toggle = CheckButton.new()
 	ghost_toggle.text = "SINGLE-PLAYER GHOST PACER"
 	ghost_toggle.button_pressed = _cfg_bool(config, "race", "ghost_enabled", true)
 	UI_THEME.styled_checkbutton(ghost_toggle)
-	box.add_child(ghost_toggle)
+	_add_toggle_row(box, ghost_toggle)
 	ghost_toggle.toggled.connect(func(_value): _apply_settings())
 
 	reduced_motion_toggle = CheckButton.new()
 	reduced_motion_toggle.text = "REDUCED MOTION"
 	reduced_motion_toggle.button_pressed = _cfg_bool(config, "accessibility", "reduced_motion", false)
 	UI_THEME.styled_checkbutton(reduced_motion_toggle)
-	box.add_child(reduced_motion_toggle)
+	_add_toggle_row(box, reduced_motion_toggle)
 	reduced_motion_toggle.toggled.connect(func(_value): _apply_settings())
 
 	high_contrast_toggle = CheckButton.new()
 	high_contrast_toggle.text = "HIGH CONTRAST HUD"
 	high_contrast_toggle.button_pressed = _cfg_bool(config, "accessibility", "high_contrast", false)
 	UI_THEME.styled_checkbutton(high_contrast_toggle)
-	box.add_child(high_contrast_toggle)
+	_add_toggle_row(box, high_contrast_toggle)
 	high_contrast_toggle.toggled.connect(func(_value): _apply_settings())
 
 	subtitles_toggle = CheckButton.new()
 	subtitles_toggle.text = "AUDIO CUE SUBTITLES"
 	subtitles_toggle.button_pressed = _cfg_bool(config, "accessibility", "subtitles", false)
 	UI_THEME.styled_checkbutton(subtitles_toggle)
-	box.add_child(subtitles_toggle)
+	_add_toggle_row(box, subtitles_toggle)
 	subtitles_toggle.toggled.connect(func(_value): _apply_settings())
 
 	time_scale_option = OptionButton.new()
 	for label in TIME_SCALE_LABELS:
 		time_scale_option.add_item(label)
+	time_scale_option.clip_text = true
+	time_scale_option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	UI_THEME.style_option_button(time_scale_option)
 	var saved_scale := float(config.get_value("accessibility", "time_scale", 1.0))
 	time_scale_option.selected = _time_scale_index(saved_scale)
 	_add_setting(box, "GAME SPEED (SINGLE PLAYER ONLY)", time_scale_option)
@@ -172,6 +258,9 @@ func _build_ui() -> void:
 	scheme_option.add_item("AUTO (FOLLOWS LAST DEVICE USED)")
 	scheme_option.add_item("KEYBOARD & MOUSE")
 	scheme_option.add_item("CONTROLLER")
+	scheme_option.clip_text = true
+	scheme_option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	UI_THEME.style_option_button(scheme_option)
 	var saved_scheme: String = String(config.get_value("input", "control_scheme", "auto"))
 	scheme_option.selected = 0 if saved_scheme == "auto" else (1 if saved_scheme == "keyboard_mouse" else 2)
 	_add_setting(box, "CONTROL SCHEME", scheme_option)
@@ -184,7 +273,7 @@ func _build_ui() -> void:
 	keyboard_sens_slider.custom_minimum_size = Vector2(0, 28)
 	keyboard_sens_slider.value = float(config.get_value("input", "keyboard_sensitivity", 0.35))
 	UI_THEME.styled_slider(keyboard_sens_slider)
-	_add_setting(box, "KEYBOARD SENSITIVITY (LOW = GENTLER STEERING)", keyboard_sens_slider)
+	_add_slider_setting(box, "KEYBOARD SENSITIVITY (LOW = GENTLER STEERING)", keyboard_sens_slider)
 
 	camera_sens_slider = HSlider.new()
 	camera_sens_slider.min_value = 0.25
@@ -193,43 +282,48 @@ func _build_ui() -> void:
 	camera_sens_slider.custom_minimum_size = Vector2(0, 28)
 	camera_sens_slider.value = float(config.get_value("input", "mouse_sensitivity", 0.8))
 	UI_THEME.styled_slider(camera_sens_slider)
-	_add_setting(box, "CAMERA SENSITIVITY (MOUSE + RIGHT STICK)", camera_sens_slider)
+	_add_slider_setting(box, "CAMERA SENSITIVITY (MOUSE + RIGHT STICK)", camera_sens_slider)
 
 	invert_toggle = CheckButton.new()
 	invert_toggle.text = "INVERT CAMERA PAN"
 	invert_toggle.button_pressed = bool(config.get_value("input", "invert_camera_x", false))
 	UI_THEME.styled_checkbutton(invert_toggle)
-	box.add_child(invert_toggle)
+	_add_toggle_row(box, invert_toggle)
 	invert_toggle.toggled.connect(func(_value): _apply_settings())
 
 	var mouse_look_toggle = CheckButton.new()
 	mouse_look_toggle.text = "MOUSE CAMERA LOOK (MOVE MOUSE TO ORBIT)"
 	mouse_look_toggle.button_pressed = bool(config.get_value("input", "mouse_look_enabled", true))
 	UI_THEME.styled_checkbutton(mouse_look_toggle)
-	box.add_child(mouse_look_toggle)
+	_add_toggle_row(box, mouse_look_toggle)
 	_input_toggles["mouse_look_enabled"] = mouse_look_toggle
 
 	var stick_look_toggle = CheckButton.new()
 	stick_look_toggle.text = "RIGHT-STICK CAMERA LOOK"
 	stick_look_toggle.button_pressed = bool(config.get_value("input", "stick_look_enabled", true))
 	UI_THEME.styled_checkbutton(stick_look_toggle)
-	box.add_child(stick_look_toggle)
+	_add_toggle_row(box, stick_look_toggle)
 	_input_toggles["stick_look_enabled"] = stick_look_toggle
 
 	var vibration_toggle = CheckButton.new()
 	vibration_toggle.text = "CONTROLLER VIBRATION"
 	vibration_toggle.button_pressed = bool(config.get_value("input", "vibration_enabled", true))
 	UI_THEME.styled_checkbutton(vibration_toggle)
-	box.add_child(vibration_toggle)
+	_add_toggle_row(box, vibration_toggle)
 	_input_toggles["vibration_enabled"] = vibration_toggle
 
 	# PHASE 3: stick response curve selector.
+	var narrow: bool = get_viewport_rect().size.x < 560.0
 	var curve_row := HBoxContainer.new()
 	var curve_label := Label.new()
 	curve_label.text = "STICK RESPONSE"
 	curve_label.add_theme_font_size_override("font_size", 12)
 	curve_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
-	curve_label.custom_minimum_size = Vector2(190, 0)
+	# S-D portrait: the 190px label column + 190px dropdown cannot fit 390;
+	# at narrow the label clips and the dropdown keeps the row's width.
+	curve_label.custom_minimum_size = Vector2(0 if narrow else 190, 0)
+	curve_label.clip_text = true
+	curve_label.size_flags_horizontal = Control.SIZE_FILL
 	curve_row.add_child(curve_label)
 	var curve_option := OptionButton.new()
 	curve_option.add_item("LINEAR", 0)
@@ -238,6 +332,9 @@ func _build_ui() -> void:
 	var saved_curve := str(config.get_value("input", "stick_response_curve", "expo"))
 	curve_option.select({"linear": 0, "expo": 1, "precision": 2}.get(saved_curve, 1))
 	curve_option.custom_minimum_size = Vector2(190, 0)
+	curve_option.clip_text = true
+	curve_option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	UI_THEME.style_option_button(curve_option)
 	curve_row.add_child(curve_option)
 	box.add_child(curve_row)
 	self.curve_option = curve_option
@@ -247,6 +344,8 @@ func _build_ui() -> void:
 	remap_title.text = "CONTROLS — TAP A ROW, THEN PRESS A KEY OR PAD BUTTON"
 	remap_title.add_theme_font_size_override("font_size", 13)
 	remap_title.add_theme_color_override("font_color", Color("ff9a1a"))
+	# S-D portrait: 13px one-liner measured 388px — wrap instead of overflow.
+	remap_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(remap_title)
 
 	remap_grid = GridContainer.new()
@@ -259,6 +358,8 @@ func _build_ui() -> void:
 	var reset_remap = Button.new()
 	reset_remap.text = "RESET ALL CONTROLS TO DEFAULT"
 	reset_remap.add_theme_font_size_override("font_size", 13)
+	reset_remap.clip_text = true
+	reset_remap.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	box.add_child(reset_remap)
 	reset_remap.pressed.connect(_reset_remap)
 
@@ -269,12 +370,32 @@ func _build_ui() -> void:
 	controller_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(controller_hint)
 
+	# S-D footer: hairline + BACK + version in one row.
+	var hairline := HSeparator.new()
+	var hb_style := StyleBoxFlat.new()
+	hb_style.bg_color = Color(1, 1, 1, 0.09)
+	hb_style.content_margin_top = 1.0
+	hb_style.content_margin_bottom = 1.0
+	hairline.add_theme_stylebox_override("separator", hb_style)
+	column.add_child(hairline)
+	var footer := HBoxContainer.new()
+	footer.name = "Footer"
+	footer.add_theme_constant_override("separation", 12)
+	column.add_child(footer)
 	var back = Button.new()
 	back.text = "BACK"
+	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	back.custom_minimum_size = Vector2(0, 52)
 	back.add_theme_font_size_override("font_size", 20)
-	column.add_child(back)
+	footer.add_child(back)
 	back.pressed.connect(_close)
+	var version = Label.new()
+	version.name = "VersionLabel"
+	version.text = "v0.9 · 26 SEP 26"
+	version.add_theme_font_size_override("font_size", 10)
+	version.add_theme_color_override("font_color", Color("9a9aae"))
+	version.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	footer.add_child(version)
 	# Controller navigation: initial focus on BACK; dpad/stick walks the
 	# settings rows (ui_up/ui_down), A presses the focused control.
 	back.call_deferred("grab_focus")
@@ -322,12 +443,16 @@ func _build_remap_rows() -> void:
 		var kbtn = Button.new()
 		kbtn.custom_minimum_size = Vector2(0, 34)
 		kbtn.add_theme_font_size_override("font_size", 13)
+		kbtn.clip_text = true
+		kbtn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		var bound_kb: String = action
 		kbtn.pressed.connect(func(): _remap_listen(bound_kb, "kb", kbtn))
 		remap_grid.add_child(kbtn)
 		var pbtn = Button.new()
 		pbtn.custom_minimum_size = Vector2(0, 34)
 		pbtn.add_theme_font_size_override("font_size", 13)
+		pbtn.clip_text = true
+		pbtn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		var bound_pad: String = action
 		pbtn.pressed.connect(func(): _remap_listen(bound_pad, "pad", pbtn))
 		remap_grid.add_child(pbtn)
@@ -405,7 +530,80 @@ func _make_slider() -> HSlider:
 	slider.step = 1.0
 	slider.custom_minimum_size = Vector2(0, 28)
 	UI_THEME.styled_slider(slider)
+	# S-D: transparent groove — the MeterTrack wrapper draws the visible
+	# fill BEHIND the slider (wrapper added as sibling-parent below).
+	var empty := StyleBoxEmpty.new()
+	slider.add_theme_stylebox_override("slider", empty)
 	return slider
+
+## S-D: ONE label pattern for slider rows — name left, tabular orange value
+## right, full-width slider (inside its MeterTrack wrapper) beneath.
+func _add_slider_setting(parent: VBoxContainer, label_text: String, slider: HSlider) -> void:
+	var label = Label.new()
+	label.text = label_text
+	label.clip_text = true
+	label.custom_minimum_size = Vector2(0, 0)
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.add_theme_font_size_override("font_size", 13)
+	label.add_theme_color_override("font_color", Color(1, 1, 1, 0.65))
+	var value = Label.new()
+	value.name = "ValueLabel"
+	value.text = str(int(slider.value))
+	value.custom_minimum_size = Vector2(44, 0)
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value.clip_text = true
+	value.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	value.add_theme_font_size_override("font_size", 13)
+	value.add_theme_color_override("font_color", Color("ff9a1a"))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.add_child(label)
+	row.add_child(value)
+	parent.add_child(row)
+	var wrapper := MeterTrack.new()
+	wrapper.name = "MeterTrack"
+	wrapper.slider = slider
+	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrapper.add_child(slider)
+	slider.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	slider.size_flags_vertical = Control.SIZE_FILL
+	parent.add_child(wrapper)
+	# Keep the value label live as the slider moves.
+	slider.value_changed.connect(func(v: float):
+		if is_instance_valid(value):
+			value.text = str(int(round(v))))
+
+## S-D toggle row: text state tag ("ON" LIME / "OFF" faint) BEFORE the
+## CheckButton, kept in sync on every toggle so ON state reads at a glance.
+func _add_toggle_row(parent: VBoxContainer, toggle: CheckButton) -> void:
+	var tag := Label.new()
+	tag.name = "StateTag"
+	tag.custom_minimum_size = Vector2(30, 0)
+	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var row := HBoxContainer.new()
+	row.name = "ToggleRow"
+	row.add_theme_constant_override("separation", 10)
+	# S-D portrait: CheckButton text is the row's only unbounded width —
+	# clip to ellipsis so long toggles shrink instead of overflowing 390px
+	# (desktop has the space and never truncates).
+	toggle.clip_text = true
+	toggle.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(tag)
+	row.add_child(toggle)
+	parent.add_child(row)
+	_refresh_toggle_tag(toggle)
+	toggle.toggled.connect(func(_pressed): _refresh_toggle_tag(toggle))
+
+func _refresh_toggle_tag(toggle: CheckButton) -> void:
+	var row := toggle.get_parent()
+	if row == null or not (row is HBoxContainer):
+		return
+	var tag: Label = row.get_node_or_null("StateTag")
+	if tag == null:
+		return
+	tag.text = "ON" if toggle.button_pressed else "OFF"
+	tag.add_theme_font_size_override("font_size", 10)
+	tag.add_theme_color_override("font_color", Color("b9f34a") if toggle.button_pressed else Color("9a9aae"))
 
 func _apply_settings() -> void:
 	# Reentrancy guard: setting a slider value inside _restore_persisted_values
