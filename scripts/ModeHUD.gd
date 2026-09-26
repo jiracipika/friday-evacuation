@@ -1,5 +1,9 @@
 extends CanvasLayer
 
+# UI SLICE: shared After-Hours token system (MenuBackdrop/Settings preload
+# pattern — a class_name self-reference breaks standalone SceneTree compiles).
+const UI_THEME = preload("res://scripts/UITheme.gd")
+
 var title_label: Label
 var objective_label: Label
 var timer_label: Label
@@ -16,25 +20,26 @@ func _ready() -> void:
 	panel = PanelContainer.new()
 	panel.position = Vector2(24, 24)
 	panel.size = Vector2(420, 142)
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.055, 0.055, 0.09, 0.94)
-	style.border_color = Color(1.0, 0.6, 0.12, 0.8)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(12)
+	var style: StyleBoxFlat = UI_THEME.panel_style(UI_THEME.color(UI_THEME.ORANGE), true)
+	# Keep the old ad-hoc box's compact footprint: panel_style's content
+	# margins would grow the PanelContainer minimum size, so zero them (the
+	# VBox separation already spaces the rows). Shadow draws outside the
+	# rect and does not affect layout budgets.
+	style.set_content_margin_all(0.0)
 	panel.add_theme_stylebox_override("panel", style)
 	root.add_child(panel)
 	var box = VBoxContainer.new()
 	box.add_theme_constant_override("separation", 5)
 	panel.add_child(box)
-	title_label = _label("MODE", 24, Color("ffb52e"))
-	objective_label = _label("OBJECTIVE", 14, Color("d0d0df"))
-	timer_label = _label("TIME  --", 16, Color("ffffff"))
-	progress_label = _label("PROGRESS  0%", 14, Color("a8ffbd"))
+	title_label = _label("MODE", 24, UI_THEME.color(UI_THEME.ORANGE))
+	objective_label = _label("OBJECTIVE", 14, UI_THEME.color(UI_THEME.TEXT, 0.85))
+	timer_label = _label("TIME  --", 16, UI_THEME.color(UI_THEME.PAPER))
+	progress_label = _label("PROGRESS  0%", 14, UI_THEME.color(UI_THEME.LIME))
 	progress_bar = ProgressBar.new()
 	progress_bar.custom_minimum_size = Vector2(0, 14)
 	progress_bar.show_percentage = false
 	var fill = StyleBoxFlat.new()
-	fill.bg_color = Color("ff9a1a")
+	fill.bg_color = UI_THEME.color(UI_THEME.ORANGE)
 	fill.set_corner_radius_all(6)
 	progress_bar.add_theme_stylebox_override("fill", fill)
 	box.add_child(title_label)
