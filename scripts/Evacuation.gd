@@ -444,6 +444,13 @@ func _setup_arena() -> void:
 	# GRAPHICS PASS: structural columns at ±10 — real collision, placed on
 	# lane boundaries verified against gates/landings (see OfficeDressing).
 	_spawn_columns()
+	# Shared non-colliding architectural features follow existing floor culling.
+	var architecture = load("res://scripts/OfficeArchitecture.gd")
+	for story in range(4):
+		var landmark: Node3D = architecture.build(story)
+		landmark.position.y = story * 6.0
+		add_child(landmark)
+		_register_floor_node(story, landmark)
 
 	# Elevator pads connect floors. Each pad is an Area3D trigger zone that
 	# smoothly lifts the player to the next floor when entered.
