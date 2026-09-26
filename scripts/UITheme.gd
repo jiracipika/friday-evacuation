@@ -220,10 +220,12 @@ class MeterBar extends Control:
 	# the original SURFACE track rendered invisible against it.
 	const TRACK := Color("25253a")
 	const FILL := Color("ff9a1a")
+	const FILL_CORAL := Color("ff6f61")
 	const TICK := Color("f7f6f2")
 	var value := 0.0: set = _set_value
 	var maximum := 1.0
 	var tick := -1.0  # <0 hides the reference tick
+	var debuff := false  # R5: below-baseline = dashed coral fill
 	func _set_value(v: float) -> void:
 		value = v
 		queue_redraw()
@@ -234,7 +236,15 @@ class MeterBar extends Control:
 		if maximum > 0.0:
 			frac = clampf(value / maximum, 0.0, 1.0)
 		if frac > 0.0:
-			draw_rect(Rect2(Vector2.ZERO, Vector2(size.x * frac, size.y)), FILL)
+			var fill_color := FILL_CORAL if debuff else FILL
+			if debuff:
+				# Dashed coral: three segments with two gaps.
+				var w := size.x * frac
+				var seg := w / 5.0
+				for i in 3:
+					draw_rect(Rect2(Vector2(seg * 2.0 * i, 0.0), Vector2(seg, size.y)), fill_color)
+			else:
+				draw_rect(Rect2(Vector2.ZERO, Vector2(size.x * frac, size.y)), fill_color)
 		if tick >= 0.0 and maximum > 0.0:
 			var tx := size.x * clampf(tick / maximum, 0.0, 1.0)
 			draw_rect(Rect2(Vector2(tx - 1.0, 0.0), Vector2(2.0, size.y)), TICK)

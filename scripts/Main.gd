@@ -64,6 +64,8 @@ var modifier_menu: Control
 var character_row: HBoxContainer
 var character_select: OptionButton
 var character_detail: Label
+var skin_sheet: VBoxContainer
+var skin_meters: Dictionary = {}  # "jump"/"grip"/"boost" -> {meter, value}
 var skin_row: HBoxContainer
 var skin_select: OptionButton
 var skin_detail: Label
@@ -838,6 +840,14 @@ func _build_character_selector(parent: Control) -> void:
 	character_detail.add_theme_font_size_override("font_size", 14)
 	character_detail.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	parent.add_child(character_detail)
+	# S-G spec-sheet: silhouette/accessory as a visible micro line (was
+	# tooltip-only, which mobile never shows).
+	var rider_spec := Label.new()
+	rider_spec.name = "RiderSpec"
+	rider_spec.custom_minimum_size = Vector2(0, 16)
+	rider_spec.add_theme_font_size_override("font_size", 10)
+	rider_spec.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_FAIR))
+	parent.add_child(rider_spec)
 	var selected := 0
 	var characters: Array[Dictionary] = roster.all()
 	var short_items := _is_narrow()
@@ -866,7 +876,10 @@ func _on_character_selected(index: int) -> void:
 	_refresh_hero()
 	if character_detail:
 		character_detail.text = character["tagline"]
-		character_detail.tooltip_text = "%s • %s" % [character["silhouette"], character["accessory"]]
+		var spec := character_detail.get_parent().get_node_or_null("RiderSpec") as Label
+		if spec:
+			spec.text = ("%s • %s" % [character["silhouette"], character["accessory"]]).to_upper()
+			spec.tooltip_text = ""
 
 func _build_skin_selector(parent: Control) -> void:
 	var skins = load("res://scripts/ChairSkins.gd")
@@ -905,6 +918,7 @@ func _build_skin_selector(parent: Control) -> void:
 	skin_detail.add_theme_font_size_override("font_size", 14)
 	skin_detail.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_MUTED))
 	parent.add_child(skin_detail)
+	_build_skin_sheet(parent)
 
 	var all_skins: Array[Dictionary] = skins.all()
 	var selected := 0
@@ -951,10 +965,8 @@ func _on_skin_selected(index: int) -> void:
 	if skin_detail:
 		var stats = get_node_or_null("/root/StatsManager")
 		var wins: int = stats.races_won if stats else 0
-		var mods := "JUMP x%.2f  GRIP x%.2f  BOOST x%.2f" % [
-			float(skin["jump_mult"]), float(skin["friction_mult"]), float(skin["boost_mult"])
-		]
-		skin_detail.text = "%s — %s" % [skin["tagline"], mods]
+		skin_detail.text = skin["tagline"]
+		_update_skin_sheet(float(skin["jump_mult"]), float(skin["friction_mult"]), float(skin["boost_mult"]))
 		var _next = skins.next_unlock(wins)
 		if not _next.is_empty():
 			skin_detail.tooltip_text = "next unlock: %s at %d wins (you have %d)" % [
@@ -1117,3 +1129,66 @@ func _layout_responsive() -> void:
 
 func _is_narrow() -> bool:
 	return get_viewport_rect().size.x < 560.0
+
+## S-G chair spec sheet: stat meters replace the "JUMP x1.00 ..." run-on
+## line (FINAL-SPEC section 7 / R5). Baseline tick at x1.0; below-1.0
+## values draw the dashed coral debuff fill with a coral value label.
+func _build_skin_sheet(parent: Control) -> void:
+	skin_sheet = VBoxContainer.new()
+	skin_sheet.name = "SkinSheet"
+	skin_sheet.add_theme_constant_override("separation", 4)
+	parent.add_child(skin_sheet)
+	for row_spec in [["JUMP", "jump"], ["GRIP", "grip"], ["BOOST", "boost"]]:
+		var row := HBoxContainer.new()
+		row.name = "%sRow" % row_spec[0]
+		row.add_theme_constant_override("separation", 8)
+		skin_sheet.add_child(row)
+		var name_label := Label.new()
+		name_label.text = row_spec[0]
+		name_label.custom_minimum_size.x = 46
+		name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		name_label.add_theme_font_size_override("font_size", 10)
+		name_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT_FAIR))
+		row.add_child(name_label)
+		# Untyped on purpose: MeterBar is an inner class of the preloaded
+		# UITheme script, not a global class_name — a typed annotation
+		# would not resolve (and self-referencing class_names breaks raw
+		# SceneTree compiles).
+		var meter = UI_THEME.MeterBar.new()
+		meter.name = "%sMeter" % row_spec[0]
+		meter.custom_minimum_size = Vector2(110, 6)
+		meter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		meter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		meter.maximum = 2.0  # R5: fill width = 50% of value, so x1.0 = half
+		meter.tick = 1.0
+		row.add_child(meter)
+		var value := Label.new()
+		value.name = "%sValue" % row_spec[0]
+		value.custom_minimum_size.x = 44
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		value.add_theme_font_size_override("font_size", 11)
+		value.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT))
+		row.add_child(value)
+		skin_meters[row_spec[1]] = {"meter": meter, "value": value}
+
+func _update_skin_sheet(jump: float, friction: float, boost: float) -> void:
+	var stats := [
+		["jump", jump], ["grip", friction], ["boost", boost],
+	]
+	for entry in stats:
+		var cell: Dictionary = skin_meters.get(entry[0], {})
+		if cell.is_empty():
+			continue
+		var mult: float = entry[1]
+		var meter = cell["meter"]
+		meter.value = mult
+		meter.debuff = mult < 1.0
+		var value: Label = cell["value"]
+		value.text = "x%.2f" % mult
+		if mult < 1.0:
+			value.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.CORAL))
+		elif mult > 1.0:
+			value.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.LIME))
+		else:
+			value.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.TEXT))

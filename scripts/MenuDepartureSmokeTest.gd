@@ -155,6 +155,29 @@ func _run() -> void:
 	check(main.customize_subview.visible, "CUSTOMIZE RIDE opens rider/chair subview")
 	check(main.character_select != null and main.skin_select != null,
 		"rider + chair selectors present")
+	# ---- 4b. S-G spec sheet: meters replace the run-on stat line ----------
+	var skin_sheet: VBoxContainer = main.skin_sheet
+	check(skin_sheet != null and main.skin_detail != null
+		and skin_sheet.get_parent() == main.skin_detail.get_parent(),
+		"chair spec sheet present beside the chair selector")
+	var meter_count := 0
+	var ticked := 0
+	for row in skin_sheet.get_children():
+		for cell in row.get_children():
+			if cell.get_class() == "Control" and "Meter" in String(cell.name):
+				meter_count += 1
+				if cell.tick == 1.0 and cell.maximum == 2.0:
+					ticked += 1
+	check(meter_count == 3, "three stat meters (got %d)" % meter_count)
+	check(ticked == 3, "meters carry the x1.0 baseline tick + 2.0 scale (got %d)" % ticked)
+	var boost_value: Label = skin_sheet.get_node_or_null("BOOSTRow/BOOSTValue")
+	check(boost_value != null and String(boost_value.text).begins_with("x"),
+		"boost value label populated (%s)" % (boost_value.text if boost_value else "<none>"))
+	check(not "JUMP x" in main.skin_detail.text,
+		"chair detail no longer carries the run-on stat line")
+	var rider_spec: Label = main.character_detail.get_parent().get_node_or_null("RiderSpec")
+	check(rider_spec != null and rider_spec.text != "" and rider_spec.text == rider_spec.text.to_upper(),
+		"rider spec line visible and tracked caps (%s)" % (rider_spec.text if rider_spec else "<none>"))
 	var esc := InputEventAction.new()
 	esc.action = "ui_cancel"
 	esc.pressed = true
