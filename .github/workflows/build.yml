@@ -22,9 +22,56 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+# CHECKPOINT BUILDS (2026-09-26): pushes to main no longer build every
+# time. The `gate` job scans the pushed commit subjects for a [build]
+# marker and the export/release/deploy jobs only run when one is present
+# — or when triggered manually via workflow_dispatch. Rhythm: append
+# [build] to a commit roughly every ~5 increments (or press Run
+# workflow) as a checkpoint; all other pushes show a cheap green skip.
 jobs:
+  gate:
+    name: Checkpoint gate
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+    steps:
+      - name: Decide whether this push is a checkpoint
+        id: decide
+        env:
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "manual dispatch -> build"
+            exit 0
+          fi
+          # Shallow clone is enough: `git log` over the pushed range
+          # needs only the new commits. Branch creation (zero BEFORE) or
+          # a force-push without a resolvable range always builds.
+          git init -q .
+          git remote add origin "https://github.com/${{ github.repository }}.git"
+          git fetch -q --depth=64 origin "$SHA"
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "new/unknown range -> build"
+            exit 0
+          fi
+          SUBJECTS=$(git log --format=%s "$BEFORE..$SHA")
+          echo "$SUBJECTS"
+          if echo "$SUBJECTS" | grep -qi "\[build\]"; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "checkpoint marker found -> build"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "no [build] marker -> skip"
+          fi
+
   export:
     name: Export ${{ matrix.preset }}
+    needs: gate
+    if: needs.gate.outputs.build == 'true'
     runs-on: macos-latest
     strategy:
       fail-fast: false
