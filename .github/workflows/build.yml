@@ -16,6 +16,12 @@ env:
 permissions:
   contents: write
 
+# One build at a time per ref: a queued run sat 3 weeks here and (combined
+# with full artifact storage) wedged the pipeline. New pushes supersede.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   export:
     name: Export ${{ matrix.preset }}
@@ -125,6 +131,13 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.path }}
           if-no-files-found: error
+          # Free private-repo artifact storage is 500MB total; these zips
+          # are ~90MB per platform per run, so unbounded retention wedges
+          # the quota after ~5 runs and ALL later uploads (and the Vercel
+          # deploy that downloads them) start failing. 1 day is plenty —
+          # the release job consumes them within the same run, and the
+          # durable copies live on the GitHub release, not in artifacts.
+          retention-days: 1
 
       - name: Zip web build for release
         if: matrix.preset == 'Web'
@@ -138,6 +151,7 @@ jobs:
           name: friday-evacuation-web-zip
           path: builds/friday-evacuation-web.zip
           if-no-files-found: error
+          retention-days: 1
 
   release:
     name: Attach builds to release
