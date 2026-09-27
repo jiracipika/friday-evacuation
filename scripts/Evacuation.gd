@@ -1411,6 +1411,21 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 	_register_floor_node(floor_index, light_group)
 	_build_ceiling_grid(floor_pos, light_group, floor_index)
 	var Dressing = load("res://scripts/OfficeDressing.gd")
+	# Guide-lighting: each playable floor's elevator portal gets a warm POOL —
+	# the nearest grid fixture re-anchors beside the portal with a tighter
+	# range, so the traversal goal reads warm from anywhere on the floor.
+	# Floor 3 keeps its grid (its exit already carries the green beacon).
+	# Reuses an existing light: the nine-per-floor budget (ArtLightingTest)
+	# and floor culling groups are untouched.
+	const PORTAL_XZ := {0: Vector2(12.0, 14.0), 1: Vector2(-12.0, -2.0), 2: Vector2(12.0, 14.0)}
+	# NOTE: `portal` must be function-scoped — an `if`-body var is invisible
+	# to the loops below (GDScript block scoping; parse error otherwise).
+	var portal: Vector2 = PORTAL_XZ.get(floor_index, Vector2(-999.0, -999.0))
+	var pool_xz := Vector2(-999.0, -999.0)
+	if portal.x > -500.0:
+		var nx: float = clampf(roundf(portal.x / 12.0) * 12.0, -12.0, 12.0)
+		var nz: float = clampf(roundf(portal.y / 12.0) * 12.0, -12.0, 12.0)
+		pool_xz = Vector2(nx, nz)
 	for x in [-12.0, 0.0, 12.0]:
 		for z in [-12.0, 0.0, 12.0]:
 			var light = OmniLight3D.new()
@@ -1426,6 +1441,14 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 			light.omni_range = 12.0 if is_lane else 15.0
 			light.shadow_enabled = false
 			light.light_bake_mode = OmniLight3D.BAKE_STATIC
+			if Vector2(x, z) == pool_xz:
+				# Portal pool: nudge 1.5m toward the floor centre so the pool
+				# spills onto the approach, tighten the throw, warm it up.
+				var inward := (Vector2(-portal.x, -portal.y)).normalized() * 1.5
+				light.position = floor_pos + Vector3(portal.x + inward.x, 4.4, portal.y + inward.y)
+				light.light_color = Color(1.0, 0.72, 0.45)
+				light.light_energy = 1.6
+				light.omni_range = 9.0
 			light_group.add_child(light)
 
 			# GRAPHICS PASS: recessed troffer panels (frame + emissive lens)
