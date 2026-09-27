@@ -127,16 +127,18 @@ func _build_content() -> void:
 	_meta_cat.visible = two_line_meta and not category.is_empty()
 	_meta_crew.visible = not crew.is_empty()
 
-	# SELECTED mini-pill: radius 999, ORANGE bg, INK text, pinned top-right
-	# overlapping the card edge by 8px.
+	# SELECTED mini-pill: radius 999, ORANGE bg, INK text, tucked inside the
+	# top-right corner. It used to overlap the card edge by -8px, but some
+	# ancestor clips at the card bounds and the top half of the label got
+	# cut (P0B audit, 2026-09-27) — inside the card it renders clean.
 	_pill = Control.new()
 	_pill.name = "SelectedPillAnchor"
 	_pill.anchor_left = 1.0
 	_pill.anchor_right = 1.0
 	_pill.offset_left = -92.0
 	_pill.offset_right = -10.0
-	_pill.offset_top = -8.0
-	_pill.offset_bottom = 8.0
+	_pill.offset_top = 4.0
+	_pill.offset_bottom = 20.0
 	_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_pill)
 
