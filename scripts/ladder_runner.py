@@ -35,7 +35,7 @@ JumpForgivenessTest GraphicsPassSmokeTest MenuLayoutSmokeTest \
 ChairSkinSmokeTest CharacterRosterSmokeTest HauledSmokeTest ShopSeekSmokeTest \
 PizzaColonySmokeTest TouchControlsSmokeTest ModeHUDResponsiveSmokeTest ModeResultsSmokeTest ModeSmokeTest NetworkSmokeTest \
 NetworkTwoPeerTest LanAvatarSyncTest AnnouncerSmokeTest PanicCamSmokeTest \
-LevelClearTest CheckpointBotTest SkinBotSanityTest HazardsSmokeTest \
+LevelClearTest CheckpointBotTest LayoutPacingTest SkinBotSanityTest HazardsSmokeTest \
 ThemedFloorsSmokeTest PowerUpSmokeTest PauseMenuSmokeTest \
 AccessibilitySmokeTest Phase8BAccessTest RaceModifiersSmokeTest \
 ModifierMenuSmokeTest GhostRacerSmokeTest StatsRoundTripTest \
@@ -211,6 +211,8 @@ SUCCESS_PATTERNS = {
         re.compile(r"^=== MENU INPUT PATH TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
     "ResultsCelebrationTest": [
         re.compile(r"^=== RESULTS CELEBRATION TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
+    "LayoutPacingTest": [
+        re.compile(r"^=== LAYOUT PACING TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
     "LoadingFlowSmokeTest": [
         re.compile(r"^LoadingFlowSmokeTest: (\d+)/(\d+) checks passed$", re.M)],
     # 2026-09 redesign-era tests newly registered in PRODUCTION_SUITES.
