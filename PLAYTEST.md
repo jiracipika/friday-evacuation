@@ -118,7 +118,8 @@ Setup: two machines (or phone hotspot + laptop + phone), same subnet ideally.
 
 Each mode: one full loop, pre-match modal correct, HUD timer honest.
 - [ ] HAULED: deliver fridge of bees; damage/scoring reads; throw physics sane
-- [ ] SHOP & SEEK: disguise in/out (2s freeze, wobble tell), guard stun, 5-item list beatable in 90s
+- [ ] SHOP & SEEK: disguise in/out (2s freeze, wobble tell); first/second guard catches stun and allow an escape; the third ends the round; 5-item list is beatable in 90s
+- [ ] Shared mode HUD stays fully in-bounds at 390px portrait and shows the final 20% of each timer in coral
 - [ ] PIZZA COLONY: claim a pad (3s), cheese harvest, olive bomb fort, chef chase, cutter sweep elimination
 - [ ] Modifiers: toggle 2-3 chips (NO COFFEE + JUST WAXED) → race applies them; LAN match ignores modifiers (single-player only)
 
