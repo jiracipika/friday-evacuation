@@ -101,7 +101,7 @@ func _ready() -> void:
 	# Blocking pre-game briefing (tree paused until agreement).
 	load("res://scripts/PreMatchModal.gd").mount(self, "SHOP & SEEK", [
 		"Grab every item on your shopping list.",
-		"Press E beside a prop to disguise and break line of sight.",
+		"Use E beside a prop to disguise; disguising freezes you, then slows movement.",
 		"Three security catches end the shift. Disguises buy time, not immunity.",
 	])
 	_caption("GRAB %d ITEMS — GUARD ON PATROL" % list_target)
