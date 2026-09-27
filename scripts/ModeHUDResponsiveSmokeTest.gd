@@ -24,7 +24,7 @@ func _run() -> void:
 	hud.set_script(hud_script)
 	root.add_child(hud)
 	await process_frame
-	hud.configure("SHOP & SEEK", "SHOPPER ROUND — GRAB YOUR LIST", 90.0)
+	hud.call("configure", "SHOP & SEEK", "SHOPPER ROUND — GRAB YOUR LIST", 90.0)
 	await process_frame
 
 	var panel := hud.get("panel") as PanelContainer
@@ -35,11 +35,11 @@ func _run() -> void:
 
 	var timer := hud.get("timer_label") as Label
 	var progress := hud.get("progress_bar") as ProgressBar
-	hud.update_state(17.0, 0.8, "LIST 4/5  •  CAUGHT 1/3", Color("ffcf55"))
+	hud.call("update_state", 17.0, 0.8, "LIST 4/5  •  CAUGHT 1/3", Color("ffcf55"))
 	check(timer.text == "TIME  0:17" and timer.get_theme_color("font_color") == Color("ff7070"), "low-time warning is coral and readable")
 	var fill := progress.get_theme_stylebox("fill") as StyleBoxFlat
 	check(fill.bg_color == Color("ff7070"), "progress bar joins the low-time warning")
-	hud.update_state(45.0, 0.5, "SHOPPING", Color("ffcf55"))
+	hud.call("update_state", 45.0, 0.5, "SHOPPING", Color("ffcf55"))
 	check(timer.get_theme_color("font_color") != Color("ff7070") and fill.bg_color != Color("ff7070"), "timer styling resets outside the warning window")
 
 	if failures.is_empty():
