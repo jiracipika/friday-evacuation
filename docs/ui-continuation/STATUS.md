@@ -7,7 +7,7 @@ Result: docs/ui-continuation/results/P0A.md.
 Evidence: 26/26 synthetic harness cases; real MenuDepartureSmokeTest, LoadingFlowSmokeTest and boot all PASS (targeted, not full ladder).
 
 P0B: NOT STARTED — fresh screen audit and stale status reconciliation.
-P1A: INTERRUPTED / UNVERIFIED; partial work preserved separately in /Users/rs-mac/projects/fe-ui-p1a-flash, branch work/ui-p1a-flash. No worker assumed alive; inspect ps command/state before dispatch.
+P1A: COMPLETE on main (2026-09-27, parent-resumed; see results/P1A.md). The isolated worktree /Users/rs-mac/projects/fe-ui-p1a-flash is RETIRED — delete after this commit is pushed.
 P1B–P5: NOT STARTED.
 
 Next action: inspect P1A worktree diff/result evidence and current capture harness, then dispatch a bounded Flash P0B capture task. One Godot process at a time, at most two independent coding lanes. Do not rerun old worker briefs blindly. No changes to automated-newsletter or pitchforge.
