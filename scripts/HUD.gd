@@ -190,7 +190,7 @@ func _build_hud() -> void:
 	abilities.name = "Abilities"
 	abilities.add_theme_constant_override("separation", _px(4))
 	state_cols.add_child(abilities)
-	boost_label = _make_label("☕ BOOST READY [SPACE]", _px(14), _c(UIT.ORANGE))
+	boost_label = _make_label("COFFEE BOOST READY [SPACE]", _px(14), _c(UIT.ORANGE))
 	abilities.add_child(boost_label)
 	boost_bar = ProgressBar.new()
 	boost_bar.custom_minimum_size = Vector2(_px(252), _px(12))
@@ -294,7 +294,7 @@ func set_boost(cooldown: float, duration: float, active: bool, cooldown_max := 3
 		boost_bar.value = 100.0 if active else clampf(100.0 - cooldown / cooldown_max * 100.0, 0.0, 100.0)
 	if boost_label:
 		# §6: READY / ACTIVE / cooldown text at 14px.
-		boost_label.text = "☕ BOOST ACTIVE" if active else ("☕ BOOST READY [SPACE]" if cooldown <= 0.0 else "☕ BOOST %.1fs" % cooldown)
+		boost_label.text = "COFFEE BOOST ACTIVE" if active else ("COFFEE BOOST READY [SPACE]" if cooldown <= 0.0 else "COFFEE BOOST %.1fs" % cooldown)
 		boost_label.add_theme_color_override("font_color", _c(UIT.ORANGE_BRIGHT) if active or cooldown <= 0.0 else _c(UIT.TEXT, 0.45))
 	_apply_state_accent(active or cooldown <= 0.0)
 
@@ -320,10 +320,10 @@ func set_item(kind: StringName, charges: int) -> void:
 	var display := ""
 	match kind:
 		&"stapler":
-			display = "📎 STAPLER ×%d  [Q]" % charges
+			display = "STAPLER x%d [Q]" % charges
 		&"spill":
-			display = "💧 SPILL ×%d  [Q]" % charges
+			display = "SPILL x%d [Q]" % charges
 		_:
-			display = "ITEM ×%d  [Q]" % charges
+			display = "ITEM x%d [Q]" % charges
 	item_label.text = display
 	item_label.add_theme_color_override("font_color", _c(UIT.CORAL) if kind == &"stapler" else _c(UIT.YELLOW))
