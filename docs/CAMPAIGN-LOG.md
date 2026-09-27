@@ -35,3 +35,15 @@ human-playtest tuning of hazard cadence (software proxies in place).
 **Checkpoint build triggered** (2026-09-27, post-P0B): today landed D5
 results celebration + pill fix + input-path/pacing suites on main; marking
 [build] so the live site picks them up.
+
+**Afternoon adds (same day):** eb3efe3 (warm portal pools on floors 1-3 —
+guide-lighting, nine-light budget intact), 5787d63 (P1B-P3 briefs authored
+so the next session can dispatch immediately), 020a5ed (SELECTED pill fix).
+P0B audit: every surface matches spec (results/P0B.md).
+
+**Infra notes for tomorrow:** GitHub artifact quota hit during the
+checkpoint build (uploads fail until the 6-12h recalc; ~100 stale artifacts
+purged today to heal it). Live site is CURRENT anyway via the documented
+local-export Vercel rescue (builds/friday-evacuation-web + _headers +
+vercel deploy --prod). Web export gotcha reconfirmed: the target directory
+must pre-exist.
