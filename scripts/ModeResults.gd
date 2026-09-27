@@ -61,7 +61,7 @@ func _ready() -> void:
 	rematch_button = Button.new()
 	rematch_button.text = "PLAY AGAIN"
 	rematch_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rematch_button.custom_minimum_size = Vector2(0, 48)
+	rematch_button.custom_minimum_size = Vector2(0, 52)
 	rematch_button.pressed.connect(_rematch)
 	UI_THEME.apply_primary(rematch_button)
 	actions.add_child(rematch_button)
@@ -69,9 +69,10 @@ func _ready() -> void:
 	menu_button = Button.new()
 	menu_button.text = "MAIN MENU"
 	menu_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	menu_button.custom_minimum_size = Vector2(0, 48)
+	menu_button.custom_minimum_size = Vector2(0, 52)
 	menu_button.pressed.connect(_return_to_menu)
-	UI_THEME.apply_secondary(menu_button, UI_THEME.color(UI_THEME.CYAN))
+	# P3/D5: MAIN MENU reads as the violet secondary everywhere.
+	UI_THEME.apply_secondary(menu_button, UI_THEME.color(UI_THEME.VIOLET))
 	actions.add_child(menu_button)
 
 	get_viewport().size_changed.connect(_layout_panel)
@@ -82,8 +83,26 @@ func configure(headline: String, detail: String, won: bool) -> void:
 	if not is_instance_valid(title_label):
 		await ready
 	title_label.text = headline
-	title_label.add_theme_color_override("font_color", Color("a8ffbd") if won else Color("ff7070"))
+	# P3/D5: LIME for a win, CORAL for a loss — the same states the race
+	# HUD's urgency uses, replacing two off-token hexes.
+	title_label.add_theme_color_override("font_color",
+		UI_THEME.color(UI_THEME.LIME) if won else UI_THEME.color(UI_THEME.CORAL))
 	detail_label.text = detail
+	# D5 motion: fade+scale-in 0.4s ease-out (reduced motion = instant).
+	var a11y = load("res://scripts/Accessibility.gd")
+	var instant: bool = a11y != null and a11y.reduced_motion_enabled()
+	panel.pivot_offset = panel.size / 2.0
+	if instant:
+		panel.modulate = Color(1, 1, 1, 1)
+		panel.scale = Vector2.ONE
+	else:
+		panel.modulate = Color(1, 1, 1, 0)
+		panel.scale = Vector2(0.9, 0.9)
+		var tw := create_tween().set_parallel(true)
+		tw.tween_property(panel, "modulate:a", 1.0, 0.4) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(panel, "scale", Vector2.ONE, 0.4) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func _layout_panel() -> void:
 	if not is_instance_valid(panel):

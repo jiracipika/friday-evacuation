@@ -36,11 +36,12 @@ func _run() -> void:
 	var timer := hud.get("timer_label") as Label
 	var progress := hud.get("progress_bar") as ProgressBar
 	hud.call("update_state", 17.0, 0.8, "LIST 4/5  •  CAUGHT 1/3", Color("ffcf55"))
-	check(timer.text == "TIME  0:17" and timer.get_theme_color("font_color") == Color("ff7070"), "low-time warning is coral and readable")
+	var UIT = load("res://scripts/UITheme.gd")
+	check(timer.text == "TIME  0:17" and timer.get_theme_color("font_color") == UIT.color(UIT.CORAL), "low-time warning is coral and readable")
 	var fill := progress.get_theme_stylebox("fill") as StyleBoxFlat
-	check(fill.bg_color == Color("ff7070"), "progress bar joins the low-time warning")
+	check(fill.bg_color == UIT.color(UIT.CORAL), "progress bar joins the low-time warning")
 	hud.call("update_state", 45.0, 0.5, "SHOPPING", Color("ffcf55"))
-	check(timer.get_theme_color("font_color") != Color("ff7070") and fill.bg_color != Color("ff7070"), "timer styling resets outside the warning window")
+	check(timer.get_theme_color("font_color") != UIT.color(UIT.CORAL) and fill.bg_color != UIT.color(UIT.CORAL), "timer styling resets outside the warning window")
 
 	if failures.is_empty():
 		print("ModeHUDResponsiveSmokeTest: %d/%d checks passed" % [checks, checks])

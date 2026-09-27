@@ -48,7 +48,7 @@ func _ready() -> void:
 	_progress_fill.bg_color = UI_THEME.color(UI_THEME.ORANGE)
 	_progress_fill.set_corner_radius_all(6)
 	progress_bar.add_theme_stylebox_override("fill", _progress_fill)
-	status_label = _label("READY", 14, Color("a8ffbd"))
+	status_label = _label("READY", 14, UI_THEME.color(UI_THEME.LIME))
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	for item in [title_label, objective_label, timer_label, progress_label, progress_bar, status_label]:
 		box.add_child(item)
@@ -79,15 +79,17 @@ func configure(title: String, objective: String, time_limit: float) -> void:
 	timer_label.text = "TIME  %s" % _format_time(time_limit)
 	_layout_hud()
 
-func update_state(remaining: float, progress: float, status: String, status_color := Color("a8ffbd")) -> void:
+func update_state(remaining: float, progress: float, status: String, status_color := Color(0, 0, 0, 0)) -> void:
+	if status_color.a <= 0.0:
+		status_color = UI_THEME.color(UI_THEME.LIME)
 	if not is_instance_valid(timer_label):
 		return
 	var safe_remaining := maxf(remaining, 0.0)
 	var urgent := safe_remaining > 0.0 and safe_remaining / _time_limit <= 0.2
 	timer_label.text = "TIME  %s" % _format_time(safe_remaining)
-	timer_label.add_theme_color_override("font_color", Color("ff7070") if urgent else UI_THEME.color(UI_THEME.PAPER))
+	timer_label.add_theme_color_override("font_color", UI_THEME.color(UI_THEME.CORAL) if urgent else UI_THEME.color(UI_THEME.PAPER))
 	progress_bar.value = clampf(progress * 100.0, 0.0, 100.0)
-	_progress_fill.bg_color = Color("ff7070") if urgent else UI_THEME.color(UI_THEME.ORANGE)
+	_progress_fill.bg_color = UI_THEME.color(UI_THEME.CORAL) if urgent else UI_THEME.color(UI_THEME.ORANGE)
 	progress_label.text = "PROGRESS  %d%%" % roundi(progress * 100.0)
 	status_label.text = status
 	status_label.add_theme_color_override("font_color", status_color)
