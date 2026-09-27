@@ -392,11 +392,18 @@ func _eliminate(reason: String) -> void:
 	_end(false, reason)
 
 func _end(victory: bool, reason: String) -> void:
+	if match_over:
+		return
 	match_over = true
 	won = victory
+	if player and is_instance_valid(player):
+		player.set_can_move(false)
 	mode_hud.update_state(remaining_time if victory else 0.0, _progress(), reason, Color("a8ffbd") if victory else Color("ff7070"))
 	_caption(reason)
 	print("[PIZZA COLONY] %s" % reason)
+	var results_script = load("res://scripts/ModeResults.gd")
+	if results_script:
+		results_script.mount(self, "SERVICE COMPLETE" if victory else "SERVICE FAILED", reason, victory)
 
 func _progress() -> float:
 	var owned := 0
@@ -418,6 +425,8 @@ func _update_hud() -> void:
 	mode_hud.update_state(remaining_time, _progress(), status, Color("ffcf55") if not cutter_active else Color("ff7070"))
 
 func _unhandled_input(event: InputEvent) -> void:
+	if match_over:
+		return
 	var FollowCameraScript = load("res://scripts/FollowCamera.gd")
 	if FollowCameraScript and FollowCameraScript.handle_mouse_input(event):
 		get_viewport().set_input_as_handled()
