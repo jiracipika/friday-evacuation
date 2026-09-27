@@ -12,6 +12,8 @@ const INTERACT_RANGE := 2.4
 const SCAN_COOLDOWN := 5.0
 const GUARD_SPEED := 3.2
 const GUARD_STUN := 1.0
+const CAUGHT_LIMIT := 3
+const CATCH_GRACE := 2.5
 const AISLES := 7
 const SHELF_LEN := 14.0
 const SHELF_H := 2.2
@@ -64,6 +66,8 @@ var wobble_phase := 0.0
 var role := &"shopper"  # shopper | hider | seeker
 var scan_ready := true
 var scan_cd_timer := 0.0
+var caught_count := 0
+var catch_grace_timer := 0.0
 
 var player: CharacterBody3D
 var guard: CharacterBody3D
@@ -89,7 +93,7 @@ func _ready() -> void:
 	_spawn_disguise_props()
 	_pick_shopper_list()
 	_spawn_guard()
-	mode_hud = _make_mode_hud("SHOP & SEEK", "SHOPPER ROUND — GRAB YOUR LIST  •  E: DISGUISE", ROUND_TIME)
+	mode_hud = _make_mode_hud("SHOP & SEEK", "SHOPPER ROUND — GRAB YOUR LIST  •  E: DISGUISE  •  3 STRIKES", ROUND_TIME)
 	# Controls recap at round start.
 	var controls_overlay = load("res://scripts/ControlsOverlay.gd").mount(self)
 	if controls_overlay:
@@ -97,8 +101,8 @@ func _ready() -> void:
 	# Blocking pre-game briefing (tree paused until agreement).
 	load("res://scripts/PreMatchModal.gd").mount(self, "SHOP & SEEK", [
 		"Grab every item on your shopping list.",
-		"The guard patrols. Stand still near shelves to disguise.",
-		"Caught too often and the round is over.",
+		"Press E beside a prop to disguise and break line of sight.",
+		"Three security catches end the shift. Disguises buy time, not immunity.",
 	])
 	_caption("GRAB %d ITEMS — GUARD ON PATROL" % list_target)
 
@@ -112,13 +116,14 @@ func _process(delta: float) -> void:
 	remaining_time = maxf(remaining_time - delta, 0.0)
 	load("res://scripts/FollowCamera.gd").update(get_node_or_null("Camera3D") as Camera3D, player, delta)
 	_update_disguise(delta)
+	catch_grace_timer = maxf(catch_grace_timer - delta, 0.0)
 	_update_guard(delta)
 	_update_scan_timer(delta)
 	_check_item_pickups()
 	var progress := float(list_collected.size()) / float(list_target)
-	var status := "SHOPPING %d/%d" % [list_collected.size(), list_target]
+	var status := "LIST %d/%d  •  CAUGHT %d/%d" % [list_collected.size(), list_target, caught_count, CAUGHT_LIMIT]
 	if disguised:
-		status = "DISGUISED — WOBBLE GIVES YOU AWAY"
+		status = "DISGUISED — WOBBLE GIVES YOU AWAY  •  %d/%d CAUGHT" % [caught_count, CAUGHT_LIMIT]
 	if list_collected.size() >= list_target:
 		won = true
 		match_over = true
@@ -303,12 +308,28 @@ func _update_guard(delta: float) -> void:
 	guard.move_and_slide()
 	# touching the guard stuns the player (caught flavor)
 	if player and is_instance_valid(player):
-		if guard.global_position.distance_to(player.global_position) <= 1.6 and player.is_stunned <= 0.0:
-			player.stun(GUARD_STUN)
-			# Stun outranks the disguise freeze; never strand a frozen chair.
-			if disguised and disguise_freeze_timer > 0.0:
-				disguise_freeze_timer = 0.0
-			_caption("SECURITY! STUNNED")
+		if guard.global_position.distance_to(player.global_position) <= 1.6 and player.is_stunned <= 0.0 and catch_grace_timer <= 0.0:
+			_register_security_catch()
+
+func _register_security_catch() -> void:
+	if match_over or catch_grace_timer > 0.0:
+		return
+	caught_count += 1
+	catch_grace_timer = CATCH_GRACE
+	# A catch cancels the disguise freeze before applying the stun so the
+	# player can always recover and move away from the guard.
+	if disguised:
+		_undisguise()
+	if player and is_instance_valid(player):
+		player.stun(GUARD_STUN)
+	_caption("SECURITY CAUGHT YOU — %d/%d" % [caught_count, CAUGHT_LIMIT])
+	if caught_count >= CAUGHT_LIMIT:
+		failed = true
+		match_over = true
+		if mode_hud:
+			var progress := float(list_collected.size()) / float(list_target)
+			mode_hud.update_state(0.0, progress, "THREE STRIKES — SHIFT OVER", Color("ff7070"))
+			_caption("SHIFT OVER — TOO MANY SECURITY CATCHES")
 
 # ============================ scan (seeker ability) ============================
 
