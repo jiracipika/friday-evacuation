@@ -18,6 +18,8 @@ static func mount(parent: Node, headline: String, detail: String, won: bool) -> 
 	return overlay
 
 func _ready() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	layer = 20
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.process_mode = Node.PROCESS_MODE_ALWAYS
