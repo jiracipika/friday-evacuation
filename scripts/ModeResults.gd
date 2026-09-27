@@ -76,7 +76,7 @@ func _ready() -> void:
 
 	get_viewport().size_changed.connect(_layout_panel)
 	_layout_panel()
-	rematch_button.grab_focus.call_deferred()
+	rematch_button.call_deferred("grab_focus")
 
 func configure(headline: String, detail: String, won: bool) -> void:
 	if not is_instance_valid(title_label):
