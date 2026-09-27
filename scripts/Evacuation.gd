@@ -2286,7 +2286,8 @@ func _end_race() -> void:
 	for entry in finish_order:
 		if entry.player_id == local_player.get_instance_id() and is_instance_valid(local_player):
 			own_finish_time = float(entry.time)
-			break	var stats = get_node_or_null("/root/StatsManager")
+			break
+	var stats = get_node_or_null("/root/StatsManager")
 	if stats:
 		var prev_best: float = stats.top_speed_ever
 		var prev_races: int = stats.total_races
