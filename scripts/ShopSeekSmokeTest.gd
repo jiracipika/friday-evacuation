@@ -98,6 +98,17 @@ func _run() -> void:
 	for i in 20:
 		await process_frame
 	check(mode.player.is_stunned > 0.0 or gs_before > 0.0, "touching the guard stuns the shopper")
+	mode.caught_count = 0
+	mode.catch_grace_timer = 0.0
+	mode._register_security_catch()
+	check(mode.caught_count == 1 and mode.catch_grace_timer > 0.0, "first catch starts an escape grace window")
+	mode._register_security_catch()
+	check(mode.caught_count == 1, "grace window prevents repeated catches")
+	mode.catch_grace_timer = 0.0
+	mode._register_security_catch()
+	mode.catch_grace_timer = 0.0
+	mode._register_security_catch()
+	check(mode.failed and mode.match_over and mode.caught_count == mode.CAUGHT_LIMIT, "third catch ends the shift")
 
 	# --- scan scaffolding ---
 	check(mode.role == &"shopper", "single-player default role is shopper")
@@ -108,6 +119,9 @@ func _run() -> void:
 
 	# --- fail flow ---
 	mode.role = &"shopper"
+	mode.failed = false
+	mode.caught_count = 0
+	mode.catch_grace_timer = 0.0
 	mode.match_over = false
 	mode.remaining_time = 0.05
 	for i in 10:
