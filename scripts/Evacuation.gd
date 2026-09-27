@@ -2297,9 +2297,13 @@ func _end_race() -> void:
 		stats.record_race(won, top_speed, 0)
 		new_personal_best = top_speed > prev_best and prev_races > 0
 		# PB time: only the local player's own finish counts, and only
-		# real finishes (the time-limit end passes -1 through).
+		# real finishes (the time-limit end passes -1 through). The stat
+		# always records, but the PILL follows the top-speed precedent:
+		# no celebration on the first-ever finish (everything is a record
+		# the first time; also covers pre-patch saves with no best_time).
 		if own_finish_time > 0.0:
-			new_best_time = stats.record_finish_time(own_finish_time)
+			var prev_best_time: float = stats.best_time
+			new_best_time = stats.record_finish_time(own_finish_time) and prev_best_time > 0.0
 		# Phase 8A: celebrate skins that this win count just unlocked.
 		var skins = load("res://scripts/ChairSkins.gd")
 		if skins:
