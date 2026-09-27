@@ -39,8 +39,21 @@ func _run() -> void:
 		print("AUDIO BUS: sfx_linear=%f expected~0.5 mute_sfx=%s mute_music_at_zero=%s unmute=%s" % [
 			sfx_linear, str(not mute_ok), str(zero_ok), str(music_unmute_ok)])
 
+	# --- PB time (2026-09-26 batch): sentinel + record semantics ----------
 	s2.reset_stats()
-	if ok and audio_ok and mute_ok and zero_ok and music_unmute_ok:
+	var first_is_record: bool = s2.record_finish_time(74.5)
+	var no_record: bool = s2.record_finish_time(80.0)
+	var beat_record: bool = s2.record_finish_time(70.2)
+	var zero_ignored: bool = s2.record_finish_time(0.0)
+	var negative_ignored: bool = s2.record_finish_time(-5.0)
+	var pb_ok: bool = first_is_record and (not no_record) and beat_record \
+		and (not zero_ignored) and (not negative_ignored) \
+		and absf(s2.best_time - 70.2) < 0.01
+	if not pb_ok:
+		print("PB TIME: first=%s slower=%s faster=%s zero=%s neg=%s best=%f" % [
+			first_is_record, no_record, beat_record, zero_ignored, negative_ignored, s2.best_time])
+	s2.reset_stats()
+	if ok and audio_ok and mute_ok and zero_ok and music_unmute_ok and pb_ok:
 		print("STATS_ROUND_TRIP_PASS")
 		quit(0)
 	else:

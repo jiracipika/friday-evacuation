@@ -2281,7 +2281,12 @@ func _end_race() -> void:
 	var won := false
 	if finish_order.size() > 0 and is_instance_valid(local_player):
 		won = finish_order[0].player_id == local_player.get_instance_id()
-	var stats = get_node_or_null("/root/StatsManager")
+	var own_finish_time := -1.0
+	var new_best_time := false
+	for entry in finish_order:
+		if entry.player_id == local_player.get_instance_id() and is_instance_valid(local_player):
+			own_finish_time = float(entry.time)
+			break	var stats = get_node_or_null("/root/StatsManager")
 	if stats:
 		var prev_best: float = stats.top_speed_ever
 		var prev_races: int = stats.total_races
@@ -2290,6 +2295,10 @@ func _end_race() -> void:
 		prev_races_valid = prev_races > 0
 		stats.record_race(won, top_speed, 0)
 		new_personal_best = top_speed > prev_best and prev_races > 0
+		# PB time: only the local player's own finish counts, and only
+		# real finishes (the time-limit end passes -1 through).
+		if own_finish_time > 0.0:
+			new_best_time = stats.record_finish_time(own_finish_time)
 		# Phase 8A: celebrate skins that this win count just unlocked.
 		var skins = load("res://scripts/ChairSkins.gd")
 		if skins:
@@ -2322,8 +2331,14 @@ func _end_race() -> void:
 				traps_value.text = str(traps_hit)
 			var time_value = vbox.get_node_or_null("StatsGrid/TimeRow/TimeValue")
 			if time_value:
-				if finish_order.size() > 0 and finish_order[0].has("time"):
-					time_value.text = "%.1fs" % float(finish_order[0].time)
+				# The row shows the LOCAL player's own finish ("—" on a
+				# time-limit end), with the standing PB alongside.
+				if own_finish_time > 0.0:
+					var best: float = stats.best_time if stats else 0.0
+					if best > 0.0 and not new_best_time:
+						time_value.text = "%.1fs  (PB %.1fs)" % [own_finish_time, best]
+					else:
+						time_value.text = "%.1fs" % own_finish_time
 				else:
 					time_value.text = "—"
 			var pill_row = vbox.get_node_or_null("PillRow")
@@ -2333,6 +2348,8 @@ func _end_race() -> void:
 				var UIT = load("res://scripts/UITheme.gd")
 				if new_personal_best:
 					pill_row.add_child(_record_pill("★ NEW TOP-SPEED RECORD", UIT))
+				if new_best_time:
+					pill_row.add_child(_record_pill("★ NEW BEST TIME", UIT))
 				if skin_unlock_names.size() > 0:
 					pill_row.add_child(_record_pill("◆ NEW CHAIR: %s" % ", ".join(skin_unlock_names),
 						UIT, UIT.color(UIT.VIOLET)))
