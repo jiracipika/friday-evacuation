@@ -183,6 +183,28 @@ func _run_tests() -> void:
 			break
 		await physics_frame
 	check(boosted, "energy drink pickup triggers boost")
+
+	# --- 7b. COFFEE IS WALK-OVER (feel-pass revert, 2026-09-26) ----------
+	# Coffee is the core boost economy: proximity collects it with NO key
+	# press and NO prompt. Ammo pickups keep the deliberate E/A grab.
+	var chair3 = ChairScene.instantiate()
+	test_root.add_child(chair3)
+	await physics_frame
+	chair3.velocity = Vector3(6, 0, 0)
+	var pu_coffee = PowerUp.create(PowerUp.Kind.COFFEE)
+	test_root.add_child(pu_coffee)
+	pu_coffee.global_position = chair3.global_position
+	await physics_frame
+	await physics_frame
+	# Walk-over collect frees the pickup within the frame — guard the
+	# freed access; a freed pickup IS the auto-collect proof.
+	var coffee_gone: bool = (not is_instance_valid(pu_coffee)) or pu_coffee.is_queued_for_deletion()
+	check(coffee_gone, "coffee auto-collects on proximity without a key")
+	if coffee_gone:
+		check(true, "coffee never arms the grab prompt (freed = collected)")
+	else:
+		check(pu_coffee._body_in_range == null and pu_coffee._prompt == null,
+			"coffee never arms the grab prompt (walk-over economy)")
 	check(chair2.boost_timer > chair2.boost_duration * 1.5, "energy drink doubles boost duration (%.2f > %.2f)" % [chair2.boost_timer, chair2.boost_duration * 1.5])
 	chair2.queue_free()
 

@@ -342,15 +342,18 @@ func _process(delta: float) -> void:
 func _on_body_entered(body: Node3D) -> void:
 	if not body.is_in_group("players"):
 		return
-	# PICKUP PROMPT: keyboard/mouse + controller players press the ACTION
-	# key to grab. Touch players have no spare key — auto-collect for them
-	# (their thumbs are busy steering).
+	# PICKUP RULES: coffee is the core boost economy — walking over it
+	# grabs it (reverting the feel-pass experiment; races were being lost
+	# to fumble-fingering a cup). Ammo (stapler/spill) stays a deliberate
+	# E/A grab so wasting a slot stays a choice. Touch players have no
+	# spare key at all — auto-collect everything (thumbs are steering).
+	var auto_kind: bool = kind == Kind.COFFEE
 	var prefs = load("res://scripts/InputPrefs.gd")
 	var touch_player := false
 	if prefs and prefs.has_method("touch_enabled") and prefs.touch_enabled() \
 			and prefs.which_scheme() != prefs.SCHEME_CONTROLLER:
 		touch_player = true
-	if touch_player:
+	if touch_player or auto_kind:
 		_collect(body)
 	else:
 		_body_in_range = body
