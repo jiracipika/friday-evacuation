@@ -8,7 +8,7 @@ Evidence: 26/26 synthetic harness cases; real MenuDepartureSmokeTest, LoadingFlo
 
 P0B: COMPLETE (2026-09-27) — every screen audited against the spec; one low-priority nit filed (mode-card SELECTED pill clips top edge) for P1B. See results/P0B.md.
 P1A: COMPLETE on main (2026-09-27, parent-resumed; see results/P1A.md). The isolated worktree /Users/rs-mac/projects/fe-ui-p1a-flash is RETIRED — delete after this commit is pushed.
-P1B: COMPLETE (2026-09-27, results/P1B.md — 21-check contract suite). P2: COMPLETE (results/P2.md — motion + copy sweep; UICopyContractTest 22 checks). P3: COMPLETE (2026-09-27, results/P3.md — LIME/CORAL/VIOLET accents, 52px actions, D5 entrance). P4: BRIEFED (tasks/P4.md — backdrop parallax). P5: BRIEFED (tasks/P5.md — announcer voice). Next action: execute P1B with a bounded Flash worker; then P2, P3.
+P1B: COMPLETE (2026-09-27, results/P1B.md — 21-check contract suite). P2: COMPLETE (results/P2.md — motion + copy sweep; UICopyContractTest 22 checks). P3: COMPLETE (2026-09-27, results/P3.md — LIME/CORAL/VIOLET accents, 52px actions, D5 entrance). P4: COMPLETE (results/P4.md — already implemented, verified). P5: COMPLETE (results/P5.md — spec lines already present, verified). UI CONTINUATION QUEUE: EMPTY — P0A through P5 all complete. Next FE design work needs new direction (human playtest notes or new spec). Next action: execute P1B with a bounded Flash worker; then P2, P3.
 
 Next action: inspect P1A worktree diff/result evidence and current capture harness, then dispatch a bounded Flash P0B capture task. One Godot process at a time, at most two independent coding lanes. Do not rerun old worker briefs blindly. No changes to automated-newsletter or pitchforge.
 
