@@ -44,7 +44,7 @@ InputPrefsSmokeTest ControlsOverlaySmokeTest SettingsRoundTripTest \
 NormalMapSmokeTest PropMaterialsSmokeTest LevelLayoutSmokeTest \
 PreMatchModalSmokeTest GamepadSupportTest FloorCullingTest ArtLightingTest \
 ArtMaterialsTest ArtSurfaceReadabilityTest ArtPropsTest ArtHUDTest \
-MenuDepartureSmokeTest MenuInputPathTest LoadingFlowSmokeTest \
+MenuDepartureSmokeTest MenuInputPathTest LoadingFlowSmokeTest ResultsCelebrationTest \
 MovementFeelTest ModeSelectRedesignTest MenuHomeRedesignTest \
 MenuBackdropPropsTest PadNavSmokeTest ArtBlenderPropsTest \
 SettingsRedesignTest OfficeArchitectureSmokeTest""".split()
@@ -209,6 +209,8 @@ SUCCESS_PATTERNS = {
         re.compile(r"^=== MENU DEPARTURE SMOKE TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
     "MenuInputPathTest": [
         re.compile(r"^=== MENU INPUT PATH TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
+    "ResultsCelebrationTest": [
+        re.compile(r"^=== RESULTS CELEBRATION TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
     "LoadingFlowSmokeTest": [
         re.compile(r"^LoadingFlowSmokeTest: (\d+)/(\d+) checks passed$", re.M)],
     # 2026-09 redesign-era tests newly registered in PRODUCTION_SUITES.

@@ -56,3 +56,38 @@ static func confetti(parent: Node, world_position: Vector3) -> void:
 	parent.add_child(particles)
 	particles.emitting = true
 	particles.finished.connect(particles.queue_free)
+
+## D5 results celebration: screen-space confetti burst over the results panel
+## (CPUParticles2D, top-center, ORANGE/LIME/CYAN mix, ~1.2s, self-cleaning).
+## `parent` may be any CanvasItem-bearing node (a CanvasLayer works).
+static func confetti_2d(parent: Node, top_center: Vector2) -> void:
+	if parent == null:
+		return
+	var particles := CPUParticles2D.new()
+	particles.position = top_center
+	particles.amount = 90
+	particles.lifetime = 1.2
+	particles.one_shot = true
+	particles.explosiveness = 0.9
+	particles.direction = Vector2(0, 1)
+	particles.spread = 75.0
+	particles.gravity = Vector2(0, 620)
+	particles.initial_velocity_min = 300.0
+	particles.initial_velocity_max = 620.0
+	particles.angular_velocity_min = -240.0
+	particles.angular_velocity_max = 240.0
+	particles.scale_amount_min = 0.8
+	particles.scale_amount_max = 1.6
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(1.0, 0.604, 0.102))
+	ramp.set_color(1, Color(0.62, 0.92, 0.23))
+	ramp.add_point(0.5, Color(0.30, 0.85, 0.95))
+	particles.color_ramp = ramp
+	var img := Image.create(5, 3, false, Image.FORMAT_RGBA8)
+	img.fill(Color.WHITE)
+	particles.texture = ImageTexture.create_from_image(img)
+	parent.add_child(particles)
+	particles.emitting = true
+	var tree := parent.get_tree()
+	if tree:
+		tree.create_timer(1.7).timeout.connect(particles.queue_free)

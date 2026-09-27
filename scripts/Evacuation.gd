@@ -2192,8 +2192,10 @@ func _style_results_panel() -> void:
 				var value := Label.new()
 				value.name = "%sValue" % spec[1]
 				value.text = "—"
-				value.add_theme_font_size_override("font_size", 13)
-				value.add_theme_color_override("font_color", UIT.color(UIT.TEXT))
+				# D5: stat values read at 24px; TOP SPEED carries the orange.
+				value.add_theme_font_size_override("font_size", 24)
+				value.add_theme_color_override("font_color",
+					UIT.color(UIT.ORANGE) if spec[1] == "TopSpeed" else UIT.color(UIT.TEXT))
 				row.add_child(value)
 		# S-F record pills (LIME per spec).
 		if not vbox.has_node("PillRow"):
@@ -2205,14 +2207,19 @@ func _style_results_panel() -> void:
 			vbox.move_child(pills, vbox.get_node_or_null("StatsGrid").get_index() + 1)
 		var winner = vbox.get_node_or_null("WinnerLabel")
 		if winner:
-			winner.add_theme_color_override("font_color", UIT.color(UIT.TEXT))
-			winner.add_theme_font_size_override("font_size", 26)
+			# D5: 32px warm-orange banner with a dark outline for contrast.
+			winner.add_theme_color_override("font_color", Color(1.0, 0.65, 0.1))
+			winner.add_theme_font_size_override("font_size", 32)
+			winner.add_theme_color_override("font_outline_color", Color("0a0a0f"))
+			winner.add_theme_constant_override("outline_size", 4)
 		var rematch = vbox.get_node_or_null("RematchButton")
 		if rematch and UIT:
 			UIT.apply_primary(rematch)
+			rematch.custom_minimum_size.y = 52.0
 		var menu = vbox.get_node_or_null("MenuButton")
 		if menu and UIT:
 			UIT.apply_secondary(menu, UIT.color(UIT.VIOLET))
+			menu.custom_minimum_size.y = 52.0
 		var stats = vbox.get_node_or_null("StatsLabel")
 		if stats:
 			# StatsLabel survives as the muted modifiers caption only.
@@ -2248,11 +2255,11 @@ func _end_race() -> void:
 	# StatsManager is absent (meter tick hidden, no pills from records).
 	var prev_top_speed := -1.0
 	var prev_races_valid := false
+	var won := false
+	if finish_order.size() > 0 and is_instance_valid(local_player):
+		won = finish_order[0].player_id == local_player.get_instance_id()
 	var stats = get_node_or_null("/root/StatsManager")
 	if stats:
-		var won := false
-		if finish_order.size() > 0 and is_instance_valid(local_player):
-			won = finish_order[0].player_id == local_player.get_instance_id()
 		var prev_best: float = stats.top_speed_ever
 		var prev_races: int = stats.total_races
 		var prev_wins: int = stats.races_won
@@ -2304,7 +2311,10 @@ func _end_race() -> void:
 				if new_personal_best:
 					pill_row.add_child(_record_pill("★ NEW TOP-SPEED RECORD", UIT))
 				if skin_unlock_names.size() > 0:
-					pill_row.add_child(_record_pill("◆ NEW CHAIR: %s" % ", ".join(skin_unlock_names), UIT))
+					pill_row.add_child(_record_pill("◆ NEW CHAIR: %s" % ", ".join(skin_unlock_names),
+						UIT, UIT.color(UIT.VIOLET)))
+				# D5: entrance celebration — animate in, dim the match HUD.
+				_present_results_panel(won)
 			# Show active modifiers on the results screen for clarity
 			if sp_modifiers:
 				var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
@@ -2318,9 +2328,16 @@ func _end_race() -> void:
 
 	# REVIEW FIX: was has_method("confetti_burst") — the function is
 	# `confetti(parent, pos)`, so finish-line confetti never fired.
-	var impact = load("res://scripts/ImpactFX.gd")
-	if impact and impact.has_method("confetti"):
-		impact.confetti(self, local_player.global_position if local_player else Vector3.ZERO)
+	# D5: confetti is a WIN reward — world burst at the winner + a 2D burst
+	# over the results panel. Losses end quiet.
+	if won:
+		var impact = load("res://scripts/ImpactFX.gd")
+		if impact and impact.has_method("confetti") and is_instance_valid(local_player):
+			impact.confetti(self, local_player.global_position)
+		if impact and impact.has_method("confetti_2d") and results_panel:
+			var a11y_win = load("res://scripts/Accessibility.gd")
+			if a11y_win == null or not a11y_win.reduced_motion_enabled():
+				impact.confetti_2d(results_panel.get_parent(), _results_top_center())
 	if new_personal_best:
 		var audio_pb = get_node_or_null("/root/AudioManager")
 		if audio_pb:
@@ -2331,11 +2348,13 @@ func _end_race() -> void:
 	if skin_unlock_names.size() > 0:
 		_announce_skin_unlocks(skin_unlock_names)
 
-## S-F: LIME record pill (spec section 7 "record pills (LIME)").
-func _record_pill(text: String, UIT) -> PanelContainer:
+## S-F: record pill (spec section 7 "record pills"); D5: top-speed record is
+## LIME, chair unlocks are VIOLET — pass `accent` to override.
+func _record_pill(text: String, UIT, accent: Color = Color(0, 0, 0, 0)) -> PanelContainer:
+	var col: Color = accent if accent.a > 0.0 else UIT.color(UIT.LIME)
 	var pill := PanelContainer.new()
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(UIT.color(UIT.LIME), 0.16)
+	style.bg_color = Color(col, 0.16)
 	style.set_corner_radius_all(9)
 	style.content_margin_left = 10.0
 	style.content_margin_right = 10.0
@@ -2345,9 +2364,65 @@ func _record_pill(text: String, UIT) -> PanelContainer:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 12)
-	label.add_theme_color_override("font_color", UIT.color(UIT.LIME))
+	label.add_theme_color_override("font_color", col)
 	pill.add_child(label)
 	return pill
+
+## D5: results entrance — fade+scale-in 0.4s ease-out, and the in-match HUD
+## cards dim to 0.35 behind the panel (results panel itself exempt).
+## Reduced motion: both land instantly.
+func _present_results_panel(won: bool) -> void:
+	_clamp_results_panel()
+	results_panel.pivot_offset = results_panel.size / 2.0
+	var a11y = load("res://scripts/Accessibility.gd")
+	var instant: bool = a11y != null and a11y.reduced_motion_enabled()
+	if instant:
+		results_panel.modulate = Color(1, 1, 1, 1)
+		results_panel.scale = Vector2.ONE
+		_dim_hud_behind_results(0.0, true)
+		return
+	results_panel.modulate = Color(1, 1, 1, 0)
+	results_panel.scale = Vector2(0.9, 0.9)
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(results_panel, "modulate:a", 1.0, 0.4) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(results_panel, "scale", Vector2.ONE, 0.4) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_dim_hud_behind_results(0.3, false)
+
+func _dim_hud_behind_results(duration: float, instant: bool) -> void:
+	# The real race HUD (speed/boost/minimap/objective cards) lives on hud_ext,
+	# its own CanvasLayer at layer 10 above $UI. CanvasLayer has no modulate
+	# (it is not a CanvasItem) — dim its top-level card groups instead, which
+	# covers every card no matter how HUD.gd regroups its internals.
+	if hud_ext:
+		for child in hud_ext.get_children():
+			if child is CanvasItem:
+				if instant:
+					(child as CanvasItem).modulate.a = 0.35
+				else:
+					var tw := create_tween()
+					tw.tween_property(child, "modulate:a", 0.35, duration)
+	var parent := results_panel.get_parent()
+	if parent == null:
+		return
+	for child in parent.get_children():
+		if child == results_panel or not (child is CanvasItem):
+			continue
+		if child is CPUParticles2D or String(child.name).begins_with("PanicCam"):
+			continue
+		if String(child.name) == "SubtitleOverlay":
+			continue
+		if instant:
+			(child as CanvasItem).modulate.a = 0.35
+		else:
+			var tw := create_tween()
+			tw.tween_property(child, "modulate:a", 0.35, duration)
+
+## D5: top-center of the results panel, in the $UI canvas layer's space.
+func _results_top_center() -> Vector2:
+	return Vector2(results_panel.global_position.x + results_panel.size.x / 2.0,
+		results_panel.global_position.y + 8.0)
 
 ## Phase 8A: caption + announcer hype for fresh chair unlocks.
 func _announce_skin_unlocks(names: Array[String]) -> void:
