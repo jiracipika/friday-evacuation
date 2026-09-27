@@ -248,3 +248,24 @@ class MeterBar extends Control:
 		if tick >= 0.0 and maximum > 0.0:
 			var tx := size.x * clampf(tick / maximum, 0.0, 1.0)
 			draw_rect(Rect2(Vector2(tx - 1.0, 0.0), Vector2(2.0, size.y)), TICK)
+
+## P2/D5 motion: the standard overlay entrance — fade+scale-in 0.4s
+## ease-out. Reduced motion (user setting) leaves the panel as-is (instant).
+## Safe to call from _ready: the tween kickoff is deferred one frame so the
+## panel's layout size is known before the pivot is set.
+static func apply_entrance(panel: Control, host: Node) -> void:
+	var a11y = load("res://scripts/Accessibility.gd")
+	if a11y != null and a11y.reduced_motion_enabled():
+		return
+	panel.modulate = Color(1, 1, 1, 0)
+	panel.scale = Vector2(0.9, 0.9)
+	var kickoff := func() -> void:
+		if not is_instance_valid(panel):
+			return
+		panel.pivot_offset = panel.size / 2.0
+		var tw = host.create_tween().set_parallel(true)
+		tw.tween_property(panel, "modulate:a", 1.0, 0.4) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(panel, "scale", Vector2.ONE, 0.4) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	kickoff.call_deferred()

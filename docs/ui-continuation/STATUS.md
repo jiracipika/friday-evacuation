@@ -8,7 +8,7 @@ Evidence: 26/26 synthetic harness cases; real MenuDepartureSmokeTest, LoadingFlo
 
 P0B: COMPLETE (2026-09-27) — every screen audited against the spec; one low-priority nit filed (mode-card SELECTED pill clips top edge) for P1B. See results/P0B.md.
 P1A: COMPLETE on main (2026-09-27, parent-resumed; see results/P1A.md). The isolated worktree /Users/rs-mac/projects/fe-ui-p1a-flash is RETIRED — delete after this commit is pushed.
-P1B: COMPLETE (2026-09-27, results/P1B.md — 21-check contract suite). P2: BRIEFED (tasks/P2.md — microcopy + motion). P3: COMPLETE (2026-09-27, results/P3.md — LIME/CORAL/VIOLET accents, 52px actions, D5 entrance). P4/P5: UNDEFINED (reserve). Next action: execute P1B with a bounded Flash worker; then P2, P3.
+P1B: COMPLETE (2026-09-27, results/P1B.md — 21-check contract suite). P2: MOTION COMPLETE (results/P2.md); microcopy sweep remains open. P3: COMPLETE (2026-09-27, results/P3.md — LIME/CORAL/VIOLET accents, 52px actions, D5 entrance). P4/P5: UNDEFINED (reserve). Next action: execute P1B with a bounded Flash worker; then P2, P3.
 
 Next action: inspect P1A worktree diff/result evidence and current capture harness, then dispatch a bounded Flash P0B capture task. One Godot process at a time, at most two independent coding lanes. Do not rerun old worker briefs blindly. No changes to automated-newsletter or pitchforge.
 

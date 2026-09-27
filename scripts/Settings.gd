@@ -131,6 +131,7 @@ func _build_ui() -> void:
 	style.content_margin_top = 24.0
 	style.content_margin_bottom = 24.0
 	panel.add_theme_stylebox_override("panel", style)
+	UI_THEME.apply_entrance(panel, self)
 
 	# Outer column: title / scrollable body / pinned BACK. (PanelContainer
 	# stacks bare children on top of each other, so they must live in a

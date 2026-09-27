@@ -45,6 +45,8 @@ func _ready() -> void:
 	var box = VBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)
 	panel.add_child(box)
+	# P2: standard overlay entrance (fade+scale, reduced-motion instant).
+	UI_THEME.apply_entrance(panel, self)
 	var tape: Control = UI_THEME.TapeStrip.new()
 	tape.name = "TapeStrip"
 	tape.custom_minimum_size = Vector2(0, 10)
