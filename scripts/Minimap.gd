@@ -1,5 +1,12 @@
 extends Control
 
+# P1B: frame chrome routes through UITheme tokens. Blip colors are semantic
+# (green exit / blue player) with no token equivalent — named here, not
+# sprinkled through _draw as inline literals.
+const EXIT_BLIP := Color("63e68a")
+const PLAYER_BLIP := Color("70b7ff")
+
+var UIT: GDScript
 var _pulse_time := 0.0
 
 func _process(delta: float) -> void:
@@ -11,6 +18,7 @@ var player_floor := 0
 var exit_position := Vector2(0.5, 0.92)
 
 func _ready() -> void:
+	UIT = load("res://scripts/UITheme.gd")
 	custom_minimum_size = Vector2(150, 150)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	queue_redraw()
@@ -41,8 +49,12 @@ func _draw() -> void:
 
 func _panel_style() -> StyleBoxFlat:
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.03, 0.03, 0.06, 0.84)
-	style.border_color = Color(1, 0.6, 0.1, 0.65)
+	if UIT:
+		style.bg_color = UIT.color(UIT.BG, 0.84)
+		style.border_color = UIT.color(UIT.ORANGE, 0.65)
+	else:
+		style.bg_color = Color(0.03, 0.03, 0.06, 0.84)
+		style.border_color = Color(1, 0.6, 0.1, 0.65)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(10)
 	return style

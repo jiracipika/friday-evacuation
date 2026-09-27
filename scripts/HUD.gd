@@ -17,6 +17,8 @@ var boost_bar: ProgressBar
 var minimap: Control
 var item_label: Label
 var objective_label: Label
+var state_panel: PanelContainer
+var _state_accented := false
 var _last_objective_floor := -1
 
 var UIT: GDScript
@@ -55,13 +57,17 @@ func _panel_style(alpha: float, radius: int = 8) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	# Spec §6 header uses alpha 0.96; ArtHUDTest's readability contract
 	# requires fully opaque world isolation for the player-state panel.
-	style.bg_color = _c("0a0a0f", alpha)
+	style.bg_color = _c(UIT.BG, alpha)
 	style.set_corner_radius_all(radius)
 	style.content_margin_left = 12.0
 	style.content_margin_right = 12.0
 	style.content_margin_top = 4.0
 	style.content_margin_bottom = 4.0
 	return style
+
+## P1B: the one chip look — story chip and sabotage hint share it.
+func _chip_style() -> StyleBoxFlat:
+	return _panel_style(0.96, 10)
 
 func _build_hud() -> void:
 	# --- OBJECTIVE HEADER (top-center): caption left, timer right. ---
@@ -78,13 +84,13 @@ func _build_hud() -> void:
 	var header_row := HBoxContainer.new()
 	header_row.add_theme_constant_override("separation", _px(16))
 	header.add_child(header_row)
-	timer_caption = _make_label("EVACUATION WINDOW", _px(14), _c("f7f6f2"))
+	timer_caption = _make_label("EVACUATION WINDOW", _px(14), _c(UIT.TEXT))
 	timer_caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	header_row.add_child(timer_caption)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header_row.add_child(spacer)
-	timer_label = _make_label("2:00", _px(34), _c("ff9a1a"))
+	timer_label = _make_label("2:00", _px(34), _c(UIT.ORANGE))
 	header_row.add_child(timer_label)
 
 	# --- OBJECTIVE STRIP: arrow + immediate action, two lines max. ---
@@ -102,15 +108,15 @@ func _build_hud() -> void:
 	obj_row.add_theme_constant_override("separation", _px(10))
 	obj_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	objective_panel.add_child(obj_row)
-	var arrow := _make_label("▲", _px(28), _c("ff9a1a"))
+	var arrow := _make_label("▲", _px(28), _c(UIT.ORANGE))
 	arrow.name = "ObjectiveArrow"
 	obj_row.add_child(arrow)
-	objective_label = _make_label(FLOOR_GOALS[0], _px(18), _c("f7f6f2"))
+	objective_label = _make_label(FLOOR_GOALS[0], _px(18), _c(UIT.TEXT))
 	objective_label.name = "ObjectiveStrip"
 	objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	objective_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	objective_label.add_theme_constant_override("outline_size", 4)
-	objective_label.add_theme_color_override("font_outline_color", _c("0a0a0f", 0.85))
+	objective_label.add_theme_color_override("font_outline_color", _c(UIT.BG, 0.85))
 	obj_row.add_child(objective_label)
 
 	# --- FLOOR / MAP GROUP (top-left): story label above the map. ---
@@ -123,9 +129,9 @@ func _build_hud() -> void:
 	floor_group.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(floor_group)
 	var floor_panel := PanelContainer.new()
-	floor_panel.add_theme_stylebox_override("panel", _panel_style(0.96, 10))
+	floor_panel.add_theme_stylebox_override("panel", _chip_style())
 	floor_group.add_child(floor_panel)
-	floor_label = _make_label("FLOOR 1", _px(20), _c("f7f6f2"))
+	floor_label = _make_label("FLOOR 1", _px(20), _c(UIT.TEXT))
 	floor_panel.add_child(floor_label)
 	var minimap_script = load("res://scripts/Minimap.gd")
 	minimap = Control.new()
@@ -146,11 +152,11 @@ func _build_hud() -> void:
 	status_panel.offset_bottom = _px(64)
 	status_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(status_panel)
-	status_label = _make_label("RACE", _px(18), _c("f7f6f2"))
+	status_label = _make_label("RACE", _px(18), _c(UIT.TEXT))
 	status_panel.add_child(status_label)
 
 	# --- PLAYER STATE (bottom-left): speed, thrust, item/charges. ---
-	var state_panel := PanelContainer.new()
+	state_panel = PanelContainer.new()
 	state_panel.name = "Instruments"
 	# Readability contract (ArtHUDTest): world-facing player-state chrome is
 	# fully opaque; header/strip keep their spec alphas (0.96/0.92).
@@ -167,9 +173,9 @@ func _build_hud() -> void:
 	var speed_row := HBoxContainer.new()
 	speed_row.add_theme_constant_override("separation", _px(8))
 	state_cols.add_child(speed_row)
-	speed_label = _make_label("0", _px(24), _c("f7f6f2"))
+	speed_label = _make_label("0", _px(24), _c(UIT.TEXT))
 	speed_row.add_child(speed_label)
-	var unit_label = _make_label("km/h", _px(12), _c("9b9baa"))
+	var unit_label = _make_label("km/h", _px(12), _c(UIT.TEXT_MUTED))
 	unit_label.name = "SpeedUnit"
 	unit_label.size_flags_vertical = Control.SIZE_SHRINK_END
 	speed_row.add_child(unit_label)
@@ -184,7 +190,7 @@ func _build_hud() -> void:
 	abilities.name = "Abilities"
 	abilities.add_theme_constant_override("separation", _px(4))
 	state_cols.add_child(abilities)
-	boost_label = _make_label("☕ BOOST READY [SPACE]", _px(14), _c("ff9a1a"))
+	boost_label = _make_label("☕ BOOST READY [SPACE]", _px(14), _c(UIT.ORANGE))
 	abilities.add_child(boost_label)
 	boost_bar = ProgressBar.new()
 	boost_bar.custom_minimum_size = Vector2(_px(252), _px(12))
@@ -192,20 +198,25 @@ func _build_hud() -> void:
 	boost_bar.add_theme_stylebox_override("fill", _meter_fill())
 	boost_bar.add_theme_stylebox_override("background", _meter_bg())
 	abilities.add_child(boost_bar)
-	sabotage_label = _make_label("Q  SABOTAGE", _px(14), _c("f7f6f2", 0.72))
-	abilities.add_child(sabotage_label)
-	item_label = _make_label("", _px(14), _c("9b82ff"))
+	# P1B: sabotage hint shares the story chip's panel style (one chip look).
+	sabotage_label = _make_label("Q  SABOTAGE", _px(14), _c(UIT.TEXT, 0.72))
+	var sabotage_chip := PanelContainer.new()
+	sabotage_chip.name = "SabotageChip"
+	sabotage_chip.add_theme_stylebox_override("panel", _chip_style())
+	sabotage_chip.add_child(sabotage_label)
+	abilities.add_child(sabotage_chip)
+	item_label = _make_label("", _px(14), _c(UIT.VIOLET))
 	abilities.add_child(item_label)
 
 func _meter_fill() -> StyleBoxFlat:
 	var fill := StyleBoxFlat.new()
-	fill.bg_color = _c("ff9a1a")  # spec §6: ORANGE throughout, no ramp
+	fill.bg_color = _c(UIT.ORANGE)  # spec §6: ORANGE throughout, no ramp
 	fill.set_corner_radius_all(3)
 	return fill
 
 func _meter_bg() -> StyleBoxFlat:
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = _c("15151f")
+	bg.bg_color = _c(UIT.SURFACE)
 	bg.set_corner_radius_all(3)
 	return bg
 
@@ -251,14 +262,14 @@ func _process(delta: float) -> void:
 		if a11y and a11y.has_method("reduced_motion"):
 			reduced = a11y.reduced_motion()
 		if _timer_remaining < 15.0:
-			timer_label.add_theme_color_override("font_color", _c("ff6f61"))
+			timer_label.add_theme_color_override("font_color", _c(UIT.CORAL))
 			var pulse := 1.0
 			if not reduced:
 				_pulse_time += delta
 				pulse = 0.75 + 0.25 * (0.5 + 0.5 * sin(_pulse_time * TAU / 0.5))
 			timer_label.modulate.a = pulse
 		else:
-			timer_label.add_theme_color_override("font_color", _c("ff9a1a"))
+			timer_label.add_theme_color_override("font_color", _c(UIT.ORANGE))
 			timer_label.modulate.a = 1.0
 
 func set_player_position(world_position: Vector3, floor_index: int) -> void:
@@ -284,7 +295,20 @@ func set_boost(cooldown: float, duration: float, active: bool, cooldown_max := 3
 	if boost_label:
 		# §6: READY / ACTIVE / cooldown text at 14px.
 		boost_label.text = "☕ BOOST ACTIVE" if active else ("☕ BOOST READY [SPACE]" if cooldown <= 0.0 else "☕ BOOST %.1fs" % cooldown)
-		boost_label.add_theme_color_override("font_color", _c("ffbd4a") if active or cooldown <= 0.0 else _c("f7f6f2", 0.45))
+		boost_label.add_theme_color_override("font_color", _c(UIT.ORANGE_BRIGHT) if active or cooldown <= 0.0 else _c(UIT.TEXT, 0.45))
+	_apply_state_accent(active or cooldown <= 0.0)
+
+## P1B: the player-state panel glows an ORANGE border while boost is
+## READY/ACTIVE and returns to the plain surface while cooling. Toggles only
+## on state change (no per-frame stylebox churn).
+func _apply_state_accent(on: bool) -> void:
+	if state_panel == null or on == _state_accented:
+		return
+	_state_accented = on
+	var sb: StyleBoxFlat = state_panel.get_theme_stylebox("panel")
+	if sb:
+		sb.set_border_width_all(2 if on else 0)
+		sb.border_color = UIT.color(UIT.ORANGE)
 
 ## Phase 4B item readout: kind × charges, or the plain sabotage hint.
 func set_item(kind: StringName, charges: int) -> void:
@@ -302,4 +326,4 @@ func set_item(kind: StringName, charges: int) -> void:
 		_:
 			display = "ITEM ×%d  [Q]" % charges
 	item_label.text = display
-	item_label.add_theme_color_override("font_color", _c("ff6f61") if kind == &"stapler" else _c("f2c66d"))
+	item_label.add_theme_color_override("font_color", _c(UIT.CORAL) if kind == &"stapler" else _c(UIT.YELLOW))
