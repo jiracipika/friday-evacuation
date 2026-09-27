@@ -31,3 +31,7 @@ LayoutPacingTest 9/9 (new), ArtBlenderPropsTest 18/18 (fixed), full ladder
 
 **Next steps:** P0B fresh-screen audit (per STATUS.md), then P1B–P5; consider
 human-playtest tuning of hazard cadence (software proxies in place).
+
+**Checkpoint build triggered** (2026-09-27, post-P0B): today landed D5
+results celebration + pill fix + input-path/pacing suites on main; marking
+[build] so the live site picks them up.
