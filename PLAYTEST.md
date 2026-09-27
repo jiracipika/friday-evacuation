@@ -121,6 +121,7 @@ Each mode: one full loop, pre-match modal correct, HUD timer honest.
 - [ ] SHOP & SEEK: disguise in/out (2s freeze, wobble tell); first/second guard catches stun and allow an escape; the third ends the round; 5-item list is beatable in 90s
 - [ ] Shared mode HUD stays fully in-bounds at 390px portrait and shows the final 20% of each timer in coral
 - [ ] PIZZA COLONY: claim a pad (3s), cheese harvest, olive bomb fort, chef chase, cutter sweep elimination
+- [ ] All three secondary modes show PLAY AGAIN and MAIN MENU on both win and loss; mouse and controller input work, rematch resets the mode
 - [ ] Modifiers: toggle 2-3 chips (NO COFFEE + JUST WAXED) → race applies them; LAN match ignores modifiers (single-player only)
 
 ## Regression guards (already automated — don't hand-test)

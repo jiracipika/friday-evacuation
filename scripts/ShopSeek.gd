@@ -74,6 +74,7 @@ var guard: CharacterBody3D
 var guard_path: Array[Vector3] = []
 var guard_index := 0
 var mode_hud: CanvasLayer
+var results_overlay: CanvasLayer
 var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
@@ -129,17 +130,21 @@ func _process(delta: float) -> void:
 		match_over = true
 		mode_hud.update_state(0.0, 1.0, "LIST COMPLETE — ESCAPED", Color("a8ffbd"))
 		_caption("LIST COMPLETE!")
+		_show_results(true, "LIST COMPLETE — ESCAPED")
 		return
 	if remaining_time <= 0.0:
 		failed = true
 		match_over = true
 		mode_hud.update_state(0.0, progress, "TIME UP — %d/%d GRABBED" % [list_collected.size(), list_target], Color("ff7070"))
+		_show_results(false, "TIME UP — %d/%d ITEMS" % [list_collected.size(), list_target])
 		return
 	mode_hud.update_state(remaining_time, progress, status, Color("ffcf55") if not disguised else Color("7fd8ff"))
 
 # ============================ input ============================
 
 func _unhandled_input(event: InputEvent) -> void:
+	if match_over:
+		return
 	var FollowCameraScript = load("res://scripts/FollowCamera.gd")
 	if FollowCameraScript and FollowCameraScript.handle_mouse_input(event):
 		get_viewport().set_input_as_handled()
@@ -330,6 +335,15 @@ func _register_security_catch() -> void:
 			var progress := float(list_collected.size()) / float(list_target)
 			mode_hud.update_state(0.0, progress, "THREE STRIKES — SHIFT OVER", Color("ff7070"))
 			_caption("SHIFT OVER — TOO MANY SECURITY CATCHES")
+			_show_results(false, "THREE STRIKES — SHIFT OVER")
+
+func _show_results(victory: bool, headline: String) -> void:
+	if is_instance_valid(results_overlay):
+		return
+	var details := "ITEMS %d/%d  •  SECURITY CATCHES %d/%d" % [list_collected.size(), list_target, caught_count, CAUGHT_LIMIT]
+	var results_script = load("res://scripts/ModeResults.gd")
+	if results_script:
+		results_overlay = results_script.mount(self, headline, details, victory)
 
 # ============================ scan (seeker ability) ============================
 

@@ -131,45 +131,11 @@ func _finish_round(score: int, label: String, color: Color) -> void:
 		_next_round_timer = 3.0
 
 func _show_end_panel() -> void:
-	var layer := CanvasLayer.new()
-	layer.name = "EndPanel"
-	var panel := PanelContainer.new()
-	panel.anchor_left = 0.5
-	panel.anchor_right = 0.5
-	panel.anchor_top = 0.42
-	panel.anchor_bottom = 0.42
-	panel.offset_left = -220
-	panel.offset_right = 220
-	panel.offset_top = -90
-	panel.offset_bottom = 90
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.04, 0.04, 0.06, 0.96)
-	style.border_color = Color("ff9a1a")
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(10)
-	panel.add_theme_stylebox_override("panel", style)
-	var vbox := VBoxContainer.new()
-	var title := Label.new()
-	title.text = "SHIFT COMPLETE"
-	title.add_theme_font_size_override("font_size", 30)
-	title.add_theme_color_override("font_color", Color("ff9a1a"))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-	var score_lbl := Label.new()
-	var per_round := "  ·  ".join(round_scores.map(func(s): return "+%d" % s))
-	score_lbl.text = "TOTAL SCORE  %d\n%s" % [total_score, per_round]
-	score_lbl.add_theme_font_size_override("font_size", 18)
-	score_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(score_lbl)
-	var hint := Label.new()
-	hint.text = "Esc — menu"
-	hint.add_theme_font_size_override("font_size", 13)
-	hint.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(hint)
-	panel.add_child(vbox)
-	layer.add_child(panel)
-	add_child(layer)
+	var per_round := "  ·  ".join(round_scores.map(func(score): return "+%d" % score))
+	var details := "TOTAL SCORE  %d\n%s" % [total_score, per_round]
+	var results_script = load("res://scripts/ModeResults.gd")
+	if results_script:
+		results_script.mount(self, "SHIFT COMPLETE", details, total_score > 0)
 
 # ============================ per-frame ============================
 
@@ -374,6 +340,8 @@ func _destroy_cargo() -> void:
 # ============================ grab / throw ============================
 
 func _unhandled_input(event: InputEvent) -> void:
+	if match_over:
+		return
 	var FollowCameraScript = load("res://scripts/FollowCamera.gd")
 	if FollowCameraScript and FollowCameraScript.handle_mouse_input(event):
 		get_viewport().set_input_as_handled()
