@@ -47,3 +47,10 @@ purged today to heal it). Live site is CURRENT anyway via the documented
 local-export Vercel rescue (builds/friday-evacuation-web + _headers +
 vercel deploy --prod). Web export gotcha reconfirmed: the target directory
 must pre-exist.
+
+**Continuation block (14:30–17:05):** P1B complete (8961e4b — HUD fully on
+UITheme tokens, boost accent border, caught off-token f2c66d; 21-check
+HUDThemeSmokeTest), P3 complete (3c1be26 — mode results LIME/CORAL/VIOLET
+accents, 52px actions, D5 entrance; ModeResults test 6→11), P2 motion done
+(255e271 — UITheme.apply_entrance on lobby+settings; copy sweep remains).
+Final certification: ladder PASS 68/68 phases, 66/66 suites.
