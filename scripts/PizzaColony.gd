@@ -381,7 +381,6 @@ func _check_fell_off() -> void:
 
 func _eliminate(reason: String) -> void:
 	eliminated = true
-	match_over = true
 	var dir := Vector3(player.global_position.x, 0.0, player.global_position.z).normalized()
 	if dir.length() < 0.1:
 		dir = Vector3.RIGHT
@@ -396,7 +395,7 @@ func _end(victory: bool, reason: String) -> void:
 		return
 	match_over = true
 	won = victory
-	if player and is_instance_valid(player):
+	if victory and player and is_instance_valid(player):
 		player.set_can_move(false)
 	mode_hud.update_state(remaining_time if victory else 0.0, _progress(), reason, Color("a8ffbd") if victory else Color("ff7070"))
 	_caption(reason)
