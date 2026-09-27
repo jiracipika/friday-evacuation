@@ -125,3 +125,58 @@ func _make_effect(effect_name: String, intensity: float) -> AudioStream:
 	stream.stereo = false
 	stream.data = data
 	return stream
+
+# --- S-AMBIENT: looping office bed under races (2026-09-26) --------------
+
+var _ambient_player: AudioStreamPlayer = null
+
+## Seamless ~4s HVAC/fluorescent bed: two detuned low sines + shaped air
+## noise + a quiet 7.3kHz shimmer, looped forward. Swell periods divide
+## the buffer so the loop point is inaudible.
+func _make_ambient() -> AudioStreamWAV:
+	var sample_rate := 22050
+	var duration := 4.0
+	var sample_count := int(duration * sample_rate)
+	var data := PackedByteArray()
+	data.resize(sample_count * 2)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 505
+	for i in range(sample_count):
+		var t := float(i) / float(sample_rate)
+		var swell := 0.8 + 0.2 * sin(TAU * t / duration * 2.0)
+		var hum := (sin(TAU * 55.0 * t) * 0.5 + sin(TAU * 58.0 * t) * 0.35) * 0.06
+		var air := (rng.randf() * 2.0 - 1.0) * 0.012
+		var shimmer := sin(TAU * 7300.0 * t) * 0.004 * (0.5 + 0.5 * sin(TAU * t / duration * 5.0))
+		var sample := (hum + air + shimmer) * swell
+		var pcm := int(clampi(roundi(sample * 32767.0), -32768, 32767))
+		data[i * 2] = pcm & 0xff
+		data[i * 2 + 1] = (pcm >> 8) & 0xff
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = sample_rate
+	stream.stereo = false
+	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	stream.loop_begin = 0
+	stream.loop_end = sample_count
+	stream.data = data
+	return stream
+
+## Start the ambience — rides the Music bus (a bed, not an effect).
+## Idempotent; safe when called from every mode's _ready.
+func start_ambient() -> void:
+	if _ambient_player and _ambient_player.playing:
+		return
+	if _ambient_player == null:
+		_ambient_player = AudioStreamPlayer.new()
+		_ambient_player.bus = MUSIC_BUS
+		_ambient_player.volume_db = -14.0
+		add_child(_ambient_player)
+		_ambient_player.stream = _make_ambient()
+	_ambient_player.play()
+
+func stop_ambient() -> void:
+	if _ambient_player and _ambient_player.playing:
+		_ambient_player.stop()
+
+func is_ambient_playing() -> bool:
+	return _ambient_player != null and _ambient_player.playing

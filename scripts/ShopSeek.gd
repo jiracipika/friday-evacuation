@@ -78,6 +78,10 @@ var results_overlay: CanvasLayer
 var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
+	# Ambient bed rides the Music bus under the mode.
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("start_ambient"):
+		am.start_ambient()
 	# Phase 8B: single-player game-speed knob (no-op in test mode; get_time_scale
 	# itself returns 1.0 whenever a network peer is active).
 	load("res://scripts/Accessibility.gd").apply_time_scale()
@@ -108,6 +112,10 @@ func _ready() -> void:
 	_caption("GRAB %d ITEMS — GUARD ON PATROL" % list_target)
 
 func _exit_tree() -> void:
+	# Ambient bed dies with the mode (AudioManager may be absent raw).
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("stop_ambient"):
+		am.stop_ambient()
 	# Phase 8B teardown: never leak a boosted time_scale into the menu.
 	load("res://scripts/Accessibility.gd").reset_time_scale()
 

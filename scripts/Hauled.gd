@@ -60,6 +60,10 @@ var bee_swarm: GPUParticles3D
 var can_projectiles: Array[RigidBody3D] = []
 
 func _ready() -> void:
+	# Ambient bed rides the Music bus under the mode.
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("start_ambient"):
+		am.start_ambient()
 	# Phase 8B: single-player game-speed knob (no-op in test mode; get_time_scale
 	# itself returns 1.0 whenever a network peer is active).
 	load("res://scripts/Accessibility.gd").apply_time_scale()
@@ -84,6 +88,10 @@ func _ready() -> void:
 	_start_round(0)
 
 func _exit_tree() -> void:
+	# Ambient bed dies with the mode (AudioManager may be absent raw).
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("stop_ambient"):
+		am.stop_ambient()
 	_release_carried_cargo()
 	load("res://scripts/Accessibility.gd").reset_time_scale()
 

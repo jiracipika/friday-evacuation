@@ -2488,6 +2488,10 @@ func _exit_tree() -> void:
 	# Safety net: rematch reloads the scene without _on_back_to_menu.
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	load("res://scripts/Accessibility.gd").reset_time_scale()
+	# Ambient bed dies with the mode (AudioManager may be absent raw).
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("stop_ambient"):
+		am.stop_ambient()
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Mouse-look camera motion (toggle+sensitivity inside InputPrefs).
@@ -2549,6 +2553,10 @@ func _setup_hud() -> void:
 	if mc_script and mc_script.has_method("mount_for_mode"):
 		# mount_for_mode owns the direct chair signal routing for every mode.
 		mobile_controls = mc_script.mount_for_mode(self, local_player)
+	# Ambient office bed (rides Music bus; pauses with the PreMatchModal).
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("start_ambient"):
+		am.start_ambient()
 
 func _on_mobile_move(value: Vector2) -> void:
 	if local_player and is_instance_valid(local_player) and local_player.has_method("set_mobile_input"):
