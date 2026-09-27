@@ -468,6 +468,42 @@ def run_boot(godot_bin, repo_root, log_path, timeout_seconds):
     return result
 
 
+def run_import(godot_bin, repo_root, log_path, timeout_seconds):
+    """Fresh-asset import phase: godot --import generates .import metadata
+    (models/*.import are gitignored by policy) and the .godot cache. Without
+    this a fresh clone fails every GLB-loading suite (e.g. box_stack.glb).
+    Failure here is a FAILURE, never a silent skip."""
+    cmd = [godot_bin, "--headless", "--path", repo_root, "--import"]
+    with open(log_path, "wb") as logf:
+        logf.write(("$ %s\n" % " ".join(cmd)).encode("utf-8"))
+        logf.flush()
+        started = time.monotonic()
+        proc = subprocess.Popen(
+            cmd, stdout=logf, stderr=subprocess.STDOUT,
+            cwd=repo_root, start_new_session=True)
+        try:
+            rc = proc.wait(timeout=timeout_seconds)
+            timed_out = False
+        except subprocess.TimeoutExpired:
+            _kill_process_group(proc)
+            rc = None
+            timed_out = True
+        duration = time.monotonic() - started
+    with open(log_path, "ab") as logf:
+        logf.write(("\n[runner] rc=%s timed_out=%s duration=%.1fs timeout=%ss\n"
+                    % (rc, timed_out, duration, timeout_seconds)).encode("utf-8"))
+    result = {"suite": "IMPORT", "rc": rc, "timeout": timeout_seconds,
+              "log_path": log_path}
+    if timed_out:
+        result["status"] = "TIMEOUT"
+        result["reason"] = "import timed out after %ss" % timeout_seconds
+        return result
+    result["status"] = "PASS" if rc == 0 else "FAIL"
+    if rc != 0:
+        result["reason"] = "import exited rc=%s" % rc
+    return result
+
+
 def run_ladder(godot_bin=None, log_dir=None, timeout_seconds=None,
                suites=None, include_boot=True, repo_root=None):
     """Run the full serial ladder. Returns (exit_code, run_dir, results)."""
@@ -491,6 +527,16 @@ def run_ladder(godot_bin=None, log_dir=None, timeout_seconds=None,
 
     results = []
     overall = 0
+    # Import phase FIRST (2026-09-27: fresh clones failed GLB suites because
+    # models/*.import are gitignored — the cache must be generated locally).
+    import_log = os.path.join(run_dir, "import.log")
+    res = run_import(godot_bin, repo_root, import_log, timeout_seconds)
+    results.append(res)
+    print("=== IMPORT %s ===" % res["status"])
+    if res["status"] != "PASS":
+        print("    reason: %s" % res.get("reason", ""))
+        print("    log: %s" % res["log_path"])
+        overall = 1
     for suite in suites:
         log_path = os.path.join(run_dir, "suite-%s.log" % suite)
         res = run_suite(godot_bin, repo_root, suite, log_path, timeout_seconds)
