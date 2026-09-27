@@ -33,7 +33,7 @@ PRODUCTION_SUITES = """\
 BootTest HeroAssemblySmokeTest SplashGateTest PlayerChairMechanicsSmokeTest \
 JumpForgivenessTest GraphicsPassSmokeTest MenuLayoutSmokeTest \
 ChairSkinSmokeTest CharacterRosterSmokeTest HauledSmokeTest ShopSeekSmokeTest \
-PizzaColonySmokeTest TouchControlsSmokeTest ModeSmokeTest NetworkSmokeTest \
+PizzaColonySmokeTest TouchControlsSmokeTest ModeResultsSmokeTest ModeSmokeTest NetworkSmokeTest \
 NetworkTwoPeerTest LanAvatarSyncTest AnnouncerSmokeTest PanicCamSmokeTest \
 LevelClearTest CheckpointBotTest SkinBotSanityTest HazardsSmokeTest \
 ThemedFloorsSmokeTest PowerUpSmokeTest PauseMenuSmokeTest \
@@ -140,6 +140,7 @@ SUCCESS_PATTERNS = {
     "TouchControlsSmokeTest": [re.compile(r"^TOUCH_SMOKE_PASS$", re.M)],
     # === MODE SMOKE TEST PASSED ===  (ModeSmokeTest.gd:23)
     "ModeSmokeTest": [re.compile(r"^=== MODE SMOKE TEST PASSED ===$", re.M)],
+    "ModeResultsSmokeTest": [re.compile(r"^ModeResultsSmokeTest: \d+/\d+ checks passed$", re.M)],
     "NetworkSmokeTest": [
         re.compile(r"^=== NETWORK SMOKE TEST PASSED ===$", re.M)],
     "NetworkTwoPeerTest": [
