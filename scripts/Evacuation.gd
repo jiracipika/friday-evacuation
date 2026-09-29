@@ -2390,6 +2390,35 @@ func _end_race() -> void:
 					var own_row := _standings_row(finish_order[own_placement - 1], own_placement, true)
 					standings.add_child(own_row)
 					_animate_standings_row(own_row, 5)
+				# Non-finishers show as DNF rows so LAN players can see who
+				# got stranded (and by how many). On a full finish the
+				# roster is fully in finish_order and no rows appear. The
+				# racing roster is local_player + remote_players nodes —
+				# the `players` array only tracks a finish-count threshold.
+				var dnf_idx := 0
+				var roster: Array = []
+				if is_instance_valid(local_player):
+					roster.append({"id": local_player.get_instance_id(), "name": local_player.player_display_name})
+				for remote in remote_players.values():
+					if is_instance_valid(remote) and "player_display_name" in remote:
+						roster.append({"id": remote.get_instance_id(), "name": remote.player_display_name})
+				for p in roster:
+					var finished := false
+					for entry in finish_order:
+						if entry.player_id == int(p.id):
+							finished = true
+							break
+					if finished:
+						continue
+					dnf_idx += 1
+					var dnf_row := _standings_row({
+						"player_id": int(p.id),
+						"name": String(p.name),
+						"time": -1.0,
+					}, 0, false)
+					dnf_row.name = "StandRowDNF%d" % dnf_idx
+					standings.add_child(dnf_row)
+					_animate_standings_row(dnf_row, 5 + dnf_idx)
 				if own_placement >= 2:
 					var a11y_place = load("res://scripts/Accessibility.gd")
 					if a11y_place:
@@ -2451,8 +2480,11 @@ func _standings_row(entry: Dictionary, placement: int, is_own: bool) -> HBoxCont
 	var is_ghost: bool = entry.has("is_ghost") and bool(entry.is_ghost)
 	if is_ghost:
 		row.modulate = Color(1.0, 1.0, 1.0, 0.55)
+	elif placement <= 0:
+		row.modulate = Color(1.0, 1.0, 1.0, 0.7)
 	var place := Label.new()
-	place.text = _ordinal(placement)
+	# placement 0 = DNF row (non-finisher on a timed-out race).
+	place.text = "DNF" if placement <= 0 else _ordinal(placement)
 	place.custom_minimum_size.x = 34
 	place.add_theme_font_size_override("font_size", 12)
 	place.add_theme_color_override("font_color",

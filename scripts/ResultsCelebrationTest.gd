@@ -240,6 +240,57 @@ func _run() -> void:
 	scene3.queue_free()
 	await process_frame
 
+	# ================= TIMEOUT / DNF CASE =================
+	# A timed-out race lists non-finishers as dimmed DNF rows so LAN
+	# players can see who got stranded. Remotes are staged the way the
+	# game does it: PlayerChair nodes in remote_players.
+	var scene4: Node = await _boot()
+	var chair_scene: PackedScene = load("res://scenes/PlayerChair.tscn")
+	var sam: Node = chair_scene.instantiate()
+	sam.player_display_name = "Slow Sam"
+	scene4.add_child(sam)
+	scene4.remote_players[8642] = sam
+	var lena: Node = chair_scene.instantiate()
+	lena.player_display_name = "Lost Lena"
+	scene4.add_child(lena)
+	scene4.remote_players[8643] = lena
+	var partial: Array[Dictionary] = [
+		{"player_id": scene4.local_player.get_instance_id(), "name": "YOU", "time": 59.9},
+	]
+	scene4.finish_order = partial
+	scene4._end_race()
+	await create_timer(0.6).timeout
+	var standings4: VBoxContainer = scene4.get_node("UI/ResultsPanel/VBox").get_node_or_null("StandingsList")
+	check(standings4 != null, "timeout-case standings list present")
+	if standings4:
+		var dnf_rows: Array[String] = []
+		for row in standings4.get_children():
+			if not (row is HBoxContainer) or row.is_queued_for_deletion():
+				continue
+			var place_text := ""
+			var name_text := ""
+			for cell in row.get_children():
+				if cell is Label:
+					var t: String = cell.text
+					if t == "DNF":
+						place_text = t
+					elif not t.ends_with("s") and t != "—":
+						name_text = t
+			if place_text == "DNF":
+				dnf_rows.append(name_text)
+		check(dnf_rows.size() == 2,
+			"timeout shows one DNF row per non-finisher (got %d: %s)" % [dnf_rows.size(), str(dnf_rows)])
+		check("Slow Sam" in dnf_rows and "Lost Lena" in dnf_rows,
+			"DNF rows name the players who didn't finish")
+	var finisher_rows := 0
+	if standings4:
+		for row in standings4.get_children():
+			if row is HBoxContainer and not row.is_queued_for_deletion():
+				finisher_rows += 1
+	check(finisher_rows == 3, "finisher row + both DNF rows present (got %d)" % finisher_rows)
+	scene4.queue_free()
+	await process_frame
+
 	# Restore the user's real career stats no matter how the checks landed.
 	if saved_bytes.size() > 0:
 		var f := FileAccess.open(save_path, FileAccess.WRITE)
