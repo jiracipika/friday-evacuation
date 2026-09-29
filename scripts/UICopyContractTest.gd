@@ -36,7 +36,7 @@ func _run() -> void:
 	var evac := _src("res://scripts/Evacuation.gd")
 	# §4.6 results.
 	for s in ["%s WINS!", "NO WINNER", "NEW TOP-SPEED RECORD",
-			"NEW CHAIR: %s", "MODIFIERS: ", "REMATCH", "MAIN MENU"]:
+			"NEW CHAIR: %s", "MODIFIERS: ", "MAP: ", "REMATCH", "MAIN MENU"]:
 		check(evac.contains(s), "results §4.6: %s" % s)
 
 	var pause := _src("res://scripts/PauseMenu.gd")

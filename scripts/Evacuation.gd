@@ -2449,16 +2449,21 @@ func _end_race() -> void:
 						UIT, UIT.color(UIT.VIOLET)))
 				# D5: entrance celebration — animate in, dim the match HUD.
 				_present_results_panel(won)
-			# Show active modifiers on the results screen for clarity
-			if sp_modifiers:
+				# The map line always shows — PBs are per-layout, so the
+				# "(PB …)" next to TIME only means something with the map
+				# named. Active modifiers follow it when they exist.
 				var RaceModifiersScript = load("res://scripts/RaceModifiers.gd")
+				var layouts_res = load("res://scripts/LevelLayouts.gd")
+				var map_line := "MAP: %s" % String(layouts_res.display_name(String(layouts_res.current))).to_upper() if layouts_res else ""
 				var names: Array[String] = []
-				for mod in RaceModifiersScript.selected:
-					names.append(RaceModifiersScript.LABELS[mod].split(" — ")[0])
-				if names.size() > 0 and stats_label:
-					stats_label.text = "MODIFIERS: " + ", ".join(names)
-				elif stats_label:
-					stats_label.text = ""
+				if sp_modifiers and RaceModifiersScript:
+					for mod in RaceModifiersScript.selected:
+						names.append(RaceModifiersScript.LABELS[mod].split(" — ")[0])
+				if stats_label:
+					if names.size() > 0:
+						stats_label.text = "%s  ·  MODIFIERS: %s" % [map_line, ", ".join(names)]
+					else:
+						stats_label.text = map_line
 
 	# REVIEW FIX: was has_method("confetti_burst") — the function is
 	# `confetti(parent, pos)`, so finish-line confetti never fired.
