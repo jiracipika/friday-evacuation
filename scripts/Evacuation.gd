@@ -1038,7 +1038,8 @@ func _on_ghost_finished(ghost_name: String, ghost_time: float) -> void:
 	finish_order.append({
 		"player_id": ghost_racer.get_instance_id(),
 		"name": ghost_name,
-		"time": ghost_time
+		"time": ghost_time,
+		"is_ghost": true,
 	})
 	var a11y = load("res://scripts/Accessibility.gd")
 	if a11y:
@@ -2423,11 +2424,15 @@ func _end_race() -> void:
 		_announce_skin_unlocks(skin_unlock_names)
 
 ## LAN standings row: ordinal, name, time. Your row reads ORANGE/TEXT.
+## Replay-ghost entries (is_ghost) render dimmed — they're not real finishers.
 func _standings_row(entry: Dictionary, placement: int, is_own: bool) -> HBoxContainer:
 	var UIT = load("res://scripts/UITheme.gd")
 	var row := HBoxContainer.new()
 	row.name = "StandRow%d" % placement
 	row.add_theme_constant_override("separation", 10)
+	var is_ghost: bool = entry.has("is_ghost") and bool(entry.is_ghost)
+	if is_ghost:
+		row.modulate = Color(1.0, 1.0, 1.0, 0.55)
 	var place := Label.new()
 	place.text = _ordinal(placement)
 	place.custom_minimum_size.x = 34
