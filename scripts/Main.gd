@@ -58,6 +58,7 @@ var lobby_overlay: Control
 var credits_overlay: CanvasLayer
 var settings_button: Button
 var layout_option: OptionButton
+var map_best_label: Label
 var touch_button: Button
 var credits_button: Button
 var modifier_menu: Control
@@ -664,12 +665,20 @@ func _build_office_rows(list: VBoxContainer, _play_out: Array, _back_out: Array)
 	layout_option.fit_to_longest_item = false
 	layout_option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	list.add_child(layout_option)
+	# Per-layout PB readout: the map picker is where you choose the course,
+	# so it's where your best on THAT course belongs (results and the
+	# in-race chip show it too — this closes the loop at selection time).
+	map_best_label = Label.new()
+	map_best_label.name = "MapBestLabel"
+	map_best_label.add_theme_font_size_override("font_size", 12)
+	list.add_child(map_best_label)
 	var saved_layout := str(_load_saved_layout())
 	layout_option.select({"open_plan": 0, "cubicle_maze": 1, "executive": 2}.get(saved_layout, 0))
 	layout_option.item_selected.connect(_on_layout_selected)
 	var LayoutsScript = load("res://scripts/LevelLayouts.gd")
 	if LayoutsScript and LayoutsScript.has_method("set_current"):
 		LayoutsScript.set_current(saved_layout)
+	_refresh_map_best_label()
 
 	touch_button = Button.new()
 	touch_button.custom_minimum_size = Vector2(0, 48)
@@ -986,6 +995,23 @@ func _load_saved_layout() -> String:
 	cfg.load(LAYOUT_CFG_PATH)
 	return str(cfg.get_value("game", "map_layout", "open_plan"))
 
+## Per-layout PB readout under the map picker (spec §4 voice: terse, no
+## shouting). Reads the layout-scoped best from StatsManager — "NO FINISH
+## YET" while the sentinel stands, otherwise the seconds with one decimal.
+func _refresh_map_best_label() -> void:
+	if map_best_label == null:
+		return
+	var names := ["open_plan", "cubicle_maze", "executive"]
+	var picked: String = names[clampi(layout_option.selected, 0, 2)]
+	var stats = get_node_or_null("/root/StatsManager")
+	var best: float = stats.get_best_time(picked) if stats else 0.0
+	if best > 0.0:
+		map_best_label.text = "YOUR BEST ON THIS MAP: %.1fs" % best
+		map_best_label.add_theme_color_override("font_color", FridayUITheme.color(FridayUITheme.ORANGE))
+	else:
+		map_best_label.text = "NO FINISH YET ON THIS MAP"
+		map_best_label.add_theme_color_override("font_color", TEXT_MUTED)
+
 func _on_layout_selected(index: int) -> void:
 	var names := ["open_plan", "cubicle_maze", "executive"]
 	var picked: String = names[clampi(index, 0, 2)]
@@ -996,6 +1022,7 @@ func _on_layout_selected(index: int) -> void:
 	cfg.load(LAYOUT_CFG_PATH)
 	cfg.set_value("game", "map_layout", picked)
 	cfg.save(LAYOUT_CFG_PATH)
+	_refresh_map_best_label()
 	var audio = get_node_or_null("/root/AudioManager")
 	if audio and audio.has_method("play_sfx"):
 		audio.play_sfx("ui_click", 1.0)
