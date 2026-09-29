@@ -54,3 +54,23 @@ HUDThemeSmokeTest), P3 complete (3c1be26 — mode results LIME/CORAL/VIOLET
 accents, 52px actions, D5 entrance; ModeResults test 6→11), P2 motion done
 (255e271 — UITheme.apply_entrance on lobby+settings; copy sweep remains).
 Final certification: ladder PASS 68/68 phases, 66/66 suites.
+
+## 2026-09-29 — CampaignGoal day 2
+
+**Commits:** 142cb3f (menu map picker per-layout best + MenuMapBestTest
+7 checks). Certified the pulled results-standings batch (per-layout PBs,
+PB-paced ghost, DNF rows, MAP line) at ladder 71/71 phases / 69 suites.
+
+**What improved:** the map picker now shows YOUR BEST ON THIS MAP at
+selection time — the third touchpoint of the per-layout PB story
+(in-race chip, results row, menu picker). Test injects layout bests
+in-memory; the user's save.cfg is never written.
+
+**Parallel lanes:** results-standings batch (5 commits) landed from the
+worker lane and certified; printshop-sim v0.21.0 shipped by its lane;
+signquest/lyriclearn/WNBA/PT/Dashverse/iOS advances logged in the
+campaign console card.
+
+**Known issues:** GitHub artifact quota healed; iOS app builds remain
+user-gated (Xcode 26 + macOS 15.6 + Apple Dev account) — iOS 18.5
+simulator runtime now installed and boot-proven.
