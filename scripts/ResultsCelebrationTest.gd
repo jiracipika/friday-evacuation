@@ -215,6 +215,9 @@ func _run() -> void:
 	await create_timer(0.6).timeout
 	var standings3: VBoxContainer = scene3.get_node("UI/ResultsPanel/VBox").get_node_or_null("StandingsList")
 	check(standings3 != null, "ghost-case standings list present")
+	var winner3: Label = scene3.get_node("UI/ResultsPanel/VBox/WinnerLabel")
+	check(winner3.text == "YOU WINS!",
+		"winner banner names the first human, never the ghost (%s)" % winner3.text)
 	if standings3:
 		var ghost_dimmed := false
 		var own_opaque := false

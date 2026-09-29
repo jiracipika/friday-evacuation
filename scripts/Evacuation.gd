@@ -2326,8 +2326,15 @@ func _end_race() -> void:
 			var winner_label = vbox.get_node_or_null("WinnerLabel")
 			var stats_label = vbox.get_node_or_null("StatsLabel")
 			if winner_label:
-				if finish_order.size() > 0:
-					var winner = finish_order[0]
+				# The banner names the first HUMAN finisher — a replay ghost
+				# crossing first must not steal the win announcement (the
+				# standings still show its dimmed row).
+				var winner: Dictionary = {}
+				for entry in finish_order:
+					if not (entry.has("is_ghost") and bool(entry.is_ghost)):
+						winner = entry
+						break
+				if not winner.is_empty():
 					winner_label.text = "%s WINS!" % winner.name
 				else:
 					winner_label.text = "NO WINNER"
