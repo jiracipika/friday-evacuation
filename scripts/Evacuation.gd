@@ -2228,6 +2228,15 @@ func _style_results_panel() -> void:
 			pills.add_theme_constant_override("separation", 8)
 			vbox.add_child(pills)
 			vbox.move_child(pills, vbox.get_node_or_null("StatsGrid").get_index() + 1)
+		# LAN standings: placements for everyone who finished (top 5,
+		# plus the local player's own row when they finished outside it).
+		# Created AFTER PillRow (it slots just above it in the column).
+		if not vbox.has_node("StandingsList"):
+			var standings := VBoxContainer.new()
+			standings.name = "StandingsList"
+			standings.add_theme_constant_override("separation", 3)
+			vbox.add_child(standings)
+			vbox.move_child(standings, vbox.get_node_or_null("PillRow").get_index())
 		var winner = vbox.get_node_or_null("WinnerLabel")
 		if winner:
 			# D5: 32px warm-orange banner with a dark outline for contrast.
@@ -2346,6 +2355,26 @@ func _end_race() -> void:
 						time_value.text = "%.1fs" % own_finish_time
 				else:
 					time_value.text = "—"
+			# LAN standings: top 5 placements, then the local row if
+			# they finished outside the cut. Your row is ORANGE + (you).
+			var standings = vbox.get_node_or_null("StandingsList")
+			var own_placement := 0
+			if standings:
+				for idx in range(finish_order.size()):
+					if finish_order[idx].player_id == local_player.get_instance_id() and is_instance_valid(local_player):
+						own_placement = idx + 1
+						break
+				for child in standings.get_children():
+					child.queue_free()
+				for idx in range(mini(finish_order.size(), 5)):
+					var row_own: bool = finish_order[idx].player_id == local_player.get_instance_id() and is_instance_valid(local_player)
+					standings.add_child(_standings_row(finish_order[idx], idx + 1, row_own))
+				if own_placement > 5:
+					standings.add_child(_standings_row(finish_order[own_placement - 1], own_placement, true))
+				if own_placement >= 2:
+					var a11y_place = load("res://scripts/Accessibility.gd")
+					if a11y_place:
+						a11y_place.caption("YOU FINISHED %s" % _ordinal(own_placement), 2.0)
 			var pill_row = vbox.get_node_or_null("PillRow")
 			if pill_row:
 				for child in pill_row.get_children():
@@ -2392,6 +2421,43 @@ func _end_race() -> void:
 			pb_a11y.caption("NEW TOP-SPEED RECORD!", 1.5)
 	if skin_unlock_names.size() > 0:
 		_announce_skin_unlocks(skin_unlock_names)
+
+## LAN standings row: ordinal, name, time. Your row reads ORANGE/TEXT.
+func _standings_row(entry: Dictionary, placement: int, is_own: bool) -> HBoxContainer:
+	var UIT = load("res://scripts/UITheme.gd")
+	var row := HBoxContainer.new()
+	row.name = "StandRow%d" % placement
+	row.add_theme_constant_override("separation", 10)
+	var place := Label.new()
+	place.text = _ordinal(placement)
+	place.custom_minimum_size.x = 34
+	place.add_theme_font_size_override("font_size", 12)
+	place.add_theme_color_override("font_color",
+		UIT.color(UIT.ORANGE) if is_own else UIT.color(UIT.TEXT_FAIR))
+	row.add_child(place)
+	var name_label := Label.new()
+	name_label.text = String(entry.name) + ("  (you)" if is_own else "")
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.add_theme_font_size_override("font_size", 12)
+	name_label.add_theme_color_override("font_color",
+		UIT.color(UIT.TEXT) if is_own else UIT.color(UIT.TEXT_MUTED))
+	row.add_child(name_label)
+	var time_label := Label.new()
+	time_label.text = "%.1fs" % float(entry.time) if entry.has("time") and float(entry.time) > 0.0 else "—"
+	time_label.add_theme_font_size_override("font_size", 12)
+	time_label.add_theme_color_override("font_color",
+		UIT.color(UIT.TEXT) if is_own else UIT.color(UIT.TEXT_MUTED))
+	row.add_child(time_label)
+	return row
+
+func _ordinal(n: int) -> String:
+	match n:
+		1: return "1ST"
+		2: return "2ND"
+		3: return "3RD"
+		_: return "%dTH" % n
 
 ## S-F: record pill (spec section 7 "record pills"); D5: top-speed record is
 ## LIME, chair unlocks are VIOLET — pass `accent` to override.

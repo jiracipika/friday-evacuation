@@ -127,6 +127,20 @@ func _run() -> void:
 		print("    staged pb=%s unlocks=%s → pills=%s" % [scene.new_personal_best,
 			str(scene.skin_unlock_names), str(pill_labels.map(func(p): return p.text))])
 	check(pill_labels.size() == 2, "both record pills present (got %d)" % pill_labels.size())
+	# LAN standings: the single-player win shows exactly one row — yours.
+	var standings: VBoxContainer = vbox.get_node_or_null("StandingsList")
+	check(standings != null, "standings list present")
+	if standings:
+		var rows := 0
+		var own_row_text := ""
+		for row in standings.get_children():
+			if row is HBoxContainer and not row.is_queued_for_deletion():
+				rows += 1
+				for cell in row.get_children():
+					if cell is Label and "(you)" in cell.text:
+						own_row_text = cell.text
+		check(rows == 1, "single-finish standings shows one row (got %d)" % rows)
+		check(own_row_text != "", "own row carries the (you) tag (%s)" % own_row_text)
 	if pill_labels.size() == 2:
 		var lime_ok := false
 		var violet_ok := false
