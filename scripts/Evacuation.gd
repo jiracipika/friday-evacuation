@@ -2369,9 +2369,13 @@ func _end_race() -> void:
 					child.queue_free()
 				for idx in range(mini(finish_order.size(), 5)):
 					var row_own: bool = finish_order[idx].player_id == local_player.get_instance_id() and is_instance_valid(local_player)
-					standings.add_child(_standings_row(finish_order[idx], idx + 1, row_own))
+					var row := _standings_row(finish_order[idx], idx + 1, row_own)
+					standings.add_child(row)
+					_animate_standings_row(row, idx)
 				if own_placement > 5:
-					standings.add_child(_standings_row(finish_order[own_placement - 1], own_placement, true))
+					var own_row := _standings_row(finish_order[own_placement - 1], own_placement, true)
+					standings.add_child(own_row)
+					_animate_standings_row(own_row, 5)
 				if own_placement >= 2:
 					var a11y_place = load("res://scripts/Accessibility.gd")
 					if a11y_place:
@@ -2456,6 +2460,20 @@ func _standings_row(entry: Dictionary, placement: int, is_own: bool) -> HBoxCont
 		UIT.color(UIT.TEXT) if is_own else UIT.color(UIT.TEXT_MUTED))
 	row.add_child(time_label)
 	return row
+
+## Staggered row entrance after the panel lands. Tweens to the row's BUILT
+## alpha so ghost dimming (0.55) survives the animation; reduced motion
+## mounts rows instantly at full target alpha.
+func _animate_standings_row(row: Control, idx: int) -> void:
+	var target: float = row.modulate.a
+	var a11y = load("res://scripts/Accessibility.gd")
+	if a11y and a11y.reduced_motion_enabled():
+		return
+	row.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_interval(0.06 * idx)
+	tw.tween_property(row, "modulate:a", target, 0.22) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 func _ordinal(n: int) -> String:
 	match n:
