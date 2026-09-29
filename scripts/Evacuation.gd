@@ -1028,7 +1028,19 @@ func _maybe_spawn_ghost() -> void:
 		Vector3(-6, 18.5, 6),
 		Vector3(0, 19.0, 14.5),
 	]
-	ghost_racer.setup(course, "GHOST", 75.0)
+	# Pace the ghost at YOUR layout PB when one exists — solo play becomes
+	# "race your own best" instead of chasing a fixed 75s pacer. The PB
+	# rides the nametag so the target is visible mid-race.
+	var pace := 75.0
+	var ghost_label := "GHOST"
+	var ghost_stats = get_node_or_null("/root/StatsManager")
+	var ghost_layouts = load("res://scripts/LevelLayouts.gd")
+	if ghost_stats and ghost_layouts:
+		var own_pb: float = ghost_stats.get_best_time(String(ghost_layouts.current))
+		if own_pb > 0.0:
+			pace = own_pb
+			ghost_label = "GHOST · PB %.1fs" % own_pb
+	ghost_racer.setup(course, ghost_label, pace)
 	add_child(ghost_racer)
 	ghost_racer.ghost_finished.connect(_on_ghost_finished)
 

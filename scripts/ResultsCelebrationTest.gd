@@ -206,7 +206,17 @@ func _run() -> void:
 	# ================= GHOST-ROW CASE =================
 	# Replay ghosts finish too; their standings rows must read dimmed so a
 	# LAN player can tell a ghost's time from a real finisher's.
+	# Stage a layout PB BEFORE boot: the ghost paces itself at YOUR best.
+	var stats_ghost = root.get_node_or_null("/root/StatsManager")
+	var layouts_ghost = load("res://scripts/LevelLayouts.gd")
+	if stats_ghost:
+		stats_ghost.best_time_by_layout = {String(layouts_ghost.current): 61.0}
 	var scene3: Node = await _boot()
+	if scene3.ghost_racer != null:
+		check(is_equal_approx(float(scene3.ghost_racer.target_time), 61.0),
+			"ghost paces itself at the layout PB (got %.1f)" % float(scene3.ghost_racer.target_time))
+	else:
+		check(true, "ghost disabled in runner settings — pace check n/a")
 	var mixed: Array[Dictionary] = [
 		{"player_id": 424242, "name": "GHOST", "time": 58.0, "is_ghost": true},
 		{"player_id": scene3.local_player.get_instance_id(), "name": "YOU", "time": 63.3},
@@ -225,13 +235,9 @@ func _run() -> void:
 		for row in standings3.get_children():
 			if not (row is HBoxContainer) or row.is_queued_for_deletion():
 				continue
-			var name_text := ""
-			for cell in row.get_children():
-				if cell is Label:
-					var t: String = cell.text
-					if t != "1ST" and t != "2ND" and t != "3RD" and not t.ends_with("s"):
-						name_text = t
-			if name_text == "GHOST":
+			# _standings_row structure: [place, name, time].
+			var name_text: String = row.get_child(1).text if row.get_child_count() > 1 else ""
+			if name_text.begins_with("GHOST"):
 				ghost_dimmed = row.modulate.a < 1.0
 			elif "(you)" in name_text:
 				own_opaque = is_equal_approx(row.modulate.a, 1.0)
@@ -267,15 +273,9 @@ func _run() -> void:
 		for row in standings4.get_children():
 			if not (row is HBoxContainer) or row.is_queued_for_deletion():
 				continue
-			var place_text := ""
-			var name_text := ""
-			for cell in row.get_children():
-				if cell is Label:
-					var t: String = cell.text
-					if t == "DNF":
-						place_text = t
-					elif not t.ends_with("s") and t != "—":
-						name_text = t
+			# _standings_row structure: [place, name, time].
+			var place_text: String = row.get_child(0).text if row.get_child_count() > 0 else ""
+			var name_text: String = row.get_child(1).text if row.get_child_count() > 1 else ""
 			if place_text == "DNF":
 				dnf_rows.append(name_text)
 		check(dnf_rows.size() == 2,
