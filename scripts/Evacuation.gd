@@ -2611,6 +2611,10 @@ func _setup_hud() -> void:
 			# draws two timers on top of each other.
 			if timer_label:
 				timer_label.visible = false
+			# PB target chip: hidden unless a real best finish exists.
+			var pb_stats = get_node_or_null("/root/StatsManager")
+			if pb_stats and hud_ext.has_method("set_personal_best"):
+				hud_ext.set_personal_best(float(pb_stats.best_time))
 		# Caption overlay for audio-cue subtitles (no-op when disabled)
 		var overlay_script = load("res://scripts/SubtitleOverlay.gd")
 		if overlay_script and overlay_script.has_method("mount"):

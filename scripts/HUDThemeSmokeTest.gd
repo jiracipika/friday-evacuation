@@ -77,6 +77,19 @@ func _run() -> void:
 		and item_label.get_theme_color("font_color").is_equal_approx(UIT.color(UIT.YELLOW)),
 		"spill item readout uses the YELLOW token")
 
+	# PB target chip: deterministic via the setter, independent of the
+	# runner's real save state.
+	var pb_chip: Label = hud.get("pb_label")
+	check(pb_chip != null and pb_chip.name == "PbChip", "PB chip exists in the HUD header")
+	if pb_chip:
+		check(pb_chip.get_theme_color("font_color").is_equal_approx(UIT.color(UIT.LIME)),
+			"PB chip reads LIME")
+		hud.set_personal_best(71.4)
+		check(pb_chip.visible and pb_chip.text == "PB 71.4s",
+			"PB chip shows the best time when one exists")
+		hud.set_personal_best(0.0)
+		check(not pb_chip.visible, "PB chip hides entirely on a first race")
+
 	scene.queue_free()
 	await process_frame
 

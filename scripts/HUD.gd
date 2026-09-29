@@ -10,6 +10,7 @@ var floor_label: Label
 var boost_label: Label
 var sabotage_label: Label
 var timer_label: Label
+var pb_label: Label
 var status_label: Label
 var timer_caption: Label
 var speed_bar: ProgressBar
@@ -92,6 +93,11 @@ func _build_hud() -> void:
 	header_row.add_child(spacer)
 	timer_label = _make_label("2:00", _px(34), _c(UIT.ORANGE))
 	header_row.add_child(timer_label)
+	pb_label = _make_label("", _px(12), _c(UIT.LIME))
+	pb_label.name = "PbChip"
+	pb_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	pb_label.visible = false
+	header_row.add_child(pb_label)
 
 	# --- OBJECTIVE STRIP: arrow + immediate action, two lines max. ---
 	var objective_panel := PanelContainer.new()
@@ -232,6 +238,15 @@ func set_timer_text(value: String, remaining: float = -1.0) -> void:
 		timer_label.text = value
 	# §6: hero timer goes CORAL + pulses when critical (<15s).
 	_timer_remaining = remaining
+
+## PB target chip: your saved best finish, parked beside the timer so there's
+## a number to chase. Hidden entirely until a real best exists.
+func set_personal_best(best: float) -> void:
+	if pb_label == null:
+		return
+	pb_label.visible = best > 0.0
+	if best > 0.0:
+		pb_label.text = "PB %.1fs" % best
 
 var _timer_remaining := -1.0
 var _pulse_time := 0.0
