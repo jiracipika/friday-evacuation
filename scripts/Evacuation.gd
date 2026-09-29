@@ -2311,9 +2311,13 @@ func _end_race() -> void:
 		# always records, but the PILL follows the top-speed precedent:
 		# no celebration on the first-ever finish (everything is a record
 		# the first time; also covers pre-patch saves with no best_time).
+		# Records are scoped to the CURRENT layout — the three maps have
+		# different course lengths, so a global-only PB is dead on arrival
+		# on the longer maps once set on the shortest.
 		if own_finish_time > 0.0:
-			var prev_best_time: float = stats.best_time
-			new_best_time = stats.record_finish_time(own_finish_time) and prev_best_time > 0.0
+			var layouts_pb = load("res://scripts/LevelLayouts.gd")
+			var prev_best_time: float = stats.get_best_time(String(layouts_pb.current))
+			new_best_time = stats.record_finish_time(own_finish_time, String(layouts_pb.current)) and prev_best_time > 0.0
 		# Phase 8A: celebrate skins that this win count just unlocked.
 		var skins = load("res://scripts/ChairSkins.gd")
 		if skins:
@@ -2354,9 +2358,12 @@ func _end_race() -> void:
 			var time_value = vbox.get_node_or_null("StatsGrid/TimeRow/TimeValue")
 			if time_value:
 				# The row shows the LOCAL player's own finish ("—" on a
-				# time-limit end), with the standing PB alongside.
+				# time-limit end), with the standing PB alongside — the
+				# CURRENT layout's PB, since that's the record this race
+				# was up against.
 				if own_finish_time > 0.0:
-					var best: float = stats.best_time if stats else 0.0
+					var layouts_disp = load("res://scripts/LevelLayouts.gd")
+					var best: float = stats.get_best_time(String(layouts_disp.current)) if stats else 0.0
 					if best > 0.0 and not new_best_time:
 						time_value.text = "%.1fs  (PB %.1fs)" % [own_finish_time, best]
 					else:
@@ -2636,10 +2643,12 @@ func _setup_hud() -> void:
 			# draws two timers on top of each other.
 			if timer_label:
 				timer_label.visible = false
-			# PB target chip: hidden unless a real best finish exists.
+			# PB target chip: hidden unless a real best finish exists —
+			# scoped to the layout being raced.
 			var pb_stats = get_node_or_null("/root/StatsManager")
 			if pb_stats and hud_ext.has_method("set_personal_best"):
-				hud_ext.set_personal_best(float(pb_stats.best_time))
+				var layouts_chip = load("res://scripts/LevelLayouts.gd")
+				hud_ext.set_personal_best(pb_stats.get_best_time(String(layouts_chip.current)))
 		# Caption overlay for audio-cue subtitles (no-op when disabled)
 		var overlay_script = load("res://scripts/SubtitleOverlay.gd")
 		if overlay_script and overlay_script.has_method("mount"):

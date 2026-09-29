@@ -72,6 +72,7 @@ func _run() -> void:
 		stats.top_speed_ever = 10.0
 		# No PB yet → the best-time pill stays quiet; exactly 2 pills here.
 		stats.best_time = 0.0
+		stats.best_time_by_layout = {}
 	var order: Array[Dictionary] = [{
 		"player_id": scene.local_player.get_instance_id(),
 		"name": "YOU",
