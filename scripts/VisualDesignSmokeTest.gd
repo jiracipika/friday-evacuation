@@ -9,8 +9,8 @@ func _init() -> void:
 	failures.append_array(roster_errors)
 
 	var characters: Array[Dictionary] = RosterScript.all()
-	if characters.size() != 8:
-		failures.append("expected 8 characters, got %d" % characters.size())
+	if characters.size() != 11:
+		failures.append("expected 11 characters including three new coworkers, got %d" % characters.size())
 	if not RosterScript.ids().has(RosterScript.DEFAULT_ID):
 		failures.append("default character id missing from roster")
 
@@ -41,7 +41,7 @@ func _init() -> void:
 	meter._draw()
 
 	if failures.is_empty():
-		print("[PASS] Friday visual system: 8-character roster + shared UI theme")
+		print("[PASS] Friday visual system: 11-character roster + shared UI theme")
 		quit(0)
 	else:
 		for failure in failures:

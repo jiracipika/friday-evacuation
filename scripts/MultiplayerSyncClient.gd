@@ -34,6 +34,8 @@ func _run() -> void:
 	var gm = root.get_node("/root/GameManager")  # real autoload (project mode loads it)
 	await process_frame
 	gm.player_name = "TestClient"
+	gm.selected_character_id = "coffee_carl"
+	gm.character_designs["coffee_carl"] = {"outfit": "hoodie", "hair": "bun", "expression": "derpy", "shirt_color": "ff73b5"}
 	gm.player_color = Color(0.72, 0.4, 1.0)
 
 	var net = root.get_node("/root/Network")  # real autoload
@@ -56,6 +58,11 @@ func _run() -> void:
 	# Wait for roster (2 players) then ready up
 	await _wait_until(func(): return net.connected_players.size() >= 2, 45.0)
 	print("CLIENT: roster size ", net.connected_players.size())
+	if net.get_player_design(1) != {"hair": "bob", "expression": "panic"}:
+		printerr("CLIENT_DESIGN_FAIL: host customization did not arrive")
+		layout_fail = true
+	else:
+		print("CLIENT_DESIGN_PASS: host customization received over ENet")
 
 	# Attach the match-start listener BEFORE readying: the host may fire
 	# begin_match the instant all players read ready. Uses the INSTANCE var

@@ -56,6 +56,8 @@ func _run() -> void:
 	var gm = root.get_node("/root/GameManager")  # real autoload (project mode loads it)
 	await process_frame
 	gm.player_name = "TestHost"
+	gm.selected_character_id = "deadline_dana"
+	gm.character_designs["deadline_dana"] = {"hair": "bob", "expression": "panic"}
 	gm.player_color = Color(1.0, 0.6, 0.1)
 
 	var net = root.get_node("/root/Network")  # real autoload
@@ -86,6 +88,8 @@ func _run() -> void:
 	var want_color := Color(0.72, 0.4, 1.0)
 	var color_ok: bool = absf(got_color.r - want_color.r) < 0.004 and absf(got_color.g - want_color.g) < 0.004 and absf(got_color.b - want_color.b) < 0.004
 	check(color_ok, "client color on host roster")
+	check(net.get_player_character(client_id) == "coffee_carl", "new coworker preset received over ENet")
+	check(net.get_player_design(client_id) == {"outfit": "hoodie", "hair": "bun", "expression": "derpy", "shirt_color": "ff73b5"}, "custom design received over ENet")
 
 	# Ready flow: client readies first, then host
 	net.set_ready(true)

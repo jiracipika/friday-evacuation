@@ -100,6 +100,30 @@ const CHARACTERS: Array[Dictionary] = [
 		"accessory": "webcam_drone",
 		"face": "buffering",
 	},
+	{
+		"id": "spreadsheet_stu",
+		"name": "Spreadsheet Stu",
+		"role": "FORMULA ENTHUSIAST",
+		"tagline": "Both eyes are looking for the missing cell.",
+		"body": "424b67", "accent": "ffd65c", "chair": "executive",
+		"silhouette": "crooked_tie_glasses", "accessory": "calculator_dash", "face": "derpy",
+	},
+	{
+		"id": "coffee_carl",
+		"name": "Coffee Carl",
+		"role": "BREAK ROOM REGULAR",
+		"tagline": "One tooth. Three coffees. Zero brakes.",
+		"body": "ff9a1a", "accent": "45d9ca", "chair": "borrowed_stool",
+		"silhouette": "lanky_cardigan", "accessory": "coffee_tower", "face": "derpy",
+	},
+	{
+		"id": "printer_pam",
+		"name": "Printer Pam",
+		"role": "PAPER JAM SPECIALIST",
+		"tagline": "The printer is screaming. So is Pam.",
+		"body": "ffd65c", "accent": "9b82ff", "chair": "maintenance_cart",
+		"silhouette": "stocky_vest_bun", "accessory": "policy_binder", "face": "panic",
+	},
 ]
 
 static func all() -> Array[Dictionary]:

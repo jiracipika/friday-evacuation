@@ -15,6 +15,8 @@ var chair_instance: Node3D
 var spin: float = 0.4
 var headless := false
 var time: float = 0.0
+var preview_character_id := ""
+var preview_design: Dictionary = {}
 
 func _init() -> void:
 	custom_minimum_size = Vector2(240, 200)
@@ -32,18 +34,29 @@ func _ready() -> void:
 func _build_3d() -> void:
 	viewport = SubViewport.new()
 	viewport.transparent_bg = false
+	viewport.own_world_3d = true
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	viewport.size = Vector2i(240, 200)
 	add_child(viewport)
 
 	var world := Node3D.new()
 	viewport.add_child(world)
+	var environment := WorldEnvironment.new()
+	environment.environment = Environment.new()
+	environment.environment.background_mode = Environment.BG_COLOR
+	environment.environment.background_color = Color("182130")
+	environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.environment.ambient_light_color = Color("b4c4de")
+	environment.environment.ambient_light_energy = 0.65
+	world.add_child(environment)
 
 	# Camera: slightly above, looking down at the chair.
 	var cam := Camera3D.new()
-	cam.position = Vector3(0, 1.35, 2.6)
+	cam.position = Vector3(2.2, 1.9, -3.6)
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size = 2.65
 	world.add_child(cam)
-	cam.look_at(Vector3(0, 0.35, 0))
+	cam.look_at(Vector3(0, 0.82, 0))
 	cam.current = true
 
 	# Turntable pedestal: opaque disc + glowing rim. StaticBody collision so
@@ -58,14 +71,14 @@ func _build_3d() -> void:
 	disc.height = 0.08
 	var pedestal_mesh := MeshInstance3D.new()
 	pedestal_mesh.mesh = disc
-	pedestal_mesh.position = Vector3(0, -0.04, 0)
+	pedestal_mesh.position = Vector3(0, -0.175, 0)
 	pedestal.add_child(pedestal_mesh)
 	var ped_col := CollisionShape3D.new()
 	var ped_shape := CylinderShape3D.new()
 	ped_shape.radius = 1.0
 	ped_shape.height = 0.08
 	ped_col.shape = ped_shape
-	ped_col.position = Vector3(0, -0.04, 0)
+	ped_col.position = Vector3(0, -0.175, 0)
 	pedestal.add_child(ped_col)
 	turntable.add_child(pedestal)
 	var ped_mat := StandardMaterial3D.new()
@@ -74,21 +87,21 @@ func _build_3d() -> void:
 	pedestal_mesh.material_override = ped_mat
 	var rim := MeshInstance3D.new()
 	var rim_mesh := TorusMesh.new()
-	rim_mesh.inner_radius = 0.92
-	rim_mesh.outer_radius = 1.02
+	rim_mesh.inner_radius = 0.965
+	rim_mesh.outer_radius = 1.0
 	rim.mesh = rim_mesh
-	rim.position = Vector3(0, 0.01, 0)
+	rim.position = Vector3(0, -0.12, 0)
 	turntable.add_child(rim)
 	var rim_mat := StandardMaterial3D.new()
 	rim_mat.albedo_color = Color(1.0, 0.60, 0.22)
 	rim_mat.emission_enabled = true
 	rim_mat.emission = Color(1.0, 0.60, 0.22)
-	rim_mat.emission_energy_multiplier = 1.6
+	rim_mat.emission_energy_multiplier = 0.35
 	rim.material_override = rim_mat
 
 	# Key light (warm), fill (cool), rim (orange accent).
 	var key := OmniLight3D.new()
-	key.position = Vector3(1.8, 2.4, 1.6)
+	key.position = Vector3(1.8, 2.4, -2.4)
 	key.light_color = Color(1.0, 0.9, 0.8)
 	key.omni_range = 6.0
 	key.light_energy = 1.4
@@ -121,8 +134,19 @@ func spawn_chair() -> void:
 			chair_instance.set("skin_id", String(gm.selected_skin_id))
 		if gm and "selected_character_id" in gm:
 			chair_instance.set("character_id", String(gm.selected_character_id))
+		if not preview_character_id.is_empty():
+			chair_instance.use_global_character = false
+			chair_instance.use_global_skin = false
+			chair_instance.character_id = preview_character_id
+			chair_instance.character_design = preview_design
+			chair_instance.skin_id = "office_standard"
+			var character := FridayCharacterRoster.get_character(preview_character_id)
+			chair_instance.player_color = Color(character.body)
 		turntable.add_child(chair_instance)
-		chair_instance.position = Vector3(0, 0.04, 0)
+		# Cancel the capsule-center offset for the tabletop display.
+		chair_instance.position = Vector3(0, 0.04 - chair_instance.model_parent.position.y, 0)
+		chair_instance.set_physics_process(false)
+		chair_instance.set_process(false)
 		if "can_move" in chair_instance:
 			chair_instance.set("can_move", false)
 		if "player_display_name" in chair_instance:
@@ -139,6 +163,10 @@ func refresh_for_pick() -> void:
 		queue_redraw()
 
 func _process(delta: float) -> void:
+	if viewport:
+		viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if is_visible_in_tree() else SubViewport.UPDATE_DISABLED
+	if not is_visible_in_tree():
+		return
 	time += delta
 	if turntable:
 		turntable.rotation.y += spin * delta

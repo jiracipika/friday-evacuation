@@ -326,6 +326,8 @@ func _on_network_player_connected(peer_id: int, player_name: String) -> void:
 	# not read this machine's GameManager selection.
 	remote.use_global_character = false
 	remote.use_global_skin = false
+	if network_node and network_node.has_method("get_player_design"):
+		remote.character_design = network_node.get_player_design(peer_id)
 	if network_node and network_node.has_method("get_player_character"):
 		remote.character_id = network_node.get_player_character(peer_id)
 	if network_node and network_node.has_method("get_player_skin"):
