@@ -45,7 +45,7 @@ NormalMapSmokeTest PropMaterialsSmokeTest LevelLayoutSmokeTest \
 PreMatchModalSmokeTest GamepadSupportTest FloorCullingTest ArtLightingTest \
 ArtMaterialsTest ArtSurfaceReadabilityTest ArtPropsTest ArtHUDTest \
 MenuDepartureSmokeTest MenuInputPathTest LoadingFlowSmokeTest ResultsCelebrationTest \
-HUDThemeSmokeTest UICopyContractTest MenuMapBestTest \
+HUDThemeSmokeTest UICopyContractTest MenuMapBestTest ResultsPanelFitTest \
 MovementFeelTest ModeSelectRedesignTest MenuHomeRedesignTest \
 MenuBackdropPropsTest PadNavSmokeTest ArtBlenderPropsTest \
 SettingsRedesignTest OfficeArchitectureSmokeTest AmbientAudioTest \
@@ -215,6 +215,8 @@ SUCCESS_PATTERNS = {
         re.compile(r"^=== MENU INPUT PATH TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
     "ResultsCelebrationTest": [
         re.compile(r"^=== RESULTS CELEBRATION TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
+    "ResultsPanelFitTest": [
+        re.compile(r"^=== RESULTS PANEL FIT TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
     "HUDThemeSmokeTest": [
         re.compile(r"^=== HUD THEME SMOKE TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
     "UICopyContractTest": [

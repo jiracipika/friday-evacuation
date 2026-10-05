@@ -95,7 +95,7 @@ func _run() -> void:
 	check(is_equal_approx(panel.modulate.a, 1.0), "panel fades fully in")
 	check(panel.scale.is_equal_approx(Vector2.ONE), "panel scale settles at 1:1")
 
-	var vbox := panel.get_node("VBox")
+	var vbox := panel.get_node("Body/VBox")
 	var winner: Label = vbox.get_node_or_null("WinnerLabel")
 	check(winner != null and winner.text.begins_with("YOU"), "winner banner names the winner")
 	check(winner != null and winner.get_theme_font_size("font_size") == 32,
@@ -118,7 +118,7 @@ func _run() -> void:
 		and traps_value.get_theme_font_size("font_size") == 24,
 		"TRAPS HIT value populated at 24px")
 
-	var pills: HBoxContainer = vbox.get_node_or_null("PillRow")
+	var pills: Container = vbox.get_node_or_null("PillRow")
 	var pill_labels: Array = []
 	if pills:
 		for child in pills.get_children():
@@ -196,7 +196,7 @@ func _run() -> void:
 	scene2._end_race()
 	await create_timer(0.6).timeout
 	var panel2: Panel = scene2.get_node("UI/ResultsPanel")
-	var winner2: Label = panel2.get_node("VBox/WinnerLabel")
+	var winner2: Label = panel2.get_node("Body/VBox/WinnerLabel")
 	check(winner2.text == "NO WINNER", "timed-out race reports NO WINNER")
 	check(_particles_under(_ui(scene2)).is_empty(),
 		"no confetti when nobody wins")
@@ -224,9 +224,9 @@ func _run() -> void:
 	scene3.finish_order = mixed
 	scene3._end_race()
 	await create_timer(0.6).timeout
-	var standings3: VBoxContainer = scene3.get_node("UI/ResultsPanel/VBox").get_node_or_null("StandingsList")
+	var standings3: VBoxContainer = scene3.get_node("UI/ResultsPanel/Body/VBox").get_node_or_null("StandingsList")
 	check(standings3 != null, "ghost-case standings list present")
-	var winner3: Label = scene3.get_node("UI/ResultsPanel/VBox/WinnerLabel")
+	var winner3: Label = scene3.get_node("UI/ResultsPanel/Body/VBox/WinnerLabel")
 	check(winner3.text == "YOU WINS!",
 		"winner banner names the first human, never the ghost (%s)" % winner3.text)
 	if standings3:
@@ -266,7 +266,7 @@ func _run() -> void:
 	scene4.finish_order = partial
 	scene4._end_race()
 	await create_timer(0.6).timeout
-	var standings4: VBoxContainer = scene4.get_node("UI/ResultsPanel/VBox").get_node_or_null("StandingsList")
+	var standings4: VBoxContainer = scene4.get_node("UI/ResultsPanel/Body/VBox").get_node_or_null("StandingsList")
 	check(standings4 != null, "timeout-case standings list present")
 	if standings4:
 		var dnf_rows: Array[String] = []

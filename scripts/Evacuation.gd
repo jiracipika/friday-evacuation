@@ -170,10 +170,10 @@ func _connect_race_triggers() -> void:
 		exit_zone.body_entered.connect(_on_player_reached_exit)
 
 	if results_panel:
-		var rematch = results_panel.get_node_or_null("VBox/RematchButton")
+		var rematch = results_panel.get_node_or_null("Body/VBox/RematchButton")
 		if rematch:
 			rematch.pressed.connect(_on_rematch)
-		var menu = results_panel.get_node_or_null("VBox/MenuButton")
+		var menu = results_panel.get_node_or_null("Body/VBox/MenuButton")
 		if menu:
 			menu.pressed.connect(_on_back_to_menu)
 
@@ -2342,7 +2342,8 @@ func _on_player_reached_exit(body: Node3D) -> void:
 		_end_race()
 
 ## D1 restyle (UI-LAYOUTS §7): UITheme panel + responsive shrink-to-fit.
-## Base 560x480; caps at 92% of viewport so 390px portrait never clips;
+## Base 560x520; caps at 92% of viewport so 390px portrait never clips;
+## content lives in a scroll body so a tight cap (640x360) stays readable;
 ## buttons REMATCH (primary orange) / MAIN MENU (secondary).
 func _style_results_panel() -> void:
 	if not results_panel:
@@ -2350,7 +2351,7 @@ func _style_results_panel() -> void:
 	var UIT = load("res://scripts/UITheme.gd")
 	if UIT:
 		results_panel.add_theme_stylebox_override("panel", UIT.panel_style(UIT.color(UIT.ORANGE), true))
-	var vbox = results_panel.get_node_or_null("VBox")
+	var vbox = results_panel.get_node_or_null("Body/VBox")
 	if vbox:
 		vbox.add_theme_constant_override("separation", 10)
 		# S-F tape strip + header row (spec section 7: tape header, stamp).
@@ -2413,10 +2414,18 @@ func _style_results_panel() -> void:
 				if spec[1] == "TopSpeed":
 					var meter: Control = UIT.MeterBar.new()
 					meter.name = "TopSpeedMeter"
-					meter.custom_minimum_size = Vector2(170, 8)
+					# Shrink-to-fit: no fixed 170px min (the old min forced
+					# the grid to 356px and blew past 390px portrait); the
+					# row expands instead so the meter is wide wherever
+					# there is room and yields at narrow widths.
+					meter.custom_minimum_size = Vector2(0, 8)
+					meter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 					meter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 					meter.maximum = 15.0
 					row.add_child(meter)
+					# The meter only grows when its ROW expands inside the
+					# grid; a plain FILL row keeps the column at min width.
+					row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				var value := Label.new()
 				value.name = "%sValue" % spec[1]
 				value.text = "—"
@@ -2425,12 +2434,15 @@ func _style_results_panel() -> void:
 				value.add_theme_color_override("font_color",
 					UIT.color(UIT.ORANGE) if spec[1] == "TopSpeed" else UIT.color(UIT.TEXT))
 				row.add_child(value)
-		# S-F record pills (LIME per spec).
+		# S-F record pills (LIME per spec). A FLOW row: pills wrap to a
+		# second line at narrow widths instead of forcing the old 348px
+		# min width through the container chain.
 		if not vbox.has_node("PillRow"):
-			var pills := HBoxContainer.new()
+			var pills := HFlowContainer.new()
 			pills.name = "PillRow"
-			pills.alignment = BoxContainer.ALIGNMENT_CENTER
-			pills.add_theme_constant_override("separation", 8)
+			pills.alignment = FlowContainer.ALIGNMENT_CENTER
+			pills.add_theme_constant_override("h_separation", 8)
+			pills.add_theme_constant_override("v_separation", 6)
 			vbox.add_child(pills)
 			vbox.move_child(pills, vbox.get_node_or_null("StatsGrid").get_index() + 1)
 		# LAN standings: placements for everyone who finished (top 5,
@@ -2462,17 +2474,42 @@ func _style_results_panel() -> void:
 			# StatsLabel survives as the muted modifiers caption only.
 			stats.add_theme_color_override("font_color", UIT.color(UIT.TEXT_FAIR))
 			stats.add_theme_font_size_override("font_size", 11)
-	# Responsive: clamp panel to 92% of the visible rect every resize.
+	# Responsive: clamp panel to 92% of the visible rect on panel resize
+	# AND on viewport resize (window drag / rotate / handheld orientation).
 	_clamp_results_panel()
 	results_panel.resized.connect(_clamp_results_panel)
+	var viewport := results_panel.get_viewport()
+	if viewport and not viewport.size_changed.is_connected(_clamp_results_panel):
+		viewport.size_changed.connect(_clamp_results_panel)
+	# Standings/pills populate AFTER _ready, so the content's minimum size
+	# grows late — re-clamp (deferred, layout-safe) when it does. The signal
+	# rides the VBox: a ScrollContainer's own min ignores its child by
+	# design, so it never fires.
+	var vbox_node := results_panel.get_node_or_null("Body/VBox")
+	if vbox_node is Control and not (vbox_node as Control).minimum_size_changed.is_connected(_queue_results_clamp):
+		(vbox_node as Control).minimum_size_changed.connect(_queue_results_clamp)
 
+func _queue_results_clamp() -> void:
+	_clamp_results_panel.call_deferred()
+
+## Shrink-to-fit: the panel sits at its designed 560x520, stretches to hold
+## its content (VBox minimum + the 20px Body margins) when that is bigger,
+## and never exceeds 92% of the visible rect. When a tiny viewport forces
+## the cap below the content minimum, the scroll body keeps everything
+## reachable instead of the panel bleeding off-screen.
 func _clamp_results_panel() -> void:
 	if not results_panel:
 		return
 	var vp := results_panel.get_viewport_rect().size
 	var max_size := vp * 0.92
-	var w := minf(560.0, max_size.x)
-	var h := minf(480.0, max_size.y)
+	var content_min := Vector2.ZERO
+	var content := results_panel.get_node_or_null("Body/VBox")
+	if content is Control:
+		content_min = (content as Control).get_combined_minimum_size()
+	var w := maxf(560.0, content_min.x + 40.0)
+	var h := maxf(520.0, content_min.y + 40.0)
+	w = minf(w, max_size.x)
+	h = minf(h, max_size.y)
 	results_panel.offset_left = -w / 2.0
 	results_panel.offset_right = w / 2.0
 	results_panel.offset_top = -h / 2.0
@@ -2529,7 +2566,7 @@ func _end_race() -> void:
 
 	if results_panel:
 		results_panel.visible = true
-		var vbox = results_panel.get_node_or_null("VBox")
+		var vbox = results_panel.get_node_or_null("Body/VBox")
 		if vbox:
 			var winner_label = vbox.get_node_or_null("WinnerLabel")
 			var stats_label = vbox.get_node_or_null("StatsLabel")

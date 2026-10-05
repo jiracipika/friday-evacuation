@@ -101,7 +101,7 @@ offset_bottom = 240
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBox" type="VBoxContainer" parent="UI/ResultsPanel"]
+[node name="Body" type="ScrollContainer" parent="UI/ResultsPanel"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -109,29 +109,33 @@ offset_left = 20
 offset_top = 20
 offset_right = -20
 offset_bottom = -20
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="UI/ResultsPanel/Body"]
+size_flags_horizontal = 3
 theme_override_constants/separation = 20
 
-[node name="WinnerLabel" type="Label" parent="UI/ResultsPanel/VBox"]
+[node name="WinnerLabel" type="Label" parent="UI/ResultsPanel/Body/VBox"]
 layout_mode = 2
 text = "WINNER"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 32
 theme_override_colors/font_color = Color(1, 0.65, 0.1, 1)
 
-[node name="StatsLabel" type="Label" parent="UI/ResultsPanel/VBox"]
+[node name="StatsLabel" type="Label" parent="UI/ResultsPanel/Body/VBox"]
 layout_mode = 2
 text = ""
 horizontal_alignment = 1
 autowrap_mode = 2
 theme_override_font_sizes/font_size = 17
 
-[node name="RematchButton" type="Button" parent="UI/ResultsPanel/VBox"]
+[node name="RematchButton" type="Button" parent="UI/ResultsPanel/Body/VBox"]
 layout_mode = 2
 text = "REMATCH"
 custom_minimum_size = Vector2(0, 60)
 theme_override_font_sizes/font_size = 24
 
-[node name="MenuButton" type="Button" parent="UI/ResultsPanel/VBox"]
+[node name="MenuButton" type="Button" parent="UI/ResultsPanel/Body/VBox"]
 layout_mode = 2
 text = "MAIN MENU"
 custom_minimum_size = Vector2(0, 60)
