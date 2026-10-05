@@ -93,8 +93,12 @@ to hold standings when there's room, meter/pill-row width compaction.
 ResultsPanelFitTest 22 checks; ladder PASS 74/74 phases, 72/72 suites.
 
 **Ops note:** GitHub Actions were silently disabled repo-wide again;
-re-enabled via gh api PUT and ran a workflow_dispatch checkpoint build so
-the public site picks up the art pass.
+re-enabled via gh api PUT. The dispatch checkpoint build's deploy job then
+failed — repo secret VERCEL_TOKEN had expired — so the live site was
+refreshed by the local-export Vercel rescue (proven recipe, pck
+last-modified confirms). Token re-set from refreshed local auth via
+gh secret set (never printed); re-dispatch run then went ALL GREEN (gate +
+3 exports + deploy + release attach).
 
 **Parallel lanes:** Dashverse GLM-NEXT-SLICE consumed (5 commits, 768
 tests, both APKs re-proven on the farm + emulator), SignQuest camera-freeze
