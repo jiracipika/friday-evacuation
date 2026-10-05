@@ -731,6 +731,13 @@ func _apply_graphics_quality(quality: int) -> void:
 		key.directional_shadow_blend_splits = true
 		key.shadow_bias = 0.05
 		key.shadow_normal_bias = 1.0
+	# LIGHTING ART DIRECTION: Enhanced-only warm pools (exit signage,
+	# power-ups) + stairwell cool tint live in the race scene and ride its
+	# floor culling groups. Standard must render the pre-slice look exactly,
+	# so the scene builds/tears the gated nodes here on every preset change
+	# ( Evacuation.set_art_direction_lighting — no-op in menu scenes).
+	if root.has_method("set_art_direction_lighting"):
+		root.set_art_direction_lighting(enhanced)
 
 func _close() -> void:
 	closed.emit()

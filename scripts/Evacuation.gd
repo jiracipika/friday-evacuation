@@ -53,6 +53,20 @@ var _culled_floors: Dictionary = {}  # floor_index -> bool (currently hidden)
 const CULL_HIDE_DISTANCE_FLOORS := 2
 const CULL_LIGHT_DISTANCE_FLOORS := 1
 
+## LIGHTING ART DIRECTION (Enhanced-only): warm guide pools + stairwell
+## cool tint. Standard/LOW must render the pre-slice look EXACTLY, so the
+## gated nodes are never built at quality 0 and the tint restores exact
+## base colors. Settings._apply_graphics_quality drives this live on the
+## current scene; the persisted cfg value seeds the gate at scene build.
+var _art_lighting_enabled := false
+## Warm = "valuable / this way" in the light language (same hue family as
+## the portal grid pool). Pool lights live in per-floor ArtPools containers
+## registered with the floor culling groups — NEVER as children of pickups
+## (pickups spin; a child light would orbit) and never inside CeilingLights
+## groups (ArtLightingTest pins the nine-light grid budget there).
+const ART_WARM := Color(1.0, 0.72, 0.45)
+var _pickups: Array[Node] = []  # staging for art pools; pickups never move in XZ
+
 ## Nodes
 @onready var countdown_label: Label3D = $Arena/CountdownLabel
 @onready var timer_label: Label = $UI/TimerLabel
@@ -62,6 +76,11 @@ const CULL_LIGHT_DISTANCE_FLOORS := 1
 # --- LIFECYCLE ---
 
 func _ready() -> void:
+	# Seed the art-direction gate from the persisted quality preset (same
+	# cfg the Settings panel owns; default 0 = Standard = additions off).
+	var quality_cfg := ConfigFile.new()
+	quality_cfg.load("user://settings.cfg")
+	_art_lighting_enabled = int(quality_cfg.get_value("graphics", "quality", 0)) >= 1
 	_setup_arena()
 	_style_results_panel()
 	# UI SLICE: portrait in-match hint (rotate your phone / tap to continue).
@@ -466,6 +485,9 @@ func _setup_arena() -> void:
 	# AFTER obstacles/dressing exist so it reads real footprints (GL
 	# Compatibility has no SSAO; discs are cheap unshaded quads).
 	_spawn_floor_blob_shadows()
+	# LIGHTING ART DIRECTION: warm exit-sign/power-up pools + stairwell tint.
+	# Last, so the pools can anchor to portals and spawned pickups.
+	set_art_direction_lighting(_art_lighting_enabled)
 
 # --- PHASE 4A THEMED FLOORS ---
 
@@ -1449,7 +1471,13 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 			# lane. Reuse the existing nine lights, but stop every fixture
 			# washing almost the entire 40m floor with its 22m range.
 			var is_lane: bool = x == 0.0
-			light.light_color = Color(0.72, 0.84, 1.0) if is_lane else Color(1.0, 0.78, 0.55)
+			var base_tint := Color(0.72, 0.84, 1.0) if is_lane else Color(1.0, 0.78, 0.55)
+			light.light_color = base_tint
+			# Art-direction bookkeeping: role + Standard base color, so the
+			# Enhanced stairwell tint can restore exactly (base colors are
+			# the Standard look by definition).
+			light.set_meta("light_role", "lane" if is_lane else "perimeter")
+			light.set_meta("base_color", base_tint)
 			light.light_energy = 0.58 if is_lane else 1.25
 			light.omni_range = 12.0 if is_lane else 15.0
 			light.shadow_enabled = false
@@ -1462,6 +1490,8 @@ func _spawn_ceiling_lights(floor_pos: Vector3, floor_index: int = 0) -> void:
 				light.light_color = Color(1.0, 0.72, 0.45)
 				light.light_energy = 1.6
 				light.omni_range = 9.0
+				light.set_meta("light_role", "portal_pool")
+				light.set_meta("base_color", Color(1.0, 0.72, 0.45))
 			light_group.add_child(light)
 
 			# GRAPHICS PASS: recessed troffer panels (frame + emissive lens)
@@ -1611,6 +1641,114 @@ func _set_floor_lights_enabled(floor_index: int, enabled: bool) -> void:
 			if (light as OmniLight3D).visible == enabled:
 				continue
 			(light as OmniLight3D).visible = enabled
+
+# --- LIGHTING ART DIRECTION (Enhanced-only additions) -----------------------
+# Warm guide pools (exit signage, power-ups) + a slightly cooler stairwell.
+# The gate is the quality system: Settings._apply_graphics_quality calls
+# set_art_direction_lighting() on the live scene, and the persisted preset
+# seeds it at build. At Standard (quality 0) NONE of this exists — no pool
+# nodes are built and grid colors stay the Standard base colors — so the
+# LOW render is identical to the pre-slice scene by construction.
+
+## Public quality-gate entry point. Idempotent; safe to call every preset
+## change. Pool containers ride the floor culling groups (registered like
+## CeilingLights), so adjacency culling drops their lights and far floors
+## hide them wholesale — no culling exceptions added.
+func set_art_direction_lighting(enabled: bool) -> void:
+	_art_lighting_enabled = enabled
+	_apply_stairwell_tint(enabled)
+	if enabled:
+		_build_art_pools()
+	else:
+		_clear_art_pools()
+
+## Slightly cooler tint on the stairwell floor (index 2, y=12): concrete
+## dexterity floor reads as a cold bunker between warm office floors.
+## Energies are untouched, so the deliberate light hierarchy survives; the
+## portal pool stays the warmest thing on the floor (traversal cue).
+const STAIRWELL_COOL := {
+	"lane": Color(0.60, 0.74, 1.0),
+	"perimeter": Color(0.74, 0.83, 1.0),
+	"portal_pool": Color(0.94, 0.80, 0.62),
+}
+
+func _apply_stairwell_tint(enabled: bool) -> void:
+	var stair_group := get_node_or_null("CeilingLights_12")
+	if stair_group == null:
+		return
+	for light in stair_group.find_children("*", "OmniLight3D", true, false):
+		if not light.has_meta("base_color"):
+			continue
+		var base: Color = light.get_meta("base_color")
+		var role := String(light.get_meta("light_role", ""))
+		if enabled and STAIRWELL_COOL.has(role):
+			light.light_color = STAIRWELL_COOL[role]
+		else:
+			light.light_color = base
+
+func _build_art_pools() -> void:
+	if get_node_or_null("ArtPools_F0"):
+		return
+	for floor_index in range(4):
+		var pools := Node3D.new()
+		pools.name = "ArtPools_F%d" % floor_index
+		add_child(pools)
+		_register_floor_node(floor_index, pools)
+	# Warm pool under each EXIT sign: the green sign marks the way out, the
+	# warm pool marks it on the FLOOR and on the door approach so it reads
+	# from across the room under the cool lane light. Portal local +Z faces
+	# the room; the light hangs chest-height on the approach side of the
+	# doors (sign box sits at local y 3.62) — high enough to spread, low
+	# enough to keep the green sign the brightest thing in the alcove.
+	for portal in get_tree().get_nodes_in_group("elevator_portals"):
+		var p := portal as Node3D
+		var portal_floor := clampi(int(roundf(p.position.y / 6.0)), 0, 3)
+		var pool := _make_art_pool(ART_WARM, 1.2, 5.0)
+		pool.position = p.to_global(Vector3(0, 2.2, 1.0))
+		(get_node("ArtPools_F%d" % portal_floor) as Node3D).add_child(pool)
+	# Warm pool at each power-up's spawn XZ, hung ~1m over the carpet like a
+	# pendant: low enough to pool on the floor, high enough that the pool
+	# spreads instead of blowing a white disc (an omni centimetres above a
+	# plane saturates the texels directly beneath it). Pickups are static in
+	# XZ (they bob/spin their own meshes only), so a floor-level pool tracks
+	# the pickup for life and dies with it — a collected pickup must not
+	# leave an orphan pool of "valuable" light behind.
+	for pu in _pickups:
+		if not is_instance_valid(pu):
+			continue
+		var base_y := float(pu.get("base_y"))
+		var pu_floor := clampi(int(roundf((base_y - 0.5) / 6.0)), 0, 3)
+		var pool := _make_art_pool(ART_WARM, 0.85, 3.0)
+		pool.position = Vector3(pu.position.x, base_y + 0.9, pu.position.z)
+		(get_node("ArtPools_F%d" % pu_floor) as Node3D).add_child(pool)
+		# Die with the pickup (collected pickups must not leave an orphan
+		# pool of "valuable" light). Weakref capture: a strong lambda capture
+		# of the pool prints freed-capture errors on scene teardown when the
+		# pool dies first; the WeakRef object itself is RefCounted and never
+		# triggers that path, and get_ref() is null once the pool is gone.
+		var pool_ref: WeakRef = weakref(pool)
+		pu.tree_exiting.connect(func():
+			var p := pool_ref.get_ref() as Node
+			if p:
+				p.queue_free())
+
+func _make_art_pool(color: Color, energy: float, radius: float) -> OmniLight3D:
+	var light := OmniLight3D.new()
+	light.light_color = color
+	light.light_energy = energy
+	light.omni_range = radius
+	light.shadow_enabled = false  # compat renderer: no real-time casters, ever
+	light.light_bake_mode = OmniLight3D.BAKE_STATIC
+	light.set_meta("art_pool", true)
+	return light
+
+func _clear_art_pools() -> void:
+	for floor_index in range(4):
+		var pools := get_node_or_null("ArtPools_F%d" % floor_index)
+		if pools:
+			var group_arr: Array = _floor_groups.get(floor_index, [])
+			group_arr.erase(pools)
+			pools.queue_free()
 
 func _setup_environment() -> void:
 	var world = get_node_or_null("WorldEnvironment") as WorldEnvironment
@@ -1952,6 +2090,9 @@ func _spawn_powerups() -> void:
 			rng.randf_range(-12, 12)
 		)
 		add_child(pu)
+		# Art pools anchor to the spawn XZ (pickups never move in XZ — only
+		# bob/spin their own meshes), so staging the node reference is enough.
+		_pickups.append(pu)
 
 # --- PLAYER SPAWN ---
 
