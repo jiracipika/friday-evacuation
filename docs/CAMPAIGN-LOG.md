@@ -74,3 +74,30 @@ campaign console card.
 **Known issues:** GitHub artifact quota healed; iOS app builds remain
 user-gated (Xcode 26 + macOS 15.6 + Apple Dev account) — iOS 18.5
 simulator runtime now installed and boot-proven.
+
+## 2026-10-05 — CampaignGoal day 3
+
+**Commits:** ebda342 (art lighting — warm exit/power-up pools, stairwell
+cool tint, Enhanced-gated via Settings._apply_graphics_quality), 694cf06
+(prop variety + floor 2/4 dressing parity — whiteboards, cable trays,
+plants), 46b8a8d (ResultsPanel shrink-to-fit). Standard-graphics identity
+proven by pixel A/B vs a detached pre-slice worktree; Enhanced-only
+changes, culling preserved.
+
+**What improved:** the results panel now fits every viewport. Measured
+pre-fix: 60px off-screen top AND bottom at 640x360 (clamp never re-ran on
+viewport resize), 37px content spill at 390x844, LAN-5 standings up to
+214px overflow. Post-fix: content-aware clamp re-runs on viewport resize +
+VBox min changes, scroll Body for genuinely small viewports, panel grows
+to hold standings when there's room, meter/pill-row width compaction.
+ResultsPanelFitTest 22 checks; ladder PASS 74/74 phases, 72/72 suites.
+
+**Ops note:** GitHub Actions were silently disabled repo-wide again;
+re-enabled via gh api PUT and ran a workflow_dispatch checkpoint build so
+the public site picks up the art pass.
+
+**Parallel lanes:** Dashverse GLM-NEXT-SLICE consumed (5 commits, 768
+tests, both APKs re-proven on the farm + emulator), SignQuest camera-freeze
+root cause + quiz overflow fixed (11→35 tests), SignFlow avatar-timer +
+lint fixes, ai-trader stale-pending supersede. Printshop lane left to its
+live session (v0.34 shipped there).
