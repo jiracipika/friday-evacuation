@@ -621,6 +621,38 @@ func _theme_floor2_open_office() -> void:
 	# Wall clock pinned at 5:00 on the north wall — the whole game's reason
 	# to race, readable from the conference tables.
 	BlenderProps.spawn(self, BlenderProps.wall_clock(), Vector3(0, y + 3.6, -19.7), 0.0)
+	# DRESSING PARITY (floor 2): freestanding whiteboards behind the conference
+	# tables, hung cable trays overhead, two more potted plants reading against
+	# the dusk window bands. All non-colliding, all shadowless (repo law), one
+	# registered group so floor culling hides the set wholesale.
+	var Dressing = load("res://scripts/OfficeDressing.gd")
+	if Dressing:
+		var parity := Node3D.new()
+		parity.name = "DressingParity_F1"
+		add_child(parity)
+		var wb_specs := [
+			{"pos": Vector3(-6, y, -4.8), "yaw": 0.0, "variant": 0},
+			{"pos": Vector3(6, y, -4.8), "yaw": 0.0, "variant": 1},
+		]
+		for wbi in wb_specs.size():
+			var wb: Node3D = Dressing.whiteboard(wb_specs[wbi]["variant"])
+			wb.name = "Whiteboard_%d" % wbi
+			wb.position = wb_specs[wbi]["pos"]
+			wb.rotation.y = wb_specs[wbi]["yaw"]
+			parity.add_child(wb)
+		# Trays run along Z at the mid-span between T-bar lines; rods meet the
+		# ceiling slab (bottom at y+5.88; tray base y+5.42 + 0.32 rod + margin).
+		var tray_x: Array = [-14.0, 14.0]
+		for tray_i in tray_x.size():
+			var tray: Node3D = Dressing.cable_tray(38.0)
+			tray.name = "CableTray_%d" % tray_i
+			tray.position = Vector3(tray_x[tray_i], y + 5.42, 0)
+			tray.rotation.y = PI / 2.0
+			parity.add_child(tray)
+		# Plants flank the window bands away from the corner vending/plant duo.
+		for plant_pos in [Vector3(-13, y, 17.6), Vector3(13, y, -17.6)]:
+			BlenderProps.spawn(parity, BlenderProps.potted_plant(), plant_pos, PI * 0.25)
+		_register_floor_node(1, parity)
 	# Speed zones: tile strip (fast, slick) vs carpet patch (grippy)
 	var tile := _make_surface_zone(0.55, Vector3(10, 2.0, 6), Color(0.55, 0.75, 1.0, 0.10))
 	tile.position = Vector3(0, y + 0.15, 8)
@@ -833,6 +865,25 @@ func _theme_floor4_cafeteria_and_lot() -> void:
 			{"pos": Vector3(6, y, 12), "rot": -0.2},
 		]:
 			blender.spawn(self, blender.box_stack(), stack_spec["pos"], stack_spec["rot"])
+	# DRESSING PARITY (floor 4): menu board against the north dusk band and
+	# cable trays over the COVERED cafeteria ceiling only (the drop-ceiling
+	# slabs span |z| >= 10 — nothing may hang over the open lot). All
+	# non-colliding, shadowless, one registered culling group.
+	var Dressing = load("res://scripts/OfficeDressing.gd")
+	if Dressing:
+		var parity := Node3D.new()
+		parity.name = "DressingParity_F3"
+		add_child(parity)
+		var menu: Node3D = Dressing.whiteboard(2)
+		menu.position = Vector3(-11, y, -19.3)
+		parity.add_child(menu)
+		var tray_z: Array = [-13.8, -10.6]
+		for tray_i in tray_z.size():
+			var tray: Node3D = Dressing.cable_tray(38.0)
+			tray.name = "CableTray_%d" % tray_i
+			tray.position = Vector3(0, y + 5.42, tray_z[tray_i])
+			parity.add_child(tray)
+		_register_floor_node(3, parity)
 
 func _make_round_table() -> StaticBody3D:
 	var table := StaticBody3D.new()

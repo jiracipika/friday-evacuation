@@ -36,7 +36,7 @@ ChairSkinSmokeTest CharacterRosterSmokeTest HauledSmokeTest ShopSeekSmokeTest \
 PizzaColonySmokeTest TouchControlsSmokeTest ModeHUDResponsiveSmokeTest ModeResultsSmokeTest ModeSmokeTest NetworkSmokeTest \
 NetworkTwoPeerTest LanAvatarSyncTest AnnouncerSmokeTest PanicCamSmokeTest \
 LevelClearTest CheckpointBotTest LayoutPacingTest SkinBotSanityTest HazardsSmokeTest \
-ThemedFloorsSmokeTest PowerUpSmokeTest PauseMenuSmokeTest \
+ThemedFloorsSmokeTest OfficeDressingParityTest PowerUpSmokeTest PauseMenuSmokeTest \
 AccessibilitySmokeTest Phase8BAccessTest RaceModifiersSmokeTest \
 ModifierMenuSmokeTest GhostRacerSmokeTest StatsRoundTripTest \
 VisualDesignSmokeTest WallMaterialsSmokeTest FaceSmokeTest BindingsSmokeTest \
@@ -164,6 +164,8 @@ SUCCESS_PATTERNS = {
         re.compile(r"^=== HAZARDS SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
     "ThemedFloorsSmokeTest": [
         re.compile(r"^=== THEMED FLOORS SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
+    "OfficeDressingParityTest": [
+        re.compile(r"^=== OFFICE DRESSING PARITY TEST PASSED \(\d+ checks\) ===$", re.M)],
     "PowerUpSmokeTest": [
         re.compile(r"^=== POWER-UP SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
     "PauseMenuSmokeTest": [

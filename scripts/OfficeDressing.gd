@@ -8,11 +8,16 @@
 #   - column(): structural concrete column (real collision, corridor-safe)
 #   - monitor()/desk_dressing(): desks gain screens, keyboards, mugs, papers
 #     — all NON-colliding dressing so gameplay footprints never change
+#   - whiteboard(): freestanding marker board (conference/menu dressing)
+#   - cable_tray(): hung ceiling cable run (floors 2/4 dressing parity)
+#   - desk_plant(): tiny desktop plant for monitor desks
 #   - elevator_portal(): door frame + metal doors + EXIT sign behind each pad
 #   - exit_sign(): green emissive EXIT signage box
 #
 # Everything is procedural (no assets), static-cached where shared, and
-# mobile-friendly (<=6 tiny meshes per prop, shared materials).
+# mobile-friendly (<=9 tiny meshes per prop, shared materials; PropMaterials
+# textured surfaces where they earn their keep). New dressing casts NO
+# real-time shadows — GL Compatibility blob discs are the shadow language.
 class_name OfficeDressing
 extends RefCounted
 
@@ -369,6 +374,205 @@ static func exit_sign(pos: Vector3) -> Node3D:
 	return sign_root
 
 
+# ------------------------------------------------------- conference props --
+
+## Flat cached color material (scribbles, pen trays, cables, foliage...).
+static func _flat_mat(key: String, color: Color, rough: float) -> StandardMaterial3D:
+	return _mat(key, func() -> StandardMaterial3D:
+		var m := StandardMaterial3D.new()
+		m.albedo_color = color
+		m.roughness = rough
+		return m)
+
+
+## PropMaterials bridge with a flat-color fallback so the dressing builders
+## stay boot-safe on any checkout (same defensive pattern as Evacuation).
+static func _prop_mat(kind: String, tint: Color) -> StandardMaterial3D:
+	var PropMats: GDScript = load("res://scripts/PropMaterials.gd")
+	if PropMats:
+		if kind == "metal" and PropMats.has_method("brushed_metal"):
+			return PropMats.brushed_metal()
+		if kind == "plastic" and PropMats.has_method("plastic"):
+			return PropMats.plastic(tint)
+	var m := StandardMaterial3D.new()
+	m.albedo_color = tint
+	m.roughness = 0.55 if kind == "plastic" else 0.35
+	if kind == "metal":
+		m.metallic = 0.8
+	return m
+
+
+## Freestanding mobile whiteboard: brushed-metal frame on two legs, off-white
+## melamine board, flat marker-stroke bars and a pen tray. Faces +Z.
+## variant 0 "sprint board", 1 "agenda list", 2 "TODAY'S MENU" (Label3D).
+## Non-colliding dressing; every mesh casts NO shadow (tall thin panel — the
+## tilted key light would stripe the floor, repo law).
+static func whiteboard(variant: int) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Whiteboard"
+	var v := clampi(variant, 0, 2)
+	var metal := _prop_mat("metal", Color(0.6, 0.64, 0.68))
+	var board_mat := _flat_mat("board_surface", Color(0.93, 0.94, 0.92), 0.22)
+	var tray_mat := _prop_mat("plastic", Color(0.24, 0.26, 0.3))
+
+	var leg_sides := {"Leg_L": -1.0, "Leg_R": 1.0}
+	for leg_name in leg_sides:
+		var leg := MeshInstance3D.new()
+		leg.name = leg_name
+		var leg_mesh := BoxMesh.new()
+		leg_mesh.size = Vector3(0.06, 1.72, 0.06)
+		leg.mesh = leg_mesh
+		leg.position = Vector3(leg_sides[leg_name] * 0.62, 0.86, -0.05)
+		leg.material_override = metal
+		leg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(leg)
+
+	var frame := MeshInstance3D.new()
+	frame.name = "Frame"
+	frame.mesh = beveled_box(Vector3(1.76, 1.28, 0.055), 0.014)
+	frame.position = Vector3(0, 1.32, 0)
+	frame.material_override = metal
+	frame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(frame)
+
+	var board := MeshInstance3D.new()
+	board.name = "Board"
+	var board_mesh := BoxMesh.new()
+	board_mesh.size = Vector3(1.64, 1.16, 0.02)
+	board.mesh = board_mesh
+	board.position = Vector3(0, 1.32, 0.02)
+	board.material_override = board_mat
+	board.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(board)
+
+	var tray := MeshInstance3D.new()
+	tray.name = "PenTray"
+	var tray_mesh := BoxMesh.new()
+	tray_mesh.size = Vector3(1.5, 0.045, 0.1)
+	tray.mesh = tray_mesh
+	tray.position = Vector3(0, 0.66, 0.085)
+	tray.material_override = tray_mat
+	tray.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(tray)
+
+	# Marker strokes: broad soft bars only — flat tints, no emission, no
+	# high-frequency texture (moiré law). One cached material per color.
+	var layouts := [
+		# sprint board: three row bars + orange underline accent
+		[Vector3(-0.18, 1.62, 0.90), Vector3(0.0, 1.44, 1.10),
+			Vector3(0.10, 1.26, 0.70), Vector3(-0.05, 1.02, 1.25)],
+		# agenda: short left-aligned lines, one red "overdue"
+		[Vector3(-0.42, 1.66, 0.62), Vector3(-0.42, 1.50, 0.52),
+			Vector3(-0.42, 1.34, 0.58), Vector3(-0.42, 1.18, 0.40)],
+		# menu board: three centered warm rows under the Label3D header
+		[Vector3(0.0, 1.48, 0.95), Vector3(0.05, 1.28, 0.75),
+			Vector3(-0.05, 1.08, 0.85)],
+	]
+	var palettes := [
+		["marker_blue", "marker_red", "marker_green", "marker_amber"],
+		["marker_navy", "marker_navy", "marker_navy", "marker_red"],
+		["marker_amber", "marker_amber", "marker_blue"],
+	]
+	var palette_colors := {
+		"marker_blue": Color(0.16, 0.45, 0.85),
+		"marker_red": Color(0.85, 0.25, 0.2),
+		"marker_green": Color(0.15, 0.6, 0.3),
+		"marker_amber": Color(0.9, 0.55, 0.1),
+		"marker_navy": Color(0.2, 0.3, 0.6),
+	}
+	var bars: Array = layouts[v]
+	var names: Array = palettes[v]
+	for i in bars.size():
+		var spec: Vector3 = bars[i]
+		var stroke := MeshInstance3D.new()
+		stroke.name = "Stroke%d" % i
+		var stroke_mesh := BoxMesh.new()
+		stroke_mesh.size = Vector3(spec.z, 0.035, 0.008)
+		stroke.mesh = stroke_mesh
+		stroke.position = Vector3(spec.x, spec.y, 0.036)
+		var cname: String = names[i]
+		stroke.material_override = _flat_mat(cname, palette_colors[cname], 0.6)
+		stroke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(stroke)
+
+	if v == 2:
+		var header := Label3D.new()
+		header.name = "MenuHeader"
+		header.text = "TODAY'S MENU"
+		header.font_size = 44
+		header.pixel_size = 0.0032
+		header.modulate = Color(0.2, 0.25, 0.33)
+		header.outline_size = 0
+		header.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+		header.no_depth_test = false
+		header.position = Vector3(0, 1.74, 0.033)
+		root.add_child(header)
+	return root
+
+
+## Hung ceiling cable tray: perforated base + side rails + cable bundles and
+## two drop rods (caller places the root so the rods meet the ceiling slab).
+## THIN CEILING GEOMETRY — every mesh casts NO shadow (long-stripe law).
+static func cable_tray(length: float) -> Node3D:
+	var root := Node3D.new()
+	root.name = "CableTray"
+	var l := clampf(length, 4.0, 40.0)
+	var metal := _prop_mat("metal", Color(0.6, 0.64, 0.68))
+	var cable_a := _flat_mat("cable_dark", Color(0.13, 0.13, 0.15), 0.7)
+	var cable_b := _flat_mat("cable_blue", Color(0.2, 0.3, 0.5), 0.65)
+
+	var base := MeshInstance3D.new()
+	base.name = "Base"
+	var base_mesh := BoxMesh.new()
+	base_mesh.size = Vector3(l, 0.045, 0.4)
+	base.mesh = base_mesh
+	base.material_override = metal
+	base.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(base)
+
+	var rail_sides := {"Rail_L": -1.0, "Rail_R": 1.0}
+	for rail_name in rail_sides:
+		var rail := MeshInstance3D.new()
+		rail.name = rail_name
+		var rail_mesh := BoxMesh.new()
+		rail_mesh.size = Vector3(l, 0.1, 0.028)
+		rail.mesh = rail_mesh
+		rail.position = Vector3(0, 0.065, rail_sides[rail_name] * 0.186)
+		rail.material_override = metal
+		rail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(rail)
+
+	# Cable bundles laid in the tray (slightly varied z so the silhouette
+	# never reads as one perfect bar). Two materials, both cached.
+	var cable_z := [-0.1, 0.02, 0.12]
+	for i in cable_z.size():
+		var cable := MeshInstance3D.new()
+		cable.name = "Cable%d" % i
+		var cable_mesh := BoxMesh.new()
+		cable_mesh.size = Vector3(l * 0.985, 0.04, 0.05)
+		cable.mesh = cable_mesh
+		cable.position = Vector3(0.015 * i, 0.035, cable_z[i])
+		cable.material_override = cable_b if i == 1 else cable_a
+		cable.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(cable)
+
+	var rod_sides := {"DropRod_L": -1.0, "DropRod_R": 1.0}
+	for rod_name in rod_sides:
+		var rod := MeshInstance3D.new()
+		rod.name = rod_name
+		var rod_mesh := CylinderMesh.new()
+		rod_mesh.top_radius = 0.024
+		rod_mesh.bottom_radius = 0.024
+		rod_mesh.height = 0.32
+		rod_mesh.radial_segments = 6
+		rod.mesh = rod_mesh
+		rod.position = Vector3(rod_sides[rod_name] * (l * 0.5 - 0.9), 0.3, 0)
+		rod.material_override = metal
+		rod.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(rod)
+	return root
+
+
 # ------------------------------------------------------------- desk props --
 
 ## A toy-like retro office monitor on a sturdy stand: beveled cream/mint
@@ -518,6 +722,49 @@ static func desk_clutter(accent: Color) -> Array[MeshInstance3D]:
 	return out
 
 
+## Tiny desktop plant: terracotta pot + two foliage blobs (3 meshes, shared
+## materials, no collision, no shadow casting). Sits ON the desk surface.
+static func desk_plant() -> Node3D:
+	var root := Node3D.new()
+	root.name = "DeskPlant"
+	var pot := MeshInstance3D.new()
+	pot.name = "Pot"
+	var pot_mesh := CylinderMesh.new()
+	pot_mesh.top_radius = 0.062
+	pot_mesh.bottom_radius = 0.046
+	pot_mesh.height = 0.115
+	pot_mesh.radial_segments = 10
+	pot.mesh = pot_mesh
+	pot.position = Vector3(0, 0.0575, 0)
+	pot.material_override = _prop_mat("plastic", Color(0.62, 0.36, 0.24))
+	pot.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(pot)
+	var leaf_specs := [
+		{"pos": Vector3(-0.015, 0.19, 0.0), "r": 0.075, "key": "leaf_dark"},
+		{"pos": Vector3(0.03, 0.27, 0.01), "r": 0.055, "key": "leaf_lite"},
+	]
+	var leaf_colors := {
+		"leaf_dark": Color(0.18, 0.42, 0.22),
+		"leaf_lite": Color(0.24, 0.5, 0.27),
+	}
+	for i in leaf_specs.size():
+		var spec: Dictionary = leaf_specs[i]
+		var blob := MeshInstance3D.new()
+		blob.name = "Foliage%d" % i
+		var sphere := SphereMesh.new()
+		sphere.radius = spec["r"]
+		sphere.height = (spec["r"] as float) * 2.0
+		sphere.radial_segments = 10
+		sphere.rings = 6
+		blob.mesh = sphere
+		blob.position = spec["pos"]
+		var ckey: String = spec["key"]
+		blob.material_override = _flat_mat(ckey, leaf_colors[ckey], 0.9)
+		blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(blob)
+	return root
+
+
 ## Full desk dressing: monitor + clutter placed on the desk-top surface.
 ## desk_top_y is LOCAL to the desk body. Deterministic per desk instance.
 static var dressing_count := 0
@@ -556,3 +803,12 @@ static func desk_dressing(desk: StaticBody3D, desk_top_y: float) -> void:
 	papers.position = Vector3(0.55, desk_top_y + 0.01, -0.2)
 	papers.rotation.y = float(seed_int % 11) * 0.3
 	desk.add_child(papers)
+
+	# Desk-plant variety: every second monitor desk gets a tiny plant in the
+	# back-left corner of the 2x1 desktop — clear of the monitor base,
+	# keyboard, mug and papers footprints (still non-colliding dressing).
+	if variety == 1:
+		var plant := desk_plant()
+		plant.position = Vector3(-0.72, desk_top_y, -0.3)
+		plant.rotation.y = float(seed_int % 7) * 0.45
+		desk.add_child(plant)
