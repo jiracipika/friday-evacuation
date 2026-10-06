@@ -134,3 +134,28 @@ point advancement, real ExitZone finish signal, chair-only finish).
 
 Note anything that felt wrong with numbers (times, distances, screen). File
 tuning as a list — the GLM polish pass eats concrete numbers for breakfast.
+
+## Session 6 — Hauled hostile-cargo verdict (1f74306, ~15 min)
+
+The three behaviors shipped 2026-10-06 are provisionally validated by
+synthetic evidence only (49-check deterministic suite + pixel-measured
+frames). This session decides the bet: does cargo that fights back make
+Hauled memorable, or should the hook be reworked? Play 2-3 rounds on any
+terrain, carrying each cargo type at least once.
+
+### Fridge of Bees — vision debuff (bump >3 m/s or scored damage → 4s amber haze)
+- [ ] The haze reads as PANIC (fun tension) not ANNOYANCE (visual grief)?
+- [ ] 4s duration feels right, or does it outstay its welcome / end too soon?
+- [ ] Bumps fire often enough in real gauntlets (threshold 3 m/s untested vs real speeds)?
+
+### Haunted Sofa — told drag (7s cycle: "THE SOFA CREAKS..." at T-1s → drags from the drop zone)
+- [ ] Is the drag FELT during a normal haul, or too subtle at ~0.9 m/s?
+- [ ] Does the 1-second creak telegraph make it trivially counterable — or is that the right fair-vs-griefty balance?
+
+### Wet Cardboard — soak ramp (each abuse: +mass, −friction, darkens; capped 2.2x / 0.35)
+- [ ] Does the heavier/slipperier throw change throw-and-chase strategy in practice?
+- [ ] Do the tiered captions land, or is the darkening readable at all on the darker terrains?
+
+### Overall bet
+- [ ] After these rounds: cargo feels like a CHARACTER (keep + tune numbers) or like Evacuation-with-a-box (rework the hook)?
+- [ ] Note anything with numbers (durations, distances, speeds) — the tuning pass eats concrete numbers.
