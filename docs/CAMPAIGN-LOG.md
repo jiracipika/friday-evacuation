@@ -105,3 +105,39 @@ tests, both APKs re-proven on the farm + emulator), SignQuest camera-freeze
 root cause + quiz overflow fixed (11→35 tests), SignFlow avatar-timer +
 lint fixes, ai-trader stale-pending supersede. Printshop lane left to its
 live session (v0.34 shipped there).
+
+## Day 4 — 2026-10-06
+
+**Lanes (3 commits, all pushed):** 3d3913a texture-generation round 2
+(skip-flat + hoist squeeze: −27% gen time, 22/22 buffers BYTE-IDENTICAL
+vs pre-change dumps; wall_normal 96–118ms → 24–29ms; smoke budget 40x→32x
+with cited numbers; floor-albedo hoist documented as a dead end), 63f2e25
+hazard tuning — HONEST NO-OP (5-run LayoutPacingTest table: all layouts
+6–11x inside the clock, worst spread 2.17x vs 4x pin, no unslippable
+gates; fire drill is human-cadence content the bot never sees; only dead
+ROOMBA_* constants removed — zero-ref "tuning" constants are booby traps),
+1f74306 Hauled hostile-cargo behaviors (the day's NEW bet,
+provisionally validated: bees bump→amber-haze vision debuff 4s
+refresh-capped, haunted sofa T-1s caption tell → 2.2 N·s drag from the
+drop zone, wet cardboard mass/friction ramp with caps; HauledBehaviorsTest
+49 checks; ladder now 75/75 phases / 73/73 suites). BONUS latent fix:
+every Hauled caption since inception was DEAD (`_caption` looked up group
+"subtitle_captions" which no node joins) — now routes to
+"caption_overlays". Movie-QA pixel-stats caught an imperceptible first
+vignette (corners already lum 11) → amber haze shipped with measured
+luminance deltas.
+
+**P/B/N classifications:** texture-perf Better; hazard tuning Better
+(verdict: already fair — no-op is the honest result); Hauled behaviors
+NEW (falsifiable bet; human playtest queue: bee panic-vs-annoyance, sofa
+drag perceptibility vs telegraph, wet-throw strategy, bump threshold vs
+real player speeds).
+
+**Ops:** a 17h-hung zombie godot (previous session's printshop
+economy_test.gd, 14.7% CPU spin) blocked lock protocols all morning —
+killed by PID (age-proven foreign). Lock precedent: wait 20 min, proceed
+past foreign-PROJECT godot, always yield to same-repo godot.
+
+**Next steps:** human playtest for the Hauled bet verdict; ShopSeek/
+PizzaColony depth deliberately NOT bet today (one isolated New at a
+time); hazard params stay frozen pending playtest notes.
