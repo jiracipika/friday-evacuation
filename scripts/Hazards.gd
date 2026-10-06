@@ -10,9 +10,9 @@ extends Node3D
 signal fire_drill_started
 signal fire_drill_ended
 
-const ROOMBA_SPEED := 4.0
-const ROOMBA_STUN := 1.5
-const ROOMBA_KNOCKBACK := 10.0
+# Roomba tuning lives in Roomba.gd (SPEED / STUN / KNOCKBACK) — the entity
+# reads its own constants, so this file deliberately has no ROOMBA_* copies
+# (the dead duplicates that used to sit here tuned nothing and misled).
 const DOOR_STUN := 0.5
 const DOOR_KNOCKBACK := 8.0
 const DEBRIS_WARN_TIME := 1.0
