@@ -9,7 +9,7 @@ const CARGO_TYPES := {
 	"fridge_of_bees": {"label": "Fridge of Bees", "color": Color(0.9, 0.85, 0.3), "mass": 3.0, "behavior": "bees", "size": Vector3(1.6, 2.2, 1.4), "value": 300},
 	"haunted_sofa": {"label": "Haunted Sofa", "color": Color(0.5, 0.3, 0.4), "mass": 2.5, "behavior": "haunted", "size": Vector3(2.4, 1.0, 1.0), "value": 250},
 	"angry_vending_machine": {"label": "Angry Vending Machine", "color": Color(0.8, 0.2, 0.2), "mass": 4.0, "behavior": "vending", "size": Vector3(1.4, 2.2, 1.2), "value": 500},
-	"wet_cardboard": {"label": "Wet Cardboard Box", "color": Color(0.6, 0.5, 0.3), "mass": 1.0, "behavior": "normal", "size": Vector3(1.4, 1.4, 1.4), "value": 100},
+	"wet_cardboard": {"label": "Wet Cardboard Box", "color": Color(0.6, 0.5, 0.3), "mass": 1.0, "behavior": "wet", "size": Vector3(1.4, 1.4, 1.4), "value": 100},
 	"exploding_cake": {"label": "Exploding Cake", "color": Color(0.9, 0.7, 0.5), "mass": 1.5, "behavior": "explode", "size": Vector3(1.2, 1.0, 1.2), "value": 400},
 	"sentient_plant": {"label": "Sentient Plant", "color": Color(0.2, 0.6, 0.2), "mass": 2.0, "behavior": "plant", "size": Vector3(1.2, 1.8, 1.2), "value": 200},
 }
@@ -25,6 +25,20 @@ const CARGO_SPAWN_Z := -20.0
 const PUSH_FORCE := 16.0        # wrong-way push on rigid cargo (Newtons)
 const PLAYER_PUSH_ACCEL := 7.0  # wrong-way deceleration on chairs (m/s^2)
 
+# --- hostile-cargo personality behaviors (2026-10-05 "Hauled fights back").
+# Deterministic by construction: constants + accumulators, seeded rng only —
+# never the global randf. Pinned by HauledBehaviorsTest.gd.
+const BEE_VISION_DURATION := 4.0   # seconds of veiled vision per abuse (refresh, never stacks)
+const BUMP_SPEED_THRESHOLD := 3.0  # horizontal m/s at contact to count as a bump
+const BUMP_COOLDOWN := 0.8         # seconds between countable bumps
+const SOFA_DRAG_INTERVAL := 7.0    # seconds between self-drags (tell at T-1s)
+const SOFA_DRAG_TELL_LEAD := 1.0
+const SOFA_DRAG_IMPULSE := 2.2     # N.s backward; mass 2.5 -> ~0.9 m/s creep
+const WET_MASS_STEP := 0.3         # kg per abuse event
+const WET_MASS_CAP := 2.2          # 2.2x base mass — heavier, still haulable
+const WET_FRICTION_STEP := 0.2
+const WET_FRICTION_FLOOR := 0.35
+
 # --- state ---
 var rng := RandomNumberGenerator.new()
 var round_index := 0
@@ -38,6 +52,13 @@ var cargo: RigidBody3D
 var cargo_type_key := ""
 var cargo_value := 1.0
 var cargo_damage_events := 0
+var cargo_bump_events := 0     # hard contacts (unscored; feeds behaviors)
+var bee_vision_timer := 0.0    # >0 while the swarm veils the hauler's view
+var soggy_steps := 0           # wet cardboard abuse events this round
+var sofa_drag_count := 0
+var _bump_cooldown := 0.0
+var _sofa_drag_timer := SOFA_DRAG_INTERVAL
+var _sofa_tell_shown := false
 var carry_cumulative := 0.0
 var exploded := false
 var delivered_this_round := false
@@ -58,6 +79,8 @@ var _elapsed := 0.0
 # swarm/stun visual nodes
 var bee_swarm: GPUParticles3D
 var can_projectiles: Array[RigidBody3D] = []
+var bee_overlay: TextureRect              # screen-space swarm vignette
+var cargo_material: StandardMaterial3D    # per-round cargo mesh material
 
 func _ready() -> void:
 	# Ambient bed rides the Music bus under the mode.
@@ -104,6 +127,13 @@ func _start_round(index: int) -> void:
 	delivered_this_round = false
 	exploded = false
 	cargo_damage_events = 0
+	cargo_bump_events = 0
+	bee_vision_timer = 0.0
+	soggy_steps = 0
+	sofa_drag_count = 0
+	_bump_cooldown = 0.0
+	_sofa_drag_timer = SOFA_DRAG_INTERVAL
+	_sofa_tell_shown = false
 	carry_cumulative = 0.0
 	cargo_value = 1.0
 	var ckeys := CARGO_TYPES.keys()
@@ -129,6 +159,9 @@ func _finish_round(score: int, label: String, color: Color) -> void:
 	round_active = false
 	total_score += score
 	round_scores.append(score)
+	bee_vision_timer = 0.0  # a dead round never keeps the veil up
+	if bee_overlay and is_instance_valid(bee_overlay):
+		bee_overlay.modulate.a = 0.0
 	_show_banner("%s\n+%d" % [label, score], color)
 	if mode_hud and mode_hud.has_method("update_state"):
 		mode_hud.update_state(0.0, 1.0 if score > 0 else 0.0, "%s  |  TOTAL %d" % [label, total_score], color)
@@ -173,6 +206,7 @@ func _process(delta: float) -> void:
 	_update_carry()
 	_update_push_zones(delta)
 	_update_cargo_events(delta)
+	_tick_bee_vision(delta)
 	_update_projectiles(delta)
 	# Cargo might have been destroyed/queued during its behavior update.
 	if cargo == null or not is_instance_valid(cargo) or cargo.is_queued_for_deletion():
@@ -233,12 +267,10 @@ func _update_cargo_events(delta: float) -> void:
 	if b == "bees":
 		_bee_timer -= delta
 		if _bee_timer <= 0.0:
-			_bee_timer = randf_range(3.0, 5.0)
+			_bee_timer = rng.randf_range(3.0, 5.0)  # seeded rng: deterministic re-runs
 			_bee_burst()
 	elif b == "haunted":
-		if randf() < 0.6 * delta:
-			var dir := Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.1, 0.2), rng.randf_range(-1, 1)).normalized()
-			cargo.apply_central_impulse(dir * 2.5)
+		_tick_haunted(delta)
 	elif b == "vending":
 		_vend_timer -= delta
 		if _vend_timer <= 0.0:
@@ -255,7 +287,7 @@ func _update_cargo_events(delta: float) -> void:
 		var cur_vy := cargo.linear_velocity.y
 		if prev_vy < -8.0 and cur_vy > -1.0 and cargo.global_position.y < 4.0:
 			cargo_value = maxf(cargo_value - 0.25, 0.0)
-			cargo_damage_events += 1
+			_register_cargo_damage()
 			_caption("CARGO DAMAGED — VALUE %d%%" % int(cargo_value * 100))
 		cargo.set_meta("prev_vy", cur_vy)
 	# Destroyed when value hits 0 or falls off the map
@@ -265,6 +297,100 @@ func _update_cargo_events(delta: float) -> void:
 
 func _behavior() -> String:
 	return CARGO_TYPES[cargo_type_key]["behavior"]
+
+# --- behavior plumbing: abuse in, personality out (deterministic seams) ---
+
+## Hard contact (crates, walls, chairs) — feeds personality, never scoring.
+## Called from cargo contact monitoring; tests call it directly.
+func _register_bump(impact_speed: float) -> void:
+	if _bump_cooldown > 0.0 or impact_speed < BUMP_SPEED_THRESHOLD:
+		return
+	_bump_cooldown = BUMP_COOLDOWN
+	cargo_bump_events += 1
+	_on_cargo_abuse()
+
+## Scored damage (hard landings): value loss happens at the call site; this
+## adds the personality reaction on top.
+func _register_cargo_damage() -> void:
+	cargo_damage_events += 1
+	_on_cargo_abuse()
+
+func _on_cargo_abuse() -> void:
+	match _behavior():
+		"bees":
+			# Refresh-capped: a second bump restarts the window, never stacks.
+			bee_vision_timer = BEE_VISION_DURATION
+			_bee_swarm_alert()
+		"wet":
+			_apply_soggy_step()
+		_:
+			pass  # haunted runs on its own clock; other types keep stock behavior
+
+func _tick_bee_vision(delta: float) -> void:
+	_bump_cooldown = maxf(_bump_cooldown - delta, 0.0)
+	if bee_vision_timer > 0.0:
+		bee_vision_timer = maxf(bee_vision_timer - delta, 0.0)
+	if bee_overlay and is_instance_valid(bee_overlay):
+		bee_overlay.modulate.a = clampf(bee_vision_timer / BEE_VISION_DURATION, 0.0, 1.0)
+
+## Abuse retaliation: swarm puff + caption. Deliberately no stun (the periodic
+## burst keeps its sting) — tension, not griefing.
+func _bee_swarm_alert() -> void:
+	if bee_swarm and is_instance_valid(bee_swarm):
+		bee_swarm.emitting = true
+		get_tree().create_timer(1.2).timeout.connect(func():
+			if bee_swarm and is_instance_valid(bee_swarm):
+				bee_swarm.emitting = false)
+	_caption("THE FRIDGE SHUDDERS — BEES IN YOUR EYES")
+
+## Haunted sofa: deterministic creep AWAY from the drop zone, told at T-1s.
+## Only acts while free — carried (frozen) cargo cannot drag.
+func _tick_haunted(delta: float) -> void:
+	if cargo == null or not is_instance_valid(cargo) or cargo.freeze:
+		return
+	if not _sofa_tell_shown and _sofa_drag_timer <= SOFA_DRAG_TELL_LEAD:
+		_sofa_tell_shown = true
+		_caption("THE SOFA CREAKS — IT WANTS TO GO BACK")
+	_sofa_drag_timer -= delta
+	if _sofa_drag_timer > 0.0:
+		return
+	_sofa_drag_timer = SOFA_DRAG_INTERVAL
+	_sofa_tell_shown = false
+	sofa_drag_count += 1
+	cargo.apply_central_impulse(Vector3(0, 0, -SOFA_DRAG_IMPULSE))
+	_caption("THE SOFA DRAGS ITSELF AWAY")
+
+## Wet cardboard: every abuse event soaks it further — heavier, slipperier,
+## darker. Monotone in abuse, hard-capped so a round stays winnable.
+func _apply_soggy_step() -> void:
+	soggy_steps += 1
+	if cargo and is_instance_valid(cargo):
+		cargo.mass = minf(cargo.mass + WET_MASS_STEP, WET_MASS_CAP)
+		var pm: PhysicsMaterial = cargo.physics_material_override
+		if pm == null:
+			pm = PhysicsMaterial.new()
+			pm.friction = 1.0
+			cargo.physics_material_override = pm
+		pm.friction = maxf(pm.friction - WET_FRICTION_STEP, WET_FRICTION_FLOOR)
+	if cargo_material and is_instance_valid(cargo_material):
+		var soak := minf(float(soggy_steps) / 4.0, 1.0)
+		cargo_material.albedo_color = Color(0.6, 0.5, 0.3).lerp(Color(0.3, 0.22, 0.12), soak)
+	if soggy_steps == 1:
+		_caption("THE CARDBOARD SOAKS THROUGH — HEAVIER NOW")
+	elif soggy_steps == 2:
+		_caption("SAGGING — SLIPPERY AND HEAVY")
+	elif soggy_steps == 3:
+		_caption("THE BOX IS FALLING APART")
+
+## Contact monitoring callback: hauling slams are horizontal, spawn drops are
+## vertical (the hard-landing path's job), so only flat speed counts.
+func _on_cargo_body_entered(body: Node) -> void:
+	if not round_active or cargo == null or not is_instance_valid(cargo) or cargo.freeze:
+		return
+	if body == cargo:
+		return
+	var flat := Vector2(cargo.linear_velocity.x, cargo.linear_velocity.z)
+	_register_bump(flat.length())
 
 func _bee_burst() -> void:
 	if bee_swarm and is_instance_valid(bee_swarm):
@@ -550,6 +676,7 @@ func _clear_round_nodes() -> void:
 		cargo.queue_free()
 	cargo = null
 	bee_swarm = null
+	cargo_material = null
 	for n in terrain_nodes:
 		if is_instance_valid(n):
 			n.queue_free()
@@ -655,12 +782,18 @@ func _spawn_cargo(type_key: String) -> void:
 	mat.emission_enabled = true
 	mat.emission = info["color"] * 0.25
 	mi.material_override = mat
+	cargo_material = mat  # per-round instance: safe to mutate (soak tint)
 	c.add_child(mi)
 	var label := _make_billboard_label(info["label"], 22)
 	label.position = Vector3(0, info["size"].y * 0.5 + 0.7, 0)
 	c.add_child(label)
 	# Godot 4.7 RigidBody3D has no ccd_enabled property. The cargo is slow
 	# enough for discrete collision; its fall/damage logic handles the rest.
+	# Contact monitoring: hostile cargo feels every hard bump (personality
+	# behaviors react; scoring untouched).
+	c.contact_monitor = true
+	c.max_contacts_reported = 4
+	c.body_entered.connect(_on_cargo_body_entered)
 	add_child(c)
 	c.global_position = Vector3(0, 1.2, CARGO_SPAWN_Z)
 	c.set_meta("prev_vy", 0.0)
@@ -740,6 +873,11 @@ func _make_mode_hud() -> void:
 	var overlay_script = load("res://scripts/SubtitleOverlay.gd")
 	if overlay_script and overlay_script.has_method("mount"):
 		overlay_script.mount(hud)
+	# Bee-swarm vision debuff: full-rect radial vignette under the HUD text
+	# (added before the banner so banners/captions draw on top).
+	var vignette := _make_bee_vision_overlay()
+	hud.add_child(vignette)
+	bee_overlay = vignette
 	var banner := Label.new()
 	banner.name = "RoundBanner"
 	banner.anchor_left = 0.5
@@ -760,6 +898,37 @@ func _make_mode_hud() -> void:
 	hud.add_child(banner)
 	round_banner = banner
 
+func _make_bee_vision_overlay() -> TextureRect:
+	# Procedural radial vignette (no assets): clear center, honey-amber haze
+	# rising to a dark amber rim. The warehouse is nearly black at the edges,
+	# so a dark tint would be invisible — the swarm reads as a WARM HAZE that
+	# washes out contrast instead. Pure opacity fade — no motion, so it
+	# respects reduced-motion conventions (same fade pattern as the banner).
+	# Pixel-checked via movie capture: mid-tones darken ~15%, corners lift.
+	var rect := TextureRect.new()
+	rect.name = "BeeVisionVignette"
+	var grad := Gradient.new()
+	grad.offsets = PackedFloat32Array([0.0, 0.45, 0.8, 1.0])
+	grad.colors = PackedColorArray([
+		Color(0.82, 0.62, 0.12, 0.00),
+		Color(0.82, 0.62, 0.12, 0.16),
+		Color(0.45, 0.30, 0.05, 0.45),
+		Color(0.20, 0.13, 0.02, 0.78),
+	])
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(0.5, -0.15)  # radius 0.65: corners fully veiled
+	tex.width = 256
+	tex.height = 256
+	rect.texture = tex
+	rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rect.stretch_mode = TextureRect.STRETCH_SCALE
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rect.modulate.a = 0.0
+	return rect
+
 func _show_banner(text: String, color: Color = Color("ff9a1a")) -> void:
 	if not round_banner:
 		return
@@ -771,7 +940,11 @@ func _show_banner(text: String, color: Color = Color("ff9a1a")) -> void:
 	tween.tween_property(round_banner, "modulate:a", 0.0, 0.8)
 
 func _caption(text: String) -> void:
-	var cap = get_tree().get_first_node_in_group("subtitle_captions")
+	# SubtitleOverlay joins "caption_overlays" (Accessibility.caption's group).
+	# The old "subtitle_captions" group never had a member, so every Hauled
+	# caption was silently dead — fixed 2026-10-05 when behaviors started
+	# relying on tells actually being shown.
+	var cap = get_tree().get_first_node_in_group("caption_overlays")
 	if cap and cap.has_method("show_caption"):
 		cap.show_caption(text)
 

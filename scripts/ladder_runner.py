@@ -32,7 +32,8 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRODUCTION_SUITES = """\
 BootTest HeroAssemblySmokeTest SplashGateTest PlayerChairMechanicsSmokeTest \
 JumpForgivenessTest GraphicsPassSmokeTest MenuLayoutSmokeTest \
-ChairSkinSmokeTest CharacterRosterSmokeTest HauledSmokeTest ShopSeekSmokeTest \
+ChairSkinSmokeTest CharacterRosterSmokeTest HauledSmokeTest HauledBehaviorsTest \
+ShopSeekSmokeTest \
 PizzaColonySmokeTest TouchControlsSmokeTest ModeHUDResponsiveSmokeTest ModeResultsSmokeTest ModeSmokeTest NetworkSmokeTest \
 NetworkTwoPeerTest LanAvatarSyncTest AnnouncerSmokeTest PanicCamSmokeTest \
 LevelClearTest CheckpointBotTest LayoutPacingTest SkinBotSanityTest HazardsSmokeTest \
@@ -134,6 +135,8 @@ SUCCESS_PATTERNS = {
         re.compile(r"^\[PASS\] 8 selectable characters build unique riders", re.M)],
     "HauledSmokeTest": [
         re.compile(r"^=== HAULED SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
+    "HauledBehaviorsTest": [
+        re.compile(r"^=== HAULED BEHAVIORS TEST PASSED \(\d+ checks\) ===$", re.M)],
     "ShopSeekSmokeTest": [
         re.compile(r"^=== SHOPSEEK SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
     "PizzaColonySmokeTest": [
