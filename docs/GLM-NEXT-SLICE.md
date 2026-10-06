@@ -95,6 +95,38 @@ temporarily). Commit + push only after the ladder is green.
 - Real-device QA (Android/iPhone touch feel) needs the user's hardware.
 - Two-machine LAN QA same.
 
+## DONE (2026-10-05): texture-generation cost creep, round 2 — skip-flat/hoist squeeze
+
+Follow-up to the 2026-09-26 slice, same contract (rendered pixels must not
+change). What was left burning after round 1 was per-pixel interpreter
+traffic: wall_normal's height field was still built with 131k per-pixel
+set_height calls (now ~13 fill_rect calls derived from the same y/x
+predicates, scanned not hardcoded), wall/fabric albedo recomputed x- and
+y-dependent terms (sheen band sin, drip/scuff tests, rib cycle, row tints)
+per pixel (now per-x/per-row tables, identical float expressions), and the
+Sobel paid maxi/mini builtins on every pixel (now an edge-free interior
+run plus two edge pixels; seamless path kept verbatim). Floor albedo got a
+packed per-x class table (one lookup replaces modulo+division) and a
+per-tile pre-tinted Color table — note this one barely moved the needle on
+its own: the remaining floor-albedo cost is the mandated per-pixel engine
+calls (randf + set_pixel + two Color constructions whose 32-bit
+quantization is load-bearing for byte-identity), so it is at its practical
+GDScript floor.
+
+Verification: all 22 generated buffers (4 floor albedo+normal, 4 wall
+albedo+normal, 3 partition albedo+normal, raw RGB8 incl. mips)
+byte-identical against pre-change reference dumps. Same-thermal-window
+interleaved A/B (old/new code alternated in back-to-back processes, 5
+rounds): full-suite generation ~1.57s -> ~1.15s (-27%, 1.36x). The
+machine's absolute numbers are thermal-dominated (documented below), so
+the honest projection to the 7.1-9.0s window of the earlier note is
+~5.2-6.6s — close to but not clearly under the 5s target; the remaining
+cost is the mandated per-pixel engine calls above, which cannot be cut
+further without changing pixels (resolution-halving) or arithmetic
+(PackedByteArray quantization), both rejected. NormalMapSmokeTest ratio
+budget tightened 40x -> 32x (shipped 24.9x fast / 26.8x hot; pre-slice
+32.2x; pre-2026-09-26 ~75x).
+
 ## DONE (2026-09-26 late session): texture-generation cost creep — OPTIMIZED
 
 The queued floor/partition generator optimization shipped: hoisted the

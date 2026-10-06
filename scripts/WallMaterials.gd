@@ -42,44 +42,71 @@ static func wall_albedo(floor_index: int) -> ImageTexture:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7700 + key * 13
 
+	# PERF: x-dependent terms (sheen band color, drip-stain test, scuff
+	# columns, stud joints) are identical for every row — computed once per
+	# texture into per-x tables instead of 131k times. Row-dependent terms
+	# (baseboard/trim/wainscot tints, grunge/scuff row gates, noise
+	# amplitude) are computed once per row. The float expressions are
+	# unchanged, so output stays byte-identical (verified against
+	# pre-change reference buffers). Plain 64-bit Arrays, NOT packed
+	# 32-bit arrays — see FloorMaterials for that quantization trap.
+	var band_col: Array = []
+	band_col.resize(TEX_W)
+	var grunge_x: Array = []
+	grunge_x.resize(TEX_W)
+	var scuff_x: Array = []
+	scuff_x.resize(TEX_W)
+	var stud_x: Array = []
+	stud_x.resize(TEX_W)
+	for x in TEX_W:
+		# Vertical sheen bands: GRAPHICS PASS halved (0.10->0.05) — the
+		# full-strength bands read as wavy stripes on the tall walls from
+		# the chase camera (movie-frame QA).
+		var band := 0.05 * sin(float(x) * TAU * 2.0 / float(TEX_W))
+		band_col[x] = Color(paint.r + band, paint.g + band, paint.b + band)
+		grunge_x[x] = sin(float(x) / float(TEX_W) * TAU * 3.0 + float(key) * 2.0) > 0.86
+		scuff_x[x] = (x / 45) % 7 == 0
+		stud_x[x] = (x % 128) < 2         # panel joint every 1.25m
+	var bb_col: Color = paint.darkened(0.62)
+	var trim_col: Color = paint.darkened(0.55)
+	var wains_col: Color = paint.darkened(0.35)
+
 	for y in TEX_H:
 		# Structural bands survive mip/minification; random grain does not.
 		var v := float(y) / float(TEX_H)
 		var baseboard := v > 0.96            # dark skirting: bottom 7cm band
 		var wainscot := (not baseboard) and v > 0.78
 		var trim_row := absf(v - 0.78) < 0.02
+		var row_col: Color = paint
+		var row_banded := false
+		if baseboard:
+			row_col = bb_col
+		elif trim_row:
+			row_col = trim_col
+		elif wainscot:
+			row_col = wains_col
+		else:
+			row_banded = true
+		var vg45 := v < 0.45
+		var vg80 := v > 0.80
+		var namp := 0.04 if wainscot else 0.03
 		for x in TEX_W:
-			var col := paint
-			var stud := (x % 128) < 2         # panel joint every 1.25m
-			if baseboard:
-				col = paint.darkened(0.62)
-			elif trim_row:
-				col = paint.darkened(0.55)
-			elif wainscot:
-				col = paint.darkened(0.35)
-			else:
-				# Vertical sheen bands: GRAPHICS PASS halved (0.10->0.05) —
-				# the full-strength bands read as wavy stripes on the tall
-				# walls from the chase camera (movie-frame QA).
-				var band := 0.05 * sin(float(x) * TAU * 2.0 / float(TEX_W))
-				col = Color(col.r + band, col.g + band, col.b + band)
-			if stud and not baseboard:
+			var col: Color = band_col[x] if row_banded else row_col
+			if stud_x[x] and not baseboard:
 				col = col.darkened(0.22)
 			# Grunge: faint drip stains under the trim line and dark scuffs
 			# at wainscot level — office decay, structural enough for mips.
 			# ART PASS: softened (0.18/0.22 -> 0.05/0.12) — the brief calls
 			# for quiet premium eggshell, and hard drip edges read as noise
 			# clutter from the chase camera.
-			var u := float(x) / float(TEX_W)
-			var vg := float(y) / float(TEX_H)
-			if not baseboard and sin(u * TAU * 3.0 + float(key) * 2.0) > 0.86 and vg < 0.45:
+			if not baseboard and grunge_x[x] and vg45:
 				col = col.darkened(0.05)
-			if not baseboard and vg > 0.80 and (x / 45) % 7 == 0:
+			if not baseboard and vg80 and scuff_x[x]:
 				col = col.darkened(0.12)
 			# Fine grain stays modest: noise mostly vanishes under mips.
 			# ART PASS: 0.09/0.16 -> 0.03/0.04 — high-frequency random bump
 			# shattered into shimmer at distance; premium matte wins.
-			var n := (rng.randf() - 0.5) * (0.04 if wainscot else 0.03)
+			var n := (rng.randf() - 0.5) * namp
 			col = Color(
 				clampf(col.r + n, 0.0, 1.0),
 				clampf(col.g + n, 0.0, 1.0),
@@ -103,23 +130,42 @@ static func wall_normal(floor_index: int) -> ImageTexture:
 		return _normal_cache[key] as ImageTexture
 	var NormalGen: GDScript = load("res://scripts/NormalMapGen.gd")
 	var height: PackedFloat32Array = NormalGen.height_buffer(TEX_W, TEX_H, 0.5)
-	for y in TEX_H:
-		var v := float(y) / float(TEX_H)
-		var baseboard := v > 0.96
-		var wainscot := (not baseboard) and v > 0.78
-		var trim_row := absf(v - 0.78) < 0.02
-		for x in TEX_W:
-			var stud := (x % 128) < 2
-			var h := 0.5
-			if baseboard:
-				h = 0.56       # skirting steps forward slightly (ART: gentler)
-			elif trim_row:
-				h = 0.44       # trim shadow line
-			elif wainscot:
+	# PERF: the height field is row-constant (baseboard/trim/wainscot bands)
+	# plus 8 stud columns — 131k per-pixel set_height calls replaced by ~13
+	# fill_rect calls derived from the SAME y/x predicates. Row spans are
+	# scanned (not hardcoded) so the band edges stay whatever the predicates
+	# below say; stud fills stop one row above the baseboard exactly like
+	# the old `if stud and not baseboard` guard. Byte-identical output
+	# (verified against pre-change reference buffers).
+	var span_start := 0
+	var span_h := 0.5
+	for y in TEX_H + 1:
+		var h := 0.5
+		if y < TEX_H:
+			var v := float(y) / float(TEX_H)
+			if v > 0.96:       # skirting steps forward slightly (ART: gentler)
+				h = 0.56
+			elif absf(v - 0.78) < 0.02:  # trim shadow line
+				h = 0.44
+			elif v > 0.78:     # wainscot ledge
 				h = 0.46
-			if stud and not baseboard:
-				h = 0.40       # panel joint groove
-			NormalGen.set_height(height, TEX_W, TEX_H, x, y, h)
+		if h != span_h or y == TEX_H:
+			if span_h != 0.5:
+				NormalGen.fill_rect(height, TEX_W, TEX_H,
+					0, TEX_W - 1, span_start, y - 1, span_h)
+			span_h = h
+			span_start = y
+	# First baseboard row: stud grooves never reach it (old guard).
+	var bb_start := TEX_H
+	for y in TEX_H:
+		if float(y) / float(TEX_H) > 0.96:
+			bb_start = y
+			break
+	var px := 0
+	while px < TEX_W:
+		if px % 128 < 2:  # panel joint groove, every 1.25m
+			NormalGen.fill_rect(height, TEX_W, TEX_H, px, px, 0, bb_start - 1, 0.40)
+		px += 1
 	# ART PASS: plaster noise REMOVED — per-pixel random bump is
 	# high-frequency shimmer under mips and fought the calm-premium
 	# direction. Only the structural ledges/grooves above remain.
@@ -162,14 +208,22 @@ static func fabric_albedo(variant: int) -> ImageTexture:
 		Color(0.28, 0.36, 0.32)][clampi(variant, 0, 2)]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5500 + variant * 7
+	# PERF: the rib value is x-dependent only (same 16px cycle every row)
+	# and the weave-beat test is y-dependent only — hoisted into per-x /
+	# per-row lookups (identical float expressions, byte-identical output).
+	var rib_x: Array = []
+	rib_x.resize(TEX_W)
+	for x in TEX_W:
+		# Weave: broad felt ribbing — ribs every 16px (2 at 512px = ~1.4m on a
+		# 2.7m tile) survive mips; the old 4px ribs shattered into moiré at
+		# gameplay distance (highest-frequency surface in the office).
+		rib_x[x] = 0.03 if (x % 16) < 8 else -0.015
 	for y in TEX_H:
+		var beat := y % 24 == 0
 		for x in TEX_W:
-			# Weave: broad felt ribbing — ribs every 16px (2 at 512px = ~1.4m on a
-	# 2.7m tile) survive mips; the old 4px ribs shattered into moiré at
-	# gameplay distance (highest-frequency surface in the office).
-			var rib := 0.03 if (x % 16) < 8 else -0.015
-			if y % 24 == 0:
-				rib -= 0.015
+			var rib: float = rib_x[x]
+			if beat:
+				rib = rib - 0.015
 			var n := (rng.randf() - 0.5) * 0.04
 			var d := rib + n
 			img.set_pixel(x, y, Color(

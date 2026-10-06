@@ -99,8 +99,13 @@ func _run() -> void:
 	# With grout-rect structure the reference is real per-pixel work and
 	# the ratio reproducibly reads 23-28x across runs (generation and
 	# reference both compress ~3x in the machine's fast state). Budget
-	# 40x: the pre-optimization generators would read ~75x at the same
-	# state, so a real algorithmic slip still fails.
+	# 32x: the 2026-10-05 skip-flat slice (wall_normal fill_rect height
+	# build + wall/fabric albedo hoisting + Sobel interior fast path,
+	# byte-identical output) shipped 24.9x in a fast window and 26.8x in
+	# a hot one (absolute generation swung 1319ms -> 5226ms while the
+	# ratio held); the pre-slice code read 32.2x and the
+	# pre-2026-09-26 generators ~75x, so a real algorithmic slip still
+	# fails.
 	WM.clear_cache()
 	FM.clear_cache()
 	var NG: GDScript = load("res://scripts/NormalMapGen.gd")
@@ -149,8 +154,8 @@ func _run() -> void:
 		ref_runs += 1
 	var t_ref := maxi(int(ref_ms / maxf(ref_runs, 1.0)), 1)
 	var ratio := elapsed / float(t_ref)
-	check(ratio < 40.0,
-		"normal generation %.1fx structured-sobel reference (< 40.0x; %dms vs avg ref %dms)" % [ratio, elapsed, t_ref])
+	check(ratio < 32.0,
+		"normal generation %.1fx structured-sobel reference (< 32.0x; %dms vs avg ref %dms)" % [ratio, elapsed, t_ref])
 	print("  (generation %dms, avg reference %dms over %d runs — absolute value is thermal-noise, ratio is the contract)" % [elapsed, t_ref, ref_runs])
 
 	WM.clear_cache()

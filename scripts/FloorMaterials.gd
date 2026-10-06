@@ -60,31 +60,49 @@ static func floor_albedo(base_color: Color, floor_index: int) -> ImageTexture:
 		for tx in tiles:
 			var h := float((tx * 73856093) ^ (ty * 19349663)) / 2147483647.0
 			jitter[ty * tiles + tx] = 0.93 + 0.14 * h
+	# PERF: the per-tile field tint is a Color (3 products) recomputed per
+	# pixel — precomputed once per tile here (identical Color(paint.c * m)
+	# expressions, so identical 32-bit Color quantization). The x-position
+	# classes are x-dependent only and packed into ONE 512-entry table:
+	# 0 = grout column, 1 = shoulder column, 2+tile = field in tile column.
+	# One lookup replaces the per-pixel modulo/division. Output verified
+	# byte-identical against pre-change reference buffers.
+	var mcol: Array = []
+	mcol.resize(tiles * tiles)
+	for ty in tiles:
+		for tx in tiles:
+			var m: float = jitter[ty * tiles + tx]
+			mcol[ty * tiles + tx] = Color(paint.r * m, paint.g * m, paint.b * m)
+	var xk: Array = []
+	xk.resize(TEX)
+	for x in TEX:
+		var ex := x % TILE_PX
+		xk[x] = 0 if ex < 3 else (1 if ex == 3 else 2 + int(x / TILE_PX))
 
 	for y in TEX:
-		var ty := int(y / TILE_PX)
 		var edge_y := y % TILE_PX
+		var yedge := 0 if edge_y < 3 else (1 if edge_y == 3 else 2)
+		var yt := int(y / TILE_PX) * tiles
 		for x in TEX:
-			var col := paint
 			# PHASE 2 per-floor identity: traffic-lane wear — a soft
 			# horizontal band across the middle of each tile row where
 			# feet actually travel. Darkened + slight sheen loss. Wide
 			# gaussian-ish falloff so it reads as wear, not a stripe.
 			var wear: float = lane_wear[x]
+			var k: int = xk[x]
+			var col: Color
 			# Structural tile grid: dark grout line on each tile edge —
 			# this is what survives mips and kills the "flat slab" look.
-			var edge_x := x % TILE_PX
-			if edge_x < 3 or edge_y < 3:
+			if k == 0 or yedge == 0:
 				col = grout_col
-			elif edge_x == 3 or edge_y == 3:
+			elif k == 1 or yedge == 1:
 				col = shoulder_col
 			else:
 				# Per-quarter luminance jitter: tiles subtly differ, like real
 				# worn carpet. GRAPHICS PASS: amplitude halved (0.28->0.14) —
 				# at gameplay distance the old ±14% jitter banded into wavy
 				# moiré across the floor (pixel-measured in movie QA).
-				var m: float = jitter[ty * tiles + int(x / TILE_PX)]
-				col = Color(col.r * m, col.g * m, col.b * m)
+				col = mcol[yt + k - 2]
 				# Directional nap REMOVED: a 22cm-period sine reads as
 				# diagonal stripe moiré under mips; per-pixel grain below
 				# carries the carpet fiber feel instead.

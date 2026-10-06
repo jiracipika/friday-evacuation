@@ -90,10 +90,35 @@ static func normal_texture(buf: PackedFloat32Array, width: int, height: int,
 		var row := y * width
 		var row_up := y_up * width
 		var row_dn := y_dn * width
-		for x in width:
-			var x_l := posmod(x - 1, width) if seamless else maxi(x - 1, 0)
-			var x_r := (x + 1) % width if seamless else mini(x + 1, width - 1)
-			var dx := (buf[x_r + row] - buf[x_l + row]) * 2.0
+		if seamless:
+			# Periodic path keeps posmod per pixel (no caller uses it today;
+			# kept verbatim for the documented semantics).
+			for x in width:
+				var x_l := posmod(x - 1, width)
+				var x_r := (x + 1) % width
+				var dx := (buf[x_r + row] - buf[x_l + row]) * 2.0
+				var dy := (buf[x + row_dn] - buf[x + row_up]) * 2.0
+				if dx == 0.0 and dy == 0.0:
+					continue  # flat area: keep pre-filled neutral normal
+				var nx := -dx * s
+				var ny := -dy * s
+				var nz := 1.0
+				var len := sqrt(nx * nx + ny * ny + nz * nz)
+				# Godot tangent-space normal maps: +X right, +Y DOWN (OpenGL
+				# style is +Y up; Godot expects the Y-down convention).
+				var r := (nx / len) * 0.5 + 0.5
+				var g := (ny / len) * 0.5 + 0.5
+				var b := (nz / len) * 0.5 + 0.5
+				img.set_pixel(x, y, Color(r, g, b))
+			continue
+		# PERF clamped path: interior pixels never take the maxi/mini edge
+		# clamps (x-1 >= 0 and x+1 <= width-1 for x in 1..width-2), so the
+		# x_l/x_r builtins are dropped for the 99%+ interior run; the two
+		# edge pixels keep the original clamped expressions. Identical
+		# indices => identical reads => byte-identical output (verified
+		# against pre-change reference buffers).
+		for x in range(1, width - 1):
+			var dx := (buf[x + 1 + row] - buf[x - 1 + row]) * 2.0
 			var dy := (buf[x + row_dn] - buf[x + row_up]) * 2.0
 			if dx == 0.0 and dy == 0.0:
 				continue  # flat area: keep pre-filled neutral normal
@@ -103,6 +128,21 @@ static func normal_texture(buf: PackedFloat32Array, width: int, height: int,
 			var len := sqrt(nx * nx + ny * ny + nz * nz)
 			# Godot tangent-space normal maps: +X right, +Y DOWN (OpenGL
 			# style is +Y up; Godot expects the Y-down convention).
+			var r := (nx / len) * 0.5 + 0.5
+			var g := (ny / len) * 0.5 + 0.5
+			var b := (nz / len) * 0.5 + 0.5
+			img.set_pixel(x, y, Color(r, g, b))
+		for x in [0, width - 1]:
+			var x_l := maxi(x - 1, 0)
+			var x_r := mini(x + 1, width - 1)
+			var dx := (buf[x_r + row] - buf[x_l + row]) * 2.0
+			var dy := (buf[x + row_dn] - buf[x + row_up]) * 2.0
+			if dx == 0.0 and dy == 0.0:
+				continue
+			var nx := -dx * s
+			var ny := -dy * s
+			var nz := 1.0
+			var len := sqrt(nx * nx + ny * ny + nz * nz)
 			var r := (nx / len) * 0.5 + 0.5
 			var g := (ny / len) * 0.5 + 0.5
 			var b := (nz / len) * 0.5 + 0.5
