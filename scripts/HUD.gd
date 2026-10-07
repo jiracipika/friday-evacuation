@@ -21,6 +21,15 @@ var objective_label: Label
 var state_panel: PanelContainer
 var _state_accented := false
 var _last_objective_floor := -1
+# Narrow-viewport layout (390px portrait sweep, FINAL day): the desktop
+# insets (±352px header, 312px status chip) assume a wide screen. Under 520px
+# they push the timer/objective header clean off the viewport and drop the
+# status chip on top of the minimap. Nodes kept as members so the insets can
+# re-apply on viewport resize (rotate mid-match).
+var _header: PanelContainer
+var _objective_panel: PanelContainer
+var _status_panel: PanelContainer
+var _floor_group: VBoxContainer
 
 var UIT: GDScript
 
@@ -74,10 +83,9 @@ func _build_hud() -> void:
 	# --- OBJECTIVE HEADER (top-center): caption left, timer right. ---
 	var header := PanelContainer.new()
 	header.name = "ObjectiveHeader"
+	_header = header
 	header.add_theme_stylebox_override("panel", _panel_style(0.96))
 	header.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	header.offset_left = _px(352)
-	header.offset_right = -_px(352)
 	header.offset_top = _px(16)
 	header.offset_bottom = _px(64)
 	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -102,10 +110,9 @@ func _build_hud() -> void:
 	# --- OBJECTIVE STRIP: arrow + immediate action, two lines max. ---
 	var objective_panel := PanelContainer.new()
 	objective_panel.name = "ObjectivePanel"
+	_objective_panel = objective_panel
 	objective_panel.add_theme_stylebox_override("panel", _panel_style(0.92))
 	objective_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	objective_panel.offset_left = _px(352)
-	objective_panel.offset_right = -_px(352)
 	objective_panel.offset_top = _px(68)
 	objective_panel.offset_bottom = _px(104)
 	objective_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -128,6 +135,7 @@ func _build_hud() -> void:
 	# --- FLOOR / MAP GROUP (top-left): story label above the map. ---
 	var floor_group := VBoxContainer.new()
 	floor_group.name = "FloorGroup"
+	_floor_group = floor_group
 	floor_group.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	floor_group.offset_left = _px(24)
 	floor_group.offset_top = _px(16)
@@ -150,12 +158,9 @@ func _build_hud() -> void:
 	# --- SUPPORTING STATUS (top-right). ---
 	var status_panel := PanelContainer.new()
 	status_panel.name = "StatusPanel"
+	_status_panel = status_panel
 	status_panel.add_theme_stylebox_override("panel", _panel_style(0.96, 10))
 	status_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	status_panel.offset_left = -_px(312)
-	status_panel.offset_right = -_px(24)
-	status_panel.offset_top = _px(16)
-	status_panel.offset_bottom = _px(64)
 	status_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(status_panel)
 	status_label = _make_label("RACE", _px(18), _c(UIT.TEXT))
@@ -213,6 +218,37 @@ func _build_hud() -> void:
 	abilities.add_child(sabotage_chip)
 	item_label = _make_label("", _px(14), _c(UIT.VIOLET))
 	abilities.add_child(item_label)
+
+	# Narrow/desktop insets + live re-apply on rotate (see member docs).
+	get_viewport().size_changed.connect(_apply_insets)
+	_apply_insets()
+
+## Narrow-viewport inset pass (390px portrait sweep): under 520px the header
+## and objective strip collapse to a touch-safe 12px side inset (desktop's
+## ±352px put the timer off-viewport), and the status chip drops below the
+## objective strip on the right so it never lands on the minimap (desktop's
+## 312px-wide chip overlapped the top-left floor group at 390px).
+func _apply_insets() -> void:
+	if _header == null:
+		return
+	var narrow := get_viewport().get_visible_rect().size.x < 520.0
+	var side := _px(12) if narrow else _px(352)
+	_header.offset_left = side
+	_header.offset_right = -side
+	_objective_panel.offset_left = side
+	_objective_panel.offset_right = -side
+	if narrow:
+		_floor_group.offset_top = _px(132)
+		_status_panel.offset_left = -_px(150)
+		_status_panel.offset_right = -_px(12)
+		_status_panel.offset_top = _px(132)
+		_status_panel.offset_bottom = _px(184)
+	else:
+		_floor_group.offset_top = _px(16)
+		_status_panel.offset_left = -_px(312)
+		_status_panel.offset_right = -_px(24)
+		_status_panel.offset_top = _px(16)
+		_status_panel.offset_bottom = _px(64)
 
 func _meter_fill() -> StyleBoxFlat:
 	var fill := StyleBoxFlat.new()

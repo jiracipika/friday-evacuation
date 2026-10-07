@@ -64,8 +64,23 @@ func _build_ui() -> void:
 
 	panel = PanelContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	panel.position = Vector2(-330, -268)
-	panel.custom_minimum_size = Vector2(660, 0)
+	# 390px portrait sweep: the fixed 660px panel clipped BOTH scheme columns
+	# off-viewport on a phone (recap shows 7s at ShopSeek/Pizza round start).
+	# Narrow layouts clamp to the viewport minus touch-safe margins and stack
+	# the scheme columns vertically (side-by-side min width can't fit 390px);
+	# the panel anchors bottom-center and grows upward since it gets tall.
+	var narrow := get_viewport().get_visible_rect().size.x < 520.0
+	var panel_width := minf(660.0, get_viewport().get_visible_rect().size.x - 24.0)
+	panel.custom_minimum_size = Vector2(panel_width, 0)
+	if narrow:
+		panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		panel.offset_left = 0.0
+		panel.offset_right = 0.0
+		panel.offset_top = -12.0
+		panel.offset_bottom = -12.0
+	else:
+		panel.position = Vector2(-330, -268)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.055, 0.055, 0.09, 0.94)
@@ -87,8 +102,8 @@ func _build_ui() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(title)
 
-	var columns = HBoxContainer.new()
-	columns.add_theme_constant_override("separation", 26)
+	var columns: Container = VBoxContainer.new() if narrow else HBoxContainer.new()
+	columns.add_theme_constant_override("separation", 8 if narrow else 26)
 	columns.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(columns)
 
@@ -112,6 +127,9 @@ func _build_ui() -> void:
 
 	tip_label = _label("", 11, Color(1, 1, 1, 0.55))
 	tip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# The AUTO-SCHEME tip is ~380px on one line — wider than the clamped
+	# narrow panel's min; wrap instead of dictating the panel width.
+	tip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(tip_label)
 
 

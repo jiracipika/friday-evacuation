@@ -884,12 +884,18 @@ func _make_mode_hud() -> void:
 	banner.anchor_right = 0.5
 	banner.anchor_top = 0.3
 	banner.anchor_bottom = 0.3
-	banner.offset_left = -320
-	banner.offset_right = 320
-	banner.offset_top = -40
-	banner.offset_bottom = 40
+	# 390px portrait sweep: the desktop 640px box clipped long hazard lines
+	# off both viewport edges ("SWINGING GATES — TIME YOUR RUNS", capture
+	# hauled-match f9). Half the viewport minus a touch-safe margin, with
+	# autowrap + a taller box so wrapped lines still fit.
+	var half_width := minf(320.0, hud.get_viewport().get_visible_rect().size.x * 0.5 - 12.0)
+	banner.offset_left = -half_width
+	banner.offset_right = half_width
+	banner.offset_top = -70
+	banner.offset_bottom = 70
 	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	banner.add_theme_font_size_override("font_size", 22)
 	banner.add_theme_color_override("font_color", Color("ff9a1a"))
 	banner.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))

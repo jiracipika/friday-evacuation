@@ -56,7 +56,10 @@ func _build_ui() -> void:
 
 	_panel = PanelContainer.new()
 	_panel.name = "PausePanel"
-	_panel.custom_minimum_size = Vector2(420, 0)
+	# 390px portrait sweep: the fixed 420px min overflowed a 390px viewport
+	# by 15px per side, clipping the panel chrome off both edges.
+	var vp_size := _root.get_viewport().get_visible_rect().size
+	_panel.custom_minimum_size = Vector2(minf(420.0, vp_size.x - 24.0), 0)
 	var style := UI_THEME.panel_style(UI_THEME.color(UI_THEME.ORANGE), true)
 	style.border_color = UI_THEME.color(UI_THEME.ORANGE)
 	style.set_corner_radius_all(16)

@@ -120,15 +120,45 @@ func _input(event: InputEvent) -> void:
 		_update_stick(event.position)
 
 func _try_button(pos: Vector2) -> void:
-	var boost_c: Vector2 = size + BOOST_BTN
-	var jump_c: Vector2 = size + JUMP_BTN
-	var trap_c: Vector2 = size + TRAP_BTN
-	if pos.distance_to(boost_c) <= BOOST_R:
+	var centers := _button_centers()
+	if pos.distance_to(centers[&"boost"]) <= BOOST_R:
 		_press(&"boost")
-	elif pos.distance_to(jump_c) <= JUMP_R:
+	elif pos.distance_to(centers[&"action"]) <= JUMP_R:
 		_press(&"action")
-	elif pos.distance_to(trap_c) <= TRAP_R:
+	elif pos.distance_to(centers[&"sabotage"]) <= TRAP_R:
 		_press(&"sabotage")
+
+## Narrow-viewport lift (390px portrait sweep): under 520px wide the opaque
+## player-state card (HUD.gd instruments, top edge at 176*ui_scale above the
+## bottom edge) owns the bottom band — BOOST/JUMP drew UNDER it (CanvasLayer
+## 0 below the HUD) and vanished (capture evac-touch f9). Narrow layouts lift
+## the cluster into a right-edge column above the card; landscape keeps the
+## Phase 7A corner layout untouched.
+func _instruments_reserve() -> float:
+	if size.x < 520.0:
+		return 176.0 * clampf(size.y / 720.0, 0.85, 1.6) + 12.0
+	return 0.0
+
+## Single source of truth for draw + hit-test so the rings and the touch
+## targets can never drift apart.
+func _button_centers() -> Dictionary:
+	var reserve := _instruments_reserve()
+	if reserve <= 0.0:
+		return {
+			&"boost": size + BOOST_BTN,
+			&"action": size + JUMP_BTN,
+			&"sabotage": size + TRAP_BTN,
+		}
+	var bottom := size.y - reserve
+	var col_x := size.x - 78.0
+	var boost_c := Vector2(col_x, bottom - BOOST_R)
+	var jump_c := Vector2(col_x, boost_c.y - BOOST_R - 14.0 - JUMP_R)
+	var trap_c := Vector2(col_x, jump_c.y - JUMP_R - 14.0 - TRAP_R)
+	return {
+		&"boost": boost_c,
+		&"action": jump_c,
+		&"sabotage": trap_c,
+	}
 
 func _press(action: StringName) -> void:
 	pressed_button = action
@@ -159,14 +189,25 @@ func _draw() -> void:
 	if not touch_enabled:
 		return
 	# Joystick: base follows the initial touch point, rests bottom-left.
-	var base: Vector2 = knob_center if active_touch >= 0 else Vector2(STICK_REST.x, size.y + STICK_REST.y)
+	# Narrow layouts rest it above the lifted button column's band — the
+	# desktop rest (centered on the bottom edge) sits under the opaque
+	# instruments card at 390px portrait.
+	var reserve := _instruments_reserve()
+	var base: Vector2
+	if active_touch >= 0:
+		base = knob_center
+	elif reserve > 0.0:
+		base = Vector2(130.0, size.y - reserve - 88.0 - 4.0)
+	else:
+		base = Vector2(STICK_REST.x, size.y + STICK_REST.y)
 	draw_circle(base, 88.0, Color(0.04, 0.04, 0.08, 0.52))
 	draw_arc(base, 88.0, 0.0, TAU, 32, Color(1, 0.6, 0.1, 0.5), 3.0)
 	draw_circle(base + move_vector * 62.0, 34.0, Color(1, 0.6, 0.1, 0.72))
 
-	var boost_c: Vector2 = size + BOOST_BTN
-	var jump_c: Vector2 = size + JUMP_BTN
-	var trap_c: Vector2 = size + TRAP_BTN
+	var centers := _button_centers()
+	var boost_c: Vector2 = centers[&"boost"]
+	var jump_c: Vector2 = centers[&"action"]
+	var trap_c: Vector2 = centers[&"sabotage"]
 
 	var boost_col := Color(1.0, 0.55, 0.08, 0.65)
 	if boost_locked:
