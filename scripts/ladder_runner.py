@@ -33,13 +33,13 @@ PRODUCTION_SUITES = """\
 BootTest HeroAssemblySmokeTest SplashGateTest PlayerChairMechanicsSmokeTest \
 JumpForgivenessTest GraphicsPassSmokeTest MenuLayoutSmokeTest \
 ChairSkinSmokeTest CharacterRosterSmokeTest HauledSmokeTest HauledBehaviorsTest \
-ShopSeekSmokeTest \
+ShopSeekSmokeTest ShopSeekBeatabilityProbe \
 PizzaColonySmokeTest TouchControlsSmokeTest ModeHUDResponsiveSmokeTest ModeResultsSmokeTest SecondaryEndFlowSmokeTest ModeSmokeTest NetworkSmokeTest \
 NetworkTwoPeerTest LanAvatarSyncTest AnnouncerSmokeTest PanicCamSmokeTest \
 LevelClearTest CheckpointBotTest LayoutPacingTest SkinBotSanityTest HazardsSmokeTest \
 ThemedFloorsSmokeTest OfficeDressingParityTest PowerUpSmokeTest PauseMenuSmokeTest \
 AccessibilitySmokeTest Phase8BAccessTest TrapAccessibilitySmokeTest RaceModifiersSmokeTest \
-ModifierMenuSmokeTest GhostRacerSmokeTest StatsRoundTripTest \
+ModifierMenuSmokeTest ModifierApplicationSmokeTest GhostRacerSmokeTest StatsRoundTripTest \
 VisualDesignSmokeTest WallMaterialsSmokeTest FaceSmokeTest BindingsSmokeTest \
 InputPrefsSmokeTest ControlsOverlaySmokeTest SettingsRoundTripTest \
 NormalMapSmokeTest PropMaterialsSmokeTest LevelLayoutSmokeTest \
@@ -139,6 +139,9 @@ SUCCESS_PATTERNS = {
         re.compile(r"^=== HAULED BEHAVIORS TEST PASSED \(\d+ checks\) ===$", re.M)],
     "ShopSeekSmokeTest": [
         re.compile(r"^=== SHOPSEEK SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
+    # ShopSeekBeatabilityProbe: N/M checks passed (N/M family: equal + positive)
+    "ShopSeekBeatabilityProbe": [
+        re.compile(r"^ShopSeekBeatabilityProbe: (\d+)/(\d+) checks passed$", re.M)],
     "PizzaColonySmokeTest": [
         re.compile(r"^=== PIZZA COLONY SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
     # TOUCH_SMOKE_PASS  (TouchControlsSmokeTest.gd:35)
@@ -185,6 +188,8 @@ SUCCESS_PATTERNS = {
         re.compile(r"^=== RACE MODIFIERS SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
     "ModifierMenuSmokeTest": [
         re.compile(r"^=== MODIFIER MENU SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
+    "ModifierApplicationSmokeTest": [
+        re.compile(r"^ModifierApplicationSmokeTest: (\d+)/(\d+) checks passed$", re.M)],
     "GhostRacerSmokeTest": [
         re.compile(r"^=== GHOST RACER SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
     # STATS_ROUND_TRIP_PASS  (StatsRoundTripTest.gd:44)
