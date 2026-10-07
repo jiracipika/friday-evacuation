@@ -27,6 +27,10 @@ var ghost_racer: Node3D
 var announcer: Node = null
 var hazards: Node3D  # Phase 4C Hazards controller
 
+# Core-event audio (all voices synthesized in AudioManager, SFX bus).
+var _countdown_last_tick: int = -1  # last integer second that got a tick blip
+var _low_time_warned: bool = false  # one-shot low-time warning per race
+
 ## Smooth camera state
 var cam_follow_pos: Vector3 = Vector3.ZERO
 var cam_look_target: Vector3 = Vector3.ZERO
@@ -2194,6 +2198,7 @@ func _spawn_player() -> void:
 func _start_countdown() -> void:
 	match_state = &"countdown"
 	timer = countdown_seconds
+	_countdown_last_tick = -1
 	if local_player:
 		local_player.set_can_move(false)
 	# Controls recap at the start of EVERY round (fresh match, rematch,
@@ -2217,11 +2222,18 @@ func _start_countdown() -> void:
 		overlay.play_sequence(seq)
 
 func _update_countdown_display() -> void:
+	var seconds = int(ceilf(timer))
 	if countdown_label:
-		var seconds = int(ceilf(timer))
 		countdown_label.text = str(seconds)
 		if seconds <= 0:
 			countdown_label.visible = false
+	# Core-event audio: one tick blip per integer second (3-2-1). GO!
+	# sounds via go_horn in _start_race — same pitch ticks, higher GO.
+	if seconds > 0 and seconds != _countdown_last_tick:
+		_countdown_last_tick = seconds
+		var audio = get_node_or_null("/root/AudioManager")
+		if audio and audio.has_method("play_sfx"):
+			audio.play_sfx("countdown_tick", 1.0)
 
 func _start_race() -> void:
 	match_state = &"racing"
@@ -2232,6 +2244,12 @@ func _start_race() -> void:
 	var a11y = load("res://scripts/Accessibility.gd")
 	if a11y:
 		a11y.caption("GO!", 1.0)
+	# Core-event audio: the GO horn (go_horn was synthesized but never
+	# played before this wiring).
+	var audio = get_node_or_null("/root/AudioManager")
+	if audio and audio.has_method("play_sfx"):
+		audio.play_sfx("go_horn", 1.0)
+	_low_time_warned = false
 	_announcer().say("misc", _const_lines("START_LINES"), true)
 	if local_player:
 		local_player.set_can_move(true)
@@ -2302,6 +2320,14 @@ func _update_timer_display() -> void:
 		timer_label.text = timer_text
 	if hud_ext and is_instance_valid(hud_ext) and hud_ext.has_method("set_timer_text"):
 		hud_ext.set_timer_text(timer_text, remaining)
+	# Core-event audio: one-shot low-time warning when the HUD goes into
+	# its critical <15s coral/pulse treatment (HUD.gd §6). Reset per race
+	# in _start_race.
+	if remaining <= 15.0 and remaining > 0.0 and not _low_time_warned:
+		_low_time_warned = true
+		var audio = get_node_or_null("/root/AudioManager")
+		if audio and audio.has_method("play_sfx"):
+			audio.play_sfx("low_time", 1.0)
 
 func _update_hud() -> void:
 	if hud_ext == null or not is_instance_valid(hud_ext):
@@ -2532,6 +2558,15 @@ func _end_race() -> void:
 	var won := false
 	if finish_order.size() > 0 and is_instance_valid(local_player):
 		won = finish_order[0].player_id == local_player.get_instance_id()
+	# Core-event audio: a win always gets the victory fanfare (the PB block
+	# below keeps its own reprise for a new record), and a loss gets the
+	# descending defeat sting instead of ending silent.
+	var audio_end = get_node_or_null("/root/AudioManager")
+	if audio_end and audio_end.has_method("play_sfx"):
+		if won:
+			audio_end.play_sfx("victory", 1.0)
+		elif is_instance_valid(local_player):
+			audio_end.play_sfx("defeat", 1.0)
 	var own_finish_time := -1.0
 	var new_best_time := false
 	for entry in finish_order:

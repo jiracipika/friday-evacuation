@@ -49,7 +49,7 @@ MenuDepartureSmokeTest MenuInputPathTest LoadingFlowSmokeTest ResultsCelebration
 HUDThemeSmokeTest UICopyContractTest MenuMapBestTest ResultsPanelFitTest \
 MovementFeelTest ModeSelectRedesignTest MenuHomeRedesignTest \
 MenuBackdropPropsTest PadNavSmokeTest ArtBlenderPropsTest \
-SettingsRedesignTest OfficeArchitectureSmokeTest AmbientAudioTest \
+SettingsRedesignTest OfficeArchitectureSmokeTest AmbientAudioTest CoreAudioSmokeTest \
 StatsBestTimeTest""".split()
 
 # Default log root lives in the repo (durable), not /tmp.
@@ -247,6 +247,8 @@ SUCCESS_PATTERNS = {
         re.compile(r"^OfficeArchitectureSmokeTest: (\d+)/(\d+) checks PASS$", re.M)],
     "AmbientAudioTest": [
         re.compile(r"^AmbientAudioTest: (\d+)/(\d+) checks PASS$", re.M)],
+    "CoreAudioSmokeTest": [
+        re.compile(r"^CoreAudioSmokeTest: (\d+)/(\d+) checks PASS$", re.M)],
     "StatsBestTimeTest": [
         re.compile(r"^=== STATS BEST TIME TEST PASS \((\d+)/(\d+)\) ===$", re.M)],
     "GamepadSupportTest": [

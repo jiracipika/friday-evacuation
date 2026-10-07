@@ -809,7 +809,7 @@ func _play_selected_mode() -> void:
 func _play_click_sound() -> void:
 	var audio = get_node_or_null("/root/AudioManager")
 	if audio:
-		audio.play_sfx("powerup", 0.9)
+		audio.play_sfx("ui_click", 0.9)
 
 # --- rider / chair selectors (existing persistence paths) --------------------
 

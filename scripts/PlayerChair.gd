@@ -755,6 +755,10 @@ func _physics_process(delta: float) -> void:
 				for wheel in chair_wheels:
 					if is_instance_valid(wheel):
 						wheel.rotation.x += 0.6  # frantic wheel spin tell
+		# Core-event audio: stun-recover chirp the moment the stun timer
+		# expires (mash-expiry included) — distinct from the trap-hit thud.
+		if is_stunned <= 0.0:
+			_play_sfx("recover")
 		if model_parent:
 			model_parent.rotation.z = sin(Time.get_ticks_msec() * 0.03) * 0.15
 			model_parent.rotation.y += delta * 12.0

@@ -71,6 +71,11 @@ func _make_effect(effect_name: String, intensity: float) -> AudioStream:
 		"powerup": duration = 0.24
 		"go_horn": duration = 0.5
 		"victory": duration = 0.75
+		"defeat": duration = 0.9
+		"countdown_tick": duration = 0.12
+		"ui_click": duration = 0.06
+		"recover": duration = 0.12
+		"low_time": duration = 0.45
 		"wall_bonk": duration = 0.08
 		_: duration = 0.12
 	var sample_rate := 22050
@@ -109,6 +114,33 @@ func _make_effect(effect_name: String, intensity: float) -> AudioStream:
 			"victory":
 				frequency = 330.0 + floor(progress * 4.0) * 110.0
 				amplitude *= sin(PI * progress)
+			"defeat":
+				# Descending 4-step arpeggio — the mirror of victory's
+				# ascending 330/440/550/660, so win/lose are assertably
+				# distinct motifs (523→436→349→262 over a longer window).
+				frequency = 523.25 - floor(progress * 4.0) * 87.0
+				amplitude *= sin(PI * progress)
+			"countdown_tick":
+				# Flat-pitch blip with a fast decay; same pitch every tick,
+				# while GO! (go_horn) sits a full octave-plus lower.
+				frequency = 660.0
+				amplitude *= exp(-14.0 * progress)
+			"ui_click":
+				# Menu tick: much shorter and brighter than a countdown
+				# blip so clicks never read as race countdowns.
+				frequency = 1150.0
+				amplitude *= exp(-40.0 * progress)
+			"recover":
+				# Un-stun chirp: quick upward sweep, bell-shaped — narrower
+				# and higher than the jump sweep (220→720 over 0.2s).
+				frequency = lerpf(500.0, 880.0, progress)
+				amplitude *= sin(PI * progress) * 0.8
+			"low_time":
+				# Urgent double-beep at 880 Hz with a silent gap; the
+				# on/off gate is the motif — no other voice gates like this.
+				frequency = 880.0
+				var gated := progress < 0.28 or (progress > 0.44 and progress < 0.72)
+				amplitude *= (0.9 if gated else 0.04) * (1.0 - 0.3 * progress)
 			"wall_bonk":
 				frequency = 90.0
 				amplitude *= 1.0 - progress
