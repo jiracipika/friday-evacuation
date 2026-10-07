@@ -1,7 +1,8 @@
 # Phase8BAccessTest.gd — verifies the Phase 8B accessibility slice:
-#   1. SabotageTrap shape cues: label + glyph billboard on every trap type,
-#      and the four glyph silhouettes are pairwise DISTINCT (the whole point
-#      of shape cues — banana and spill are both yellow).
+#   1. SabotageTrap shape cues: short-word label + shape icon mesh on every
+#      trap type, shadowless, collision-free, and the four icon silhouettes
+#      are pairwise DISTINCT (the whole point of shape cues — banana and
+#      spill are both yellow).
 #   2. Game-speed round trip: setting -> Accessibility.get_time_scale() ->
 #      Engine.time_scale, corrupt-value snapping, reset, and the --test-mode
 #      guard (ladder runs must never apply a real 0.75x save).
@@ -90,15 +91,15 @@ func _trap_cue_checks() -> void:
 	check(trap_scene != null, "SabotageTrap scene loads")
 	if trap_scene == null:
 		return
-	var a11y = load("res://scripts/Accessibility.gd")
 	var expected := {
 		"water": "WATER",
-		"banana": "BANANA PEEL",
-		"stapler": "STAPLES",
-		"spill": "SLIPPERY SPILL",
+		"banana": "BANANA",
+		"stapler": "STAPLER",
+		"spill": "SPILL",
 	}
-	# Signature = 1024-bit glyph mask per type; cues are only colorblind-useful
-	# if every pair of silhouettes differs.
+	# Signature = "mesh class : face count" per type; cues are only
+	# colorblind-useful if every pair of icon silhouettes differs
+	# (banana and spill are both yellow — shape must carry it).
 	var signatures := {}
 	for trap_type in expected.keys():
 		var trap = trap_scene.instantiate()
@@ -109,29 +110,30 @@ func _trap_cue_checks() -> void:
 		await process_frame
 
 		var label: Label3D = null
-		var sprite: Sprite3D = null
+		var icon: MeshInstance3D = null
 		for child in trap.get_children():
 			if child is Label3D and label == null:
 				label = child
-			elif child is Sprite3D and sprite == null:
-				sprite = child
+			elif child.name == "ShapeIcon" and icon == null:
+				icon = child
 		check(label != null, "%s trap has name label" % trap_type)
 		check(label != null and label.text == expected[trap_type],
 			"%s label reads '%s'" % [trap_type, expected[trap_type]])
-		check(sprite != null and sprite.texture != null, "%s trap has glyph billboard" % trap_type)
-		if sprite and sprite.texture:
-			var img: Image = sprite.texture.get_image()
-			check(img.get_width() == 32 and img.get_height() == 32,
-				"%s glyph is 32x32" % trap_type)
-			# Mask from the RENDERED texture alpha (black-box: what the
-			# player actually sees must differ, not just the predicates).
-			var bits := PackedByteArray()
-			bits.resize(128)
-			for y in 32:
-				for x in 32:
-					if img.get_pixel(x, y).a > 0.5:
-						bits.set(y * 4 + x / 8, bits[y * 4 + x / 8] | (1 << (x % 8)))
-			signatures[trap_type] = bits
+		check(icon != null and icon.mesh != null, "%s trap has shape icon mesh" % trap_type)
+		check(label != null and label.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+			"%s label casts no shadow" % trap_type)
+		check(icon != null and icon.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+			"%s icon casts no shadow" % trap_type)
+		# Shape cue adds ZERO collision: the trap body keeps exactly the one
+		# CollisionShape3D from the .tscn (spill swaps its shape, still one).
+		var col_count := 0
+		for col in trap.find_children("*", "CollisionShape3D", true, false):
+			col_count += 1
+		check(col_count == 1, "%s cue adds no collision shapes (found %d)" % [trap_type, col_count])
+		if icon and icon.mesh:
+			var faces: int = icon.mesh.get_faces().size()
+			check(faces > 0, "%s icon mesh has geometry" % trap_type)
+			signatures[trap_type] = "%s:%d" % [icon.mesh.get_class(), faces]
 		trap.queue_free()
 		await process_frame
 
@@ -139,11 +141,5 @@ func _trap_cue_checks() -> void:
 	var types := signatures.keys()
 	for i in types.size():
 		for j in range(i + 1, types.size()):
-			var a: PackedByteArray = signatures[types[i]]
-			var b: PackedByteArray = signatures[types[j]]
-			var distinct := false
-			for k in a.size():
-				if a[k] != b[k]:
-					distinct = true
-					break
-			check(distinct, "%s glyph shape differs from %s (not color-only)" % [types[i], types[j]])
+			check(signatures[types[i]] != signatures[types[j]],
+				"%s icon shape differs from %s (not color-only)" % [types[i], types[j]])

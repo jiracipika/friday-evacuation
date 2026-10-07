@@ -38,7 +38,7 @@ PizzaColonySmokeTest TouchControlsSmokeTest ModeHUDResponsiveSmokeTest ModeResul
 NetworkTwoPeerTest LanAvatarSyncTest AnnouncerSmokeTest PanicCamSmokeTest \
 LevelClearTest CheckpointBotTest LayoutPacingTest SkinBotSanityTest HazardsSmokeTest \
 ThemedFloorsSmokeTest OfficeDressingParityTest PowerUpSmokeTest PauseMenuSmokeTest \
-AccessibilitySmokeTest Phase8BAccessTest RaceModifiersSmokeTest \
+AccessibilitySmokeTest Phase8BAccessTest TrapAccessibilitySmokeTest RaceModifiersSmokeTest \
 ModifierMenuSmokeTest GhostRacerSmokeTest StatsRoundTripTest \
 VisualDesignSmokeTest WallMaterialsSmokeTest FaceSmokeTest BindingsSmokeTest \
 InputPrefsSmokeTest ControlsOverlaySmokeTest SettingsRoundTripTest \
@@ -177,6 +177,8 @@ SUCCESS_PATTERNS = {
         re.compile(r"^=== ACCESSIBILITY SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
     "Phase8BAccessTest": [
         re.compile(r"^=== PHASE 8B ACCESS TEST PASSED \(\d+ checks\) ===$", re.M)],
+    "TrapAccessibilitySmokeTest": [
+        re.compile(r"^=== TRAP ACCESSIBILITY SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
     "RaceModifiersSmokeTest": [
         re.compile(r"^=== RACE MODIFIERS SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
     "ModifierMenuSmokeTest": [
