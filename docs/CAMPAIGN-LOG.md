@@ -141,3 +141,53 @@ past foreign-PROJECT godot, always yield to same-repo godot.
 **Next steps:** human playtest for the Hauled bet verdict; ShopSeek/
 PizzaColony depth deliberately NOT bet today (one isolated New at a
 time); hazard params stay frozen pending playtest notes.
+
+## Day 5 — 2026-10-07 (FINAL campaign day)
+
+**Lanes (5 slices, all pushed):** a8914ca core-audio gap fill (countdown
+ticks, GO horn, win fanfare, defeat sting, low-time warning, stun-recover
+chirp, dedicated ui_click — all procedural 16-bit PCM routed through
+play_sfx so bus gating holds; CoreAudioSmokeTest 65 checks; an
+interrupted predecessor's unpushed commit was audited line-by-line, its
+accidental sweep of another lane's registration fixed, re-verified,
+pushed), 657d0d8 trap-cue upgrade (labels 0.16→0.58 m + short words
+BANANA/SPILL/STAPLER, UITheme token tints, geometry-distinct procedural
+icons; caught two real bugs: token NAME strings error to pure black —
+pass the constant (_uit.TEXT), and spill CylinderMesh billboards
+edge-on — quarter-turn after look_at + degenerate-alignment guard;
+TrapAccessibilitySmokeTest 48), 2e56f29 390px portrait in-match sweep —
+6 REAL breaks fixed across all four modes (Evacuation HUD header +
+objective strip entirely off-viewport at narrow width, caption band
+hidden behind the instruments card, touch cluster under the card,
+Hauled RoundBanner 640px clip, ShopSeek ControlsOverlay 660px clip,
+PauseMenu 420px min; PortraitSweepSmokeTest 32 checks + reusable
+PortraitSweepCapture driver; captures under gl_compatibility — Forward+
+crashes MoltenVK on this Mac), 88fa4cf SecondaryEndFlowSmokeTest 77
+checks (win AND loss end screens, PLAY AGAIN = pristine reload, timer
+frozen) + REAL BUG FIX: PizzaColony _process ran _update_hud() after
+_end() in the same frame — a LOST match showed a frozen ~2:00 timer
+instead of 0:00 (guard `if not eliminated`; existing suite missed it by
+calling _check_fell_off directly, bypassing _process), c34448b
+modifier-application pinning (all 5 chips' real effects measured: NO
+COFFEE kills powerup spawns, JUST WAXED friction ×0.3, MOON OFFICE
+gravity ×0.6, DOUBLE TROUBLE traps 4→8, TIME ATTACK 120→90 s; LAN match
+ignores modifiers — proven with a REAL ENet host, not a stub) +
+ShopSeekBeatabilityProbe 21 checks: the 90 s bar is comfortably beatable
+(shipped list 17.2 s, worst probe seed 18.2 s = 4.9× headroom, zero
+security catches — measurement only, no constants tuned).
+
+**Ladder:** 75/75 suites (day-4 close) → 81/81 phases / 79/79 suites at
+HEAD; operator's own clean certification ladder PASS 78/78 at
+2e56f29 (run-20261007-150650).
+
+**P/B/N classifications:** audio fill Proven-completion; trap-cue
+upgrade Better; portrait sweep Better (design-overhaul priority); 
+end-flow suite Proven (regression guard over the user's own Session 5
+checklist); modifier+beatability Proven (measure-and-pin). No New bets
+today — Hauled hostile-cargo (1f74306) remains the open New awaiting the
+human Session 6 verdict; hazard params stay frozen.
+
+**Next steps:** human playtests (Session 6 Hauled verdict; feel passes
+now that audio + portrait UI landed); FE is feature-rich — the honest
+gaps left are all human-gated (gamepad feel, two-machine LAN, touch on
+real phone).
