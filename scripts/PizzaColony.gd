@@ -121,7 +121,13 @@ func _process(delta: float) -> void:
 	_update_olives(delta)
 	_check_cutter_hit()
 	_check_fell_off()
-	_update_hud()
+	# End-of-round honesty: an elimination writes the end state to the HUD
+	# (0:00 + the loss reason) inside _end(); the routine per-frame HUD update
+	# must not clobber it in the same frame (pinned by
+	# SecondaryEndFlowSmokeTest). The win path runs after this point, so its
+	# "survived with time left" HUD write still stands.
+	if not eliminated:
+		_update_hud()
 	if eliminated:
 		return
 	if pepperonis.all(func(p): return p["owner"] == &"player"):

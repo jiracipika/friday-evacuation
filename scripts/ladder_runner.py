@@ -34,7 +34,7 @@ BootTest HeroAssemblySmokeTest SplashGateTest PlayerChairMechanicsSmokeTest \
 JumpForgivenessTest GraphicsPassSmokeTest MenuLayoutSmokeTest \
 ChairSkinSmokeTest CharacterRosterSmokeTest HauledSmokeTest HauledBehaviorsTest \
 ShopSeekSmokeTest \
-PizzaColonySmokeTest TouchControlsSmokeTest ModeHUDResponsiveSmokeTest ModeResultsSmokeTest ModeSmokeTest NetworkSmokeTest \
+PizzaColonySmokeTest TouchControlsSmokeTest ModeHUDResponsiveSmokeTest ModeResultsSmokeTest SecondaryEndFlowSmokeTest ModeSmokeTest NetworkSmokeTest \
 NetworkTwoPeerTest LanAvatarSyncTest AnnouncerSmokeTest PanicCamSmokeTest \
 LevelClearTest CheckpointBotTest LayoutPacingTest SkinBotSanityTest HazardsSmokeTest \
 ThemedFloorsSmokeTest OfficeDressingParityTest PowerUpSmokeTest PauseMenuSmokeTest \
@@ -145,8 +145,10 @@ SUCCESS_PATTERNS = {
     "TouchControlsSmokeTest": [re.compile(r"^TOUCH_SMOKE_PASS$", re.M)],
     # === MODE SMOKE TEST PASSED ===  (ModeSmokeTest.gd:23)
     "ModeSmokeTest": [re.compile(r"^=== MODE SMOKE TEST PASSED ===$", re.M)],
-    "ModeHUDResponsiveSmokeTest": [re.compile(r"^ModeHUDResponsiveSmokeTest: \d+/\d+ checks passed$", re.M)],
-    "ModeResultsSmokeTest": [re.compile(r"^ModeResultsSmokeTest: \d+/\d+ checks passed$", re.M)],
+    "ModeHUDResponsiveSmokeTest": [re.compile(r"^ModeHUDResponsiveSmokeTest: (\d+)/(\d+) checks passed$", re.M)],
+    "ModeResultsSmokeTest": [re.compile(r"^ModeResultsSmokeTest: (\d+)/(\d+) checks passed$", re.M)],
+    "SecondaryEndFlowSmokeTest": [
+        re.compile(r"^SecondaryEndFlowSmokeTest: (\d+)/(\d+) checks passed$", re.M)],
     "NetworkSmokeTest": [
         re.compile(r"^=== NETWORK SMOKE TEST PASSED ===$", re.M)],
     "NetworkTwoPeerTest": [
