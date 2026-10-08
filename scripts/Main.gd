@@ -150,6 +150,16 @@ func _ready() -> void:
 	_layout_responsive()
 
 	get_viewport().size_changed.connect(_layout_responsive)
+	# Lobby-radio theme under the menu (rids the Music bus; dies with the
+	# menu so mode beds and grooves start from silence).
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("start_music"):
+		am.start_music("menu")
+
+func _exit_tree() -> void:
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("stop_music"):
+		am.stop_music()
 
 ## Ink nav field, ivory brand, orange kicker (UI-LAYOUTS section 1 + 3).
 func _build_menu_theme() -> void:

@@ -2913,6 +2913,8 @@ func _exit_tree() -> void:
 	var am = get_node_or_null("/root/AudioManager")
 	if am and am.has_method("stop_ambient"):
 		am.stop_ambient()
+	if am and am.has_method("stop_music"):
+		am.stop_music()
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Mouse-look camera motion (toggle+sensitivity inside InputPrefs).
@@ -2984,6 +2986,9 @@ func _setup_hud() -> void:
 	var am = get_node_or_null("/root/AudioManager")
 	if am and am.has_method("start_ambient"):
 		am.start_ambient()
+	# Race groove rides the same bus — the lobby theme died with the menu.
+	if am and am.has_method("start_music"):
+		am.start_music("race")
 
 func _on_mobile_move(value: Vector2) -> void:
 	if local_player and is_instance_valid(local_player) and local_player.has_method("set_mobile_input"):

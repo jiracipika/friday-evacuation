@@ -212,3 +212,48 @@ func stop_ambient() -> void:
 
 func is_ambient_playing() -> bool:
 	return _ambient_player != null and _ambient_player.playing
+
+# --- MUSIC: composed loops for the menu + the main race (2026-10-07) -----
+
+## "menu" = lobby-radio theme, "race" = the 5PM evac groove. The three
+## mini-modes keep their quiet ambient drone (start_ambient) — stealth and
+## puzzle modes want the hush. Loops render lazily on first request and
+## cache, so boots that never open the menu never pay the synthesis.
+var _menu_loop: AudioStreamWAV = null
+var _race_loop: AudioStreamWAV = null
+var _music_player: AudioStreamPlayer = null
+var _music_kind := ""
+
+func _music_stream(kind: String) -> AudioStreamWAV:
+	var music = load("res://scripts/OfficeMusic.gd")
+	if kind == "menu":
+		if _menu_loop == null:
+			_menu_loop = music.make_menu_loop()
+		return _menu_loop
+	if _race_loop == null:
+		_race_loop = music.make_race_loop()
+	return _race_loop
+
+## Start (or switch to) a composed loop. Idempotent per kind; switching
+## kinds swaps the stream and restarts playback from the loop top.
+func start_music(kind: String) -> void:
+	if _music_player == null:
+		_music_player = AudioStreamPlayer.new()
+		_music_player.bus = MUSIC_BUS
+		# Creative attenuation under SFX; the Music bus already carries the
+		# settings product (set_music_volume).
+		_music_player.volume_db = -7.0
+		add_child(_music_player)
+	if _music_kind != kind or not _music_player.playing:
+		_music_kind = kind
+		_music_player.stream = _music_stream(kind)
+		_music_player.play()
+
+func stop_music() -> void:
+	if _music_player and _music_player.playing:
+		_music_player.stop()
+	_music_kind = ""
+
+func is_music_playing(kind: String = "") -> bool:
+	return _music_player != null and _music_player.playing \
+			and (kind == "" or _music_kind == kind)
