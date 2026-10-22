@@ -38,7 +38,7 @@ func _process(_delta: float) -> bool:
 	if rider_names.size() != chairs.size():
 		failures.append("character riders do not have unique runtime identities")
 	if failures.is_empty():
-		print("[PASS] 8 selectable characters build unique riders and accessories")
+		print("[PASS] %d selectable characters build unique riders and accessories" % chairs.size())
 		quit(0)
 	else:
 		for failure in failures:

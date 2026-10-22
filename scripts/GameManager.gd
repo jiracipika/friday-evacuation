@@ -15,6 +15,7 @@ var player_name: String = "Player1"
 var player_color: Color = Color(0.4, 0.8, 1.0)
 var selected_character_id: String = "deadline_dana"
 var selected_skin_id: String = "office_standard"
+var character_designs: Dictionary = {}
 var selected_mode: GameMode = GameMode.EVACUATION
 
 # Multiplayer
@@ -57,6 +58,13 @@ func _load_identity() -> void:
 		var roster = load("res://scripts/CharacterRoster.gd")
 		if roster and not roster.ids().has(selected_character_id):
 			selected_character_id = roster.DEFAULT_ID
+		var saved_designs: Variant = config.get_value("player", "designs", {})
+		character_designs.clear()
+		if saved_designs is Dictionary and roster:
+			for id in roster.ids():
+				var clean := FridayCharacterDesign.sanitize(saved_designs.get(id, {}))
+				if not clean.is_empty():
+					character_designs[id] = clean
 		var skins = load("res://scripts/ChairSkins.gd")
 		if skins and not skins.ids().has(selected_skin_id):
 			selected_skin_id = skins.DEFAULT_ID
@@ -67,7 +75,19 @@ func save_identity() -> void:
 	config.set_value("player", "color", player_color.to_html(false))
 	config.set_value("player", "character", selected_character_id)
 	config.set_value("player", "skin", selected_skin_id)
+	config.set_value("player", "designs", character_designs)
 	config.save("user://identity.cfg")
+
+func get_character_design() -> Dictionary:
+	return FridayCharacterDesign.sanitize(character_designs.get(selected_character_id, {}))
+
+func set_character_design(design: Dictionary) -> void:
+	var clean := FridayCharacterDesign.sanitize(design)
+	if clean.is_empty():
+		character_designs.erase(selected_character_id)
+	else:
+		character_designs[selected_character_id] = clean
+	save_identity()
 
 func select_mode(mode: GameMode) -> void:
 	selected_mode = mode

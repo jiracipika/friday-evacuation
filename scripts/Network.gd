@@ -17,6 +17,7 @@ var connected_players: Dictionary = {} # peer_id -> player name
 var player_colors: Dictionary = {} # peer_id -> Color (html string over RPC)
 var player_characters: Dictionary = {} # peer_id -> validated CharacterRoster id
 var player_skins: Dictionary = {} # peer_id -> validated ChairSkins id
+var player_designs: Dictionary = {} # peer_id -> bounded cosmetic overrides
 var ready_players: Dictionary = {} # peer_id -> bool
 var player_states: Dictionary = {} # peer_id -> {position, velocity, rot_y}
 
@@ -69,6 +70,7 @@ func host_game(port: int = DEFAULT_PORT) -> bool:
 	player_colors[1] = manager.player_color.to_html(false) if manager else Color(0.4, 0.8, 1.0).to_html(false)
 	player_characters[1] = _valid_character_id(manager.selected_character_id if manager else "")
 	player_skins[1] = _valid_skin_id(manager.selected_skin_id if manager else "")
+	player_designs[1] = manager.get_character_design() if manager else {}
 	ready_players[1] = false
 	_start_discovery(true)
 	server_started.emit(port)
@@ -111,6 +113,7 @@ func close_connection() -> void:
 	player_colors.clear()
 	player_characters.clear()
 	player_skins.clear()
+	player_designs.clear()
 	ready_players.clear()
 	player_states.clear()
 
@@ -129,6 +132,7 @@ func _register_peer_placeholder(peer_id: int) -> void:
 	player_colors[peer_id] = Color(0.4, 0.8, 1.0).to_html(false)
 	player_characters[peer_id] = _valid_character_id("")
 	player_skins[peer_id] = _valid_skin_id("")
+	player_designs[peer_id] = {}
 	ready_players[peer_id] = false
 
 func _on_peer_disconnected(peer_id: int) -> void:
@@ -136,6 +140,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	player_colors.erase(peer_id)
 	player_characters.erase(peer_id)
 	player_skins.erase(peer_id)
+	player_designs.erase(peer_id)
 	ready_players.erase(peer_id)
 	player_states.erase(peer_id)
 	player_disconnected.emit(peer_id)
@@ -150,7 +155,7 @@ func _on_connected_to_server() -> void:
 	var ccolor: String = manager.player_color.to_html(false) if manager else Color(0.4, 0.8, 1.0).to_html(false)
 	var character_id: String = manager.selected_character_id if manager else ""
 	var skin_id: String = manager.selected_skin_id if manager else ""
-	submit_identity.rpc_id(1, cname, ccolor, character_id, skin_id)
+	submit_identity.rpc_id(1, cname, ccolor, character_id, skin_id, manager.get_character_design() if manager else {})
 	request_roster.rpc_id(1)
 	# Late-join: ask the host whether a match is already running.
 	request_match_state.rpc_id(1)
@@ -161,21 +166,22 @@ func _on_connected_to_server() -> void:
 ## remote PlayerChair construction fail on every other peer.
 @rpc("any_peer", "reliable", "call_remote")
 func submit_identity(player_name: String, color_html: String,
-		character_id: String = "", skin_id: String = "") -> void:
+		character_id: String = "", skin_id: String = "", design: Dictionary = {}) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender := int(multiplayer.get_remote_sender_id())
-	_store_player_identity(sender, player_name, color_html, character_id, skin_id)
+	_store_player_identity(sender, player_name, color_html, character_id, skin_id, true, design)
 
 ## Shared store seam: identity becomes spawn-ready atomically, then the local
 ## host and every client are notified. Kept separate so lifecycle tests can
 ## prove a socket placeholder is never announced as a finished avatar.
 func _store_player_identity(peer_id: int, player_name: String, color_html: String,
-		character_id: String, skin_id: String, announce := true) -> void:
+		character_id: String, skin_id: String, announce := true, design: Dictionary = {}) -> void:
 	connected_players[peer_id] = player_name
 	player_colors[peer_id] = color_html
 	player_characters[peer_id] = _valid_character_id(character_id)
 	player_skins[peer_id] = _valid_skin_id(skin_id)
+	player_designs[peer_id] = FridayCharacterDesign.sanitize(design)
 	if announce:
 		player_connected.emit(peer_id, player_name)
 	_broadcast_roster()
@@ -408,15 +414,15 @@ func _apply_authoritative_layout(layout: String) -> void:
 func request_roster() -> void:
 	if multiplayer.is_server():
 		var sender = multiplayer.get_remote_sender_id()
-		send_roster.rpc_id(sender, connected_players, ready_players, player_colors, player_characters, player_skins)
+		send_roster.rpc_id(sender, connected_players, ready_players, player_colors, player_characters, player_skins, player_designs)
 
 func _broadcast_roster() -> void:
 	if is_server():
-		broadcast_roster.rpc(connected_players, ready_players, player_colors, player_characters, player_skins)
+		broadcast_roster.rpc(connected_players, ready_players, player_colors, player_characters, player_skins, player_designs)
 
 @rpc("authority", "reliable", "call_remote")
 func send_roster(names: Dictionary, readiness: Dictionary, colors: Dictionary,
-		characters := {}, skins := {}) -> void:
+		characters := {}, skins := {}, designs := {}) -> void:
 	# Re-key as int: peer ids arrive as Floats inside RPC Dictionaries and
 	# float keys never match int lookups (get_player_color, roster prints).
 	connected_players.clear()
@@ -424,6 +430,7 @@ func send_roster(names: Dictionary, readiness: Dictionary, colors: Dictionary,
 	player_colors.clear()
 	player_characters.clear()
 	player_skins.clear()
+	player_designs.clear()
 	for key in names.keys():
 		connected_players[int(key)] = names[key]
 	var rkeys: Array = readiness.keys()
@@ -438,6 +445,8 @@ func send_roster(names: Dictionary, readiness: Dictionary, colors: Dictionary,
 	var skin_keys: Array = skins.keys()
 	for key in skin_keys:
 		player_skins[int(key)] = _valid_skin_id(str(skins[key]))
+	for key in designs.keys():
+		player_designs[int(key)] = FridayCharacterDesign.sanitize(designs[key])
 	# Backward-compatible defaults for a peer running an older payload or a
 	# just-connected placeholder whose identity RPC has not landed yet.
 	for key in connected_players.keys():
@@ -452,14 +461,17 @@ func send_roster(names: Dictionary, readiness: Dictionary, colors: Dictionary,
 
 @rpc("authority", "reliable", "call_remote")
 func broadcast_roster(names: Dictionary, readiness: Dictionary, colors: Dictionary,
-		characters := {}, skins := {}) -> void:
-	send_roster(names, readiness, colors, characters, skins)
+		characters := {}, skins := {}, designs := {}) -> void:
+	send_roster(names, readiness, colors, characters, skins, designs)
 
 func get_player_color(peer_id: int) -> Color:
 	return Color.from_string(player_colors.get(peer_id, "66ccff"), Color(0.4, 0.8, 1.0))
 
 func get_player_character(peer_id: int) -> String:
 	return _valid_character_id(str(player_characters.get(peer_id, "")))
+
+func get_player_design(peer_id: int) -> Dictionary:
+	return FridayCharacterDesign.sanitize(player_designs.get(peer_id, {}))
 
 func get_player_skin(peer_id: int) -> String:
 	return _valid_skin_id(str(player_skins.get(peer_id, "")))

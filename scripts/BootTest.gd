@@ -12,6 +12,8 @@ func _init() -> void:
 		"res://scripts/ChairSkins.gd",
 		"res://scripts/ChairSkinSmokeTest.gd",
 		"res://scripts/CharacterRoster.gd",
+		"res://scripts/CharacterDesign.gd",
+		"res://scripts/OfficeCharacterVisual.gd",
 		"res://scripts/SabotageTrap.gd",
 		"res://scripts/PowerUpVisual.gd",
 		"res://scripts/ImpactFX.gd",

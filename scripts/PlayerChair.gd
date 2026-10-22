@@ -12,6 +12,7 @@ signal sabotage_requested
 @export var player_display_name: String = "Player"
 @export var character_id: String = "deadline_dana"
 @export var use_global_character := true
+@export var character_design: Dictionary = {}
 @export var skin_id: String = "office_standard"
 @export var use_global_skin := true
 var skin: Dictionary = {}  # resolved ChairSkins entry (Phase 8A)
@@ -97,6 +98,7 @@ func _ready() -> void:
 	var gm := get_node_or_null("/root/GameManager")
 	if use_global_character and gm and "selected_character_id" in gm:
 		character_id = gm.selected_character_id
+		character_design = gm.get_character_design()
 	if use_global_skin and gm and "selected_skin_id" in gm:
 		skin_id = gm.selected_skin_id
 	# Phase 8A: resolve skin and apply stat personality BEFORE physics.
@@ -118,6 +120,7 @@ func _ready() -> void:
 	if mesh:
 		mesh.visible = false
 	_build_chair_model()
+	_ground_visual_model()
 
 	# Set nametag
 	if nametag:
@@ -232,9 +235,9 @@ func _build_chair_model() -> void:
 		rider_root.position.y = rider_y_offset
 
 ## B2 hero assembly adapter (MODEL-SHEETS §1): authored GLB replaces the
-## primitive office-chair + rider VISUALS for office_standard; halo ring
-## stays (player identity) and procedural wheels stay in chair_wheels so
-## squash/wheelie/spin animations keep working. Other skins keep full
+## primitive office-chair visuals for office_standard; the live rider and halo
+## stay. The authored base replaces the duplicate procedural wheels.
+## Other skins keep full
 ## primitive builds until each variant gets its authored chassis.
 func _mount_hero_assembly(chair_root: Node3D) -> void:
 	var kind := String(skin.get("id", "office_standard"))
@@ -248,31 +251,60 @@ func _mount_hero_assembly(chair_root: Node3D) -> void:
 	# GLB ground = wheel contact (chair base plane). The procedural build
 	# centers its base at chair_root origin: shift hero so its wheels land
 	# at the same ground line (procedural casters sit at y ~ -0.28+0.105).
-	hero.position = Vector3(0, -0.175, 0)
+	# This GLB stores vertical height along -Z. Stand it upright before
+	# aligning its wheel contact to the procedural chair's ground plane.
+	hero.rotation.x = PI / 2.0
+	hero.position = Vector3(0, -0.135, 0)
 	# Player-color accents on the authored cushions (shared atlas policy:
 	# per-instance tint until the 2K atlas + vertex-color pipeline lands).
 	var cushion_mat := StandardMaterial3D.new()
 	cushion_mat.albedo_color = player_color
 	cushion_mat.roughness = 0.9
 	for mi in hero.find_children("*", "MeshInstance3D", true, false):
-		var mesh_name := String((mi as MeshInstance3D).name)
-		if mesh_name.begins_with("seat_cushion") or mesh_name.begins_with("back_cushion"):
-			(mi as MeshInstance3D).material_override = cushion_mat
+		# The import joins cushions into Chair surfaces, so node-name tinting
+		# misses them. Override the cushion surface without recoloring metal.
+		var instance := mi as MeshInstance3D
+		for surface in instance.mesh.get_surface_count():
+			var material := instance.mesh.surface_get_material(surface)
+			if material and material.resource_name == "chair_cushion":
+				instance.set_surface_override_material(surface, cushion_mat)
 		# Repo law: no new real-time shadow casters (tilted key light stripes).
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# Hide the primitive rider + office chair meshes (keep halo + wheels).
-	if rider_root:
-		rider_root.visible = false
+	# Keep the authored chair, but replace its baked worker with the live
+	# customizable rider. Otherwise office_standard hides every rider choice.
+	var worker := hero.find_child("Worker", true, false) as Node3D
+	if worker:
+		worker.visible = false
 	for child in chair_root.get_children():
 		if child == hero or child == rider_root:
 			continue
 		var cname := String(child.name)
 		if cname == "BackrestHalo":
 			continue
-		if cname.begins_with("Wheel_"):
-			continue
 		child.visible = false
 	chair_root.add_child(hero)
+
+func _ground_visual_model() -> void:
+	# The physics origin is the capsule center. Align visible wheels/base to
+	# its bottom so every chassis rests on the floor instead of hovering.
+	var minimum := _visual_min_y(model_parent, Transform3D.IDENTITY)
+	if collision.shape is CapsuleShape3D and is_finite(minimum):
+		model_parent.position.y = -collision.shape.height * 0.5 - minimum
+		if nametag:
+			nametag.position.y += model_parent.position.y
+
+func _visual_min_y(node: Node3D, relative: Transform3D) -> float:
+	var minimum := INF
+	if not node.visible:
+		return minimum
+	if node is MeshInstance3D and node.mesh:
+		var bounds: AABB = node.get_aabb()
+		for corner in 8:
+			minimum = minf(minimum, (relative * bounds.get_endpoint(corner)).y)
+	for child in node.get_children():
+		if child is Node3D:
+			minimum = minf(minimum, _visual_min_y(child, relative * child.transform))
+	return minimum
 
 func _chair_material(color: Color, rough: float, metal: float) -> StandardMaterial3D:
 	var mat = StandardMaterial3D.new()
@@ -529,201 +561,34 @@ func _apply_character_palette() -> void:
 
 func _build_rider_model(chair_root: Node3D) -> void:
 	var roster = load("res://scripts/CharacterRoster.gd")
-	if not roster:
-		return
-	var character: Dictionary = roster.get_character(character_id)
-	var body_color := Color.from_string(character["body"], player_color)
-	var accent_color := Color.from_string(character["accent"], Color.WHITE)
-	rider_root = Node3D.new()
-	rider_root.name = "Rider_%s" % character_id
+	var visual = load("res://scripts/OfficeCharacterVisual.gd")
+	rider_root = visual.build(roster.get_character(character_id), character_design)
 	chair_root.add_child(rider_root)
 
-	# GRAPHICS PASS: stylized low-poly rider upgrade. Rounded torso, visible
-	# neck (no more floating head), simple arms, and a hand mug — all visual
-	# only; collision/nametag/skin rigs are untouched.
-	var torso := MeshInstance3D.new()
-	var torso_mesh := CapsuleMesh.new()
-	torso_mesh.radius = 0.26
-	torso_mesh.height = 0.78
-	torso.mesh = torso_mesh
-	torso.position = Vector3(0, 0.9, 0.04)
-	torso.material_override = _character_material(body_color, 0.7)
-	rider_root.add_child(torso)
-
-	# Shirt hem: a thin cylinder under the torso reads as a shirt over legs
-	# and kills the "capsule on a stick" look from the game camera.
-	var hem := MeshInstance3D.new()
-	var hem_mesh := CylinderMesh.new()
-	hem_mesh.top_radius = 0.24
-	hem_mesh.bottom_radius = 0.2
-	hem_mesh.height = 0.22
-	hem.mesh = hem_mesh
-	hem.position = Vector3(0, 0.56, 0.04)
-	hem.material_override = _character_material(body_color.darkened(0.25), 0.75)
-	rider_root.add_child(hem)
-
-	# Neck: connects head to torso so the head is no longer floating.
-	var neck := MeshInstance3D.new()
-	var neck_mesh := CylinderMesh.new()
-	neck_mesh.top_radius = 0.08
-	neck_mesh.bottom_radius = 0.1
-	neck_mesh.height = 0.16
-	neck.mesh = neck_mesh
-	neck.position = Vector3(0, 1.33, -0.03)
-	neck.material_override = _character_material(Color("f0b58f").darkened(0.15), 0.8)
-	rider_root.add_child(neck)
-
-	var head := MeshInstance3D.new()
-	var head_mesh := SphereMesh.new()
-	head_mesh.radius = 0.24
-	head_mesh.height = 0.48
-	head.mesh = head_mesh
-	head.position = Vector3(0, 1.5, -0.03)
-	head.material_override = _character_material(Color("f0b58f"), 0.8)
-	rider_root.add_child(head)
-
-	# Simple arms: two capsules angled forward toward the desk-drive pose.
-	for arm_side in [-1.0, 1.0]:
-		var arm := MeshInstance3D.new()
-		var arm_mesh := CapsuleMesh.new()
-		arm_mesh.radius = 0.065
-		arm_mesh.height = 0.5
-		arm.mesh = arm_mesh
-		arm.position = Vector3(arm_side * 0.3, 0.94, 0.14)
-		arm.rotation.x = -0.85
-		arm.material_override = _character_material(body_color.darkened(0.1), 0.72)
-		rider_root.add_child(arm)
-
-	# Hand mug: tiny accent prop in the right hand (the Friday 5PM cliché).
-	var mug := MeshInstance3D.new()
-	var mug_mesh := CylinderMesh.new()
-	mug_mesh.top_radius = 0.05
-	mug_mesh.bottom_radius = 0.04
-	mug_mesh.height = 0.11
-	mug.mesh = mug_mesh
-	mug.position = Vector3(0.38, 0.86, 0.3)
-	mug.material_override = _character_material(Color(1.0, 0.62, 0.1), 0.35, true)
-	rider_root.add_child(mug)
-
-	# Comedy face decal + googly eyes (FaceStudio; fallback-safe).
-	var face_lib = load("res://scripts/FaceStudio.gd")
-	if face_lib != null and face_lib.has_method("variant_for"):
-		var variant: String = face_lib.variant_for(character_id)
-		var decal := MeshInstance3D.new()
-		decal.name = "FaceDecal"
-		var decal_mesh := SphereMesh.new()
-		decal_mesh.radius = 0.245
-		decal_mesh.height = 0.49
-		decal.mesh = decal_mesh
-		decal.position = Vector3(0, 1.5, -0.026)
-		decal.material_override = face_lib.make_head_overlay(variant)
-		rider_root.add_child(decal)
-		_googly_eyes(rider_root, face_lib)
-		for n in rider_root.find_children("LegacyEye*", "MeshInstance3D", true, false):
-			n.visible = false
-
-	# Two high-contrast eyes keep faces readable at gameplay distance.
-	for eye_x in [-0.085, 0.085]:
-		var eye := MeshInstance3D.new()
-		eye.name = "LegacyEye"
-		var eye_mesh := SphereMesh.new()
-		eye_mesh.radius = 0.035
-		eye_mesh.height = 0.07
-		eye.mesh = eye_mesh
-		eye.position = Vector3(eye_x, 1.53, -0.235)
-		eye.material_override = _character_material(Color("15151d"), 0.4)
-		rider_root.add_child(eye)
-
-	var badge := MeshInstance3D.new()
-	var badge_mesh := BoxMesh.new()
-	badge_mesh.size = Vector3(0.18, 0.12, 0.035)
-	badge.mesh = badge_mesh
-	badge.position = Vector3(0.16, 1.02, -0.27)
-	badge.material_override = _character_material(accent_color, 0.35, true)
-	rider_root.add_child(badge)
-	_build_character_accessory(rider_root, String(character["accessory"]), accent_color)
-
-func _build_character_accessory(parent: Node3D, accessory: String, color: Color) -> void:
-	var item := MeshInstance3D.new()
-	item.name = "Accessory_%s" % accessory
-	if accessory in ["mop_lance", "waiver_scroll", "coffee_tower"]:
-		var cylinder := CylinderMesh.new()
-		cylinder.top_radius = 0.045 if accessory != "coffee_tower" else 0.11
-		cylinder.bottom_radius = cylinder.top_radius
-		cylinder.height = 1.15 if accessory == "mop_lance" else 0.55
-		item.mesh = cylinder
-		item.position = Vector3(0.48, 1.0, 0.0)
-		item.rotation.z = -0.28 if accessory == "mop_lance" else 0.0
-	elif accessory == "webcam_drone":
-		var sphere := SphereMesh.new()
-		sphere.radius = 0.16
-		sphere.height = 0.32
-		item.mesh = sphere
-		item.position = Vector3(0.55, 1.62, 0.1)
-	else:
-		var box := BoxMesh.new()
-		box.size = Vector3(0.45, 0.3, 0.08)
-		item.mesh = box
-		item.position = Vector3(0.4, 0.95, -0.14)
-		item.rotation.z = -0.2
-	item.material_override = _character_material(color, 0.45, true)
-	parent.add_child(item)
-
-## Googly eyes: textured spheres in front of the face decal; pupils wobble
-## on a spring-damper reacting to chair acceleration (comedy centerpiece).
-var _googly_velocity: Vector2 = Vector2.ZERO
-var _googly_offsets: Vector2 = Vector2.ZERO
-var _prev_velocity: Vector3 = Vector3.ZERO
-
-func _googly_eyes(parent: Node3D, face_lib) -> void:
-	for side in [-1.0, 1.0]:
-		var g := MeshInstance3D.new()
-		g.name = "GooglyEye_%s" % ("L" if side < 0 else "R")
-		var gm := SphereMesh.new()
-		gm.radius = 0.055
-		gm.height = 0.11
-		g.mesh = gm
-		var mat := StandardMaterial3D.new()
-		mat.albedo_texture = face_lib.googly_texture(0.0)
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-		mat.alpha_scissor_threshold = 0.5
-		mat.roughness = 0.25
-		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		g.material_override = mat
-		g.position = Vector3(side * 0.085, 1.56, -0.225)
-		parent.add_child(g)
+# Transform-only pupil wobble; mesh/material resources stay shared.
+var _googly_velocity := Vector2.ZERO
+var _googly_offsets := Vector2.ZERO
+var _prev_velocity := Vector3.ZERO
 
 func _update_googly_eyes(delta: float) -> void:
-	if rider_root == null or not is_instance_valid(rider_root):
+	if not is_instance_valid(rider_root):
 		return
 	var accel := (velocity - _prev_velocity) / maxf(delta, 0.001)
 	_prev_velocity = velocity
 	var target := Vector2(
-		clampf(-accel.dot(global_transform.basis.x) * 0.0006, -0.010, 0.010),
-		clampf(-accel.y * 0.00015, -0.008, 0.008))
-	var boost_scale := 2.4 if is_boosting else 1.0
-	var stiffness := 90.0
-	var damping := 12.0
-	_googly_velocity += (target - _googly_offsets) * stiffness * delta
-	_googly_velocity *= maxf(1.0 - damping * delta, 0.0)
+		clampf(-accel.dot(global_transform.basis.x) * 0.0006, -0.012, 0.012),
+		clampf(-accel.y * 0.00015, -0.009, 0.009))
+	_googly_velocity += (target - _googly_offsets) * 90.0 * delta
+	_googly_velocity *= maxf(1.0 - 12.0 * delta, 0.0)
 	_googly_offsets += _googly_velocity * delta
-	var face_lib = load("res://scripts/FaceStudio.gd")
-	if face_lib == null or not face_lib.has_method("googly_texture"):
-		return
-	var tex: ImageTexture = face_lib.googly_texture(_googly_offsets.x * 200.0 * boost_scale)
-	for g in rider_root.find_children("GooglyEye*", "MeshInstance3D", true, false):
-		if is_instance_valid(g):
-			(g as MeshInstance3D).material_override.albedo_texture = tex
-
-func _character_material(color: Color, roughness_value: float, emissive: bool = false) -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.roughness = roughness_value
-	if emissive:
-		mat.emission_enabled = true
-		mat.emission = color
-		mat.emission_energy_multiplier = 0.45
-	return mat
+	for path in ["Head/PupilL", "Head/PupilR"]:
+		var pupil := rider_root.get_node_or_null(path) as Node3D
+		if pupil:
+			var rest: Vector3 = pupil.get_meta("rest_position")
+			pupil.position = rest + Vector3(_googly_offsets.x, _googly_offsets.y, 0)
+	var head := rider_root.get_node_or_null("Head") as Node3D
+	if head:
+		head.rotation.z = lerpf(head.rotation.z, clampf(-velocity.dot(global_transform.basis.x) * 0.008, -0.12, 0.12), 1.0 - exp(-8.0 * delta))
 
 func _physics_process(delta: float) -> void:
 	if not can_move:

@@ -16,6 +16,9 @@ func _run() -> void:
 	load("res://scripts/PreMatchModal.gd").suppress_next()
 	var scene: Node = load("res://scenes/Evacuation.tscn").instantiate()
 	root.add_child(scene)
+	# This suite drives flicker explicitly. Random background pulses can
+	# otherwise change the energy snapshot or overlap the pulse under test.
+	scene.set_process(false)
 	await process_frame
 	var world: WorldEnvironment = scene.get_node("WorldEnvironment")
 	check(world.environment.ambient_light_energy >= 0.4 and world.environment.ambient_light_energy <= 0.65,
@@ -155,31 +158,32 @@ func _run() -> void:
 	check(flicker_floors.size() == 4, "each floor has at least one flicker troffer")
 
 	# --- LIVE FLICKER PULSE: the matched OmniLight really dips -----------
-	# Force an event (_flicker_t <= 0 makes the next tick fire) and sample
-	# grid-light energies across the pulse window with WALL timers — headless
-	# frame counts accumulate almost no wall time, so timers are the only
-	# honest clock for the tween-driven pulse.
+	# Force an event and step the production tween directly. Wall-timer
+	# sampling can miss a short dip or observe overlapping random pulses.
 	var all_grid_lights: Array = []
 	var base_energies := {}
 	for floor_y in [0, 6, 12, 18]:
 		for light in scene.get_node("CeilingLights_%d" % floor_y).find_children("*", "OmniLight3D", true, false):
 			all_grid_lights.append(light)
 			base_energies[light.get_instance_id()] = (light as OmniLight3D).light_energy
+	var previous_tweens := get_processed_tweens()
 	scene._flicker_t = 0.0
 	scene._tick_light_flicker(0.016)
-	var min_energies := {}
-	for light in all_grid_lights:
-		min_energies[light.get_instance_id()] = (light as OmniLight3D).light_energy
-	for i in range(16):
-		await create_timer(0.04).timeout
-		for light in all_grid_lights:
-			var id: int = light.get_instance_id()
-			min_energies[id] = minf(min_energies[id], (light as OmniLight3D).light_energy)
+	var pulse: Tween = null
+	for tween in get_processed_tweens():
+		if not previous_tweens.has(tween):
+			pulse = tween
+	check(pulse != null, "flicker schedules its matched light pulse")
+	if pulse:
+		pulse.pause()
+		pulse.custom_step(0.001)
 	var dipped := false
 	for light in all_grid_lights:
 		var id: int = light.get_instance_id()
-		dipped = dipped or min_energies[id] < float(base_energies[id]) * 0.5
+		dipped = dipped or (light as OmniLight3D).light_energy < float(base_energies[id]) * 0.5
 	check(dipped, "flicker pulse dips a matched OmniLight to half energy")
+	if pulse:
+		pulse.custom_step(1.0)  # finish both dips and the final restoration
 	var restored := true
 	for light in all_grid_lights:
 		var id: int = light.get_instance_id()

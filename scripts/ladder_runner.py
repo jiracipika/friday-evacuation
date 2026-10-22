@@ -32,7 +32,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRODUCTION_SUITES = """\
 BootTest HeroAssemblySmokeTest SplashGateTest PlayerChairMechanicsSmokeTest \
 JumpForgivenessTest GraphicsPassSmokeTest MenuLayoutSmokeTest \
-ChairSkinSmokeTest CharacterRosterSmokeTest HauledSmokeTest HauledBehaviorsTest \
+ChairSkinSmokeTest CharacterRosterSmokeTest CharacterDesignSmokeTest HauledSmokeTest HauledBehaviorsTest \
 ShopSeekSmokeTest ShopSeekBeatabilityProbe \
 PizzaColonySmokeTest TouchControlsSmokeTest ModeHUDResponsiveSmokeTest ModeResultsSmokeTest SecondaryEndFlowSmokeTest ModeSmokeTest NetworkSmokeTest \
 NetworkTwoPeerTest LanAvatarSyncTest AnnouncerSmokeTest PanicCamSmokeTest \
@@ -130,9 +130,10 @@ SUCCESS_PATTERNS = {
     # [PASS] ChairSkinSmokeTest: N checks — ...  (:133)
     "ChairSkinSmokeTest": [
         re.compile(r"^\[PASS\] ChairSkinSmokeTest: \d+ checks", re.M)],
-    # quit(0) at :42 with "[PASS] 8 selectable characters..." at :41
+    # Roster size is reported dynamically as characters are added.
     "CharacterRosterSmokeTest": [
-        re.compile(r"^\[PASS\] 8 selectable characters build unique riders", re.M)],
+        re.compile(r"^\[PASS\] \d+ selectable characters build unique riders", re.M)],
+    "CharacterDesignSmokeTest": [re.compile(r"^CharacterDesignSmokeTest: PASS", re.M)],
     "HauledSmokeTest": [
         re.compile(r"^=== HAULED SMOKE TEST PASSED \(\d+ checks\) ===$", re.M)],
     "HauledBehaviorsTest": [

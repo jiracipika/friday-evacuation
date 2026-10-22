@@ -80,6 +80,22 @@ In LAN play the **host's pick is authoritative** — everyone races the host's m
 
 "TODAY'S OFFICE CHAOS" chips on the main menu toggle single-player modifiers (time attack, low gravity, ice rink, and more) with a live summary line. Combinations persist between sessions.
 
+## Design Your Coworker
+
+Open **YOUR RIDE** from the main menu to choose from eleven low-poly office
+characters, including Spreadsheet Stu, Coffee Carl, and Printer Pam. Mix outfits,
+hairstyles, hair and skin colors, body builds, expressions, outfit/accent colors,
+and office props. **TURN LEFT / TURN RIGHT** lets you inspect the live 3D model;
+**SURPRISE ME** shuffles the design and **RESET PRESET** restores that coworker.
+Edits save automatically for each character and travel with your avatar over LAN.
+Use the same game build on every peer. Appearance changes are cosmetic; chair
+skins still control the existing handling stats.
+
+![Low-poly office character lineup](docs/characters/office-lineup.png)
+
+See [character graphics notes](docs/characters/README.md) for the shared model
+builder, art captures, and verification commands.
+
 ## Multiplayer
 
 ### Local Wi-Fi (LAN)
