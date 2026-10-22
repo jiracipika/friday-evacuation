@@ -65,6 +65,7 @@ var modifier_menu: Control
 var character_row: HBoxContainer
 var character_select: OptionButton
 var character_detail: Label
+var character_designer: Control
 var skin_sheet: VBoxContainer
 var skin_meters: Dictionary = {}  # "jump"/"grip"/"boost" -> {meter, value}
 var skin_row: HBoxContainer
@@ -639,6 +640,9 @@ func _build_customize_subview() -> void:
 
 func _build_ride_rows(list: VBoxContainer, _play_out: Array, _back_out: Array) -> void:
 	_build_character_selector(list)
+	character_designer = load("res://scripts/CharacterDesigner.gd").new()
+	list.add_child(character_designer)
+	character_designer.design_changed.connect(_refresh_hero)
 	_build_skin_selector(list)
 
 func _build_office_subview() -> void:
@@ -893,11 +897,13 @@ func _on_character_selected(index: int) -> void:
 	GameManager.player_color = Color.from_string(character["body"], GameManager.player_color)
 	GameManager.save_identity()
 	_refresh_hero()
+	if is_instance_valid(character_designer):
+		character_designer.sync_for_pick()
 	if character_detail:
 		character_detail.text = character["tagline"]
 		var spec := character_detail.get_parent().get_node_or_null("RiderSpec") as Label
 		if spec:
-			spec.text = ("%s • %s" % [character["silhouette"], character["accessory"]]).to_upper()
+			spec.text = "%s • CUSTOMIZABLE OFFICE CHARACTER" % character["role"]
 			spec.tooltip_text = ""
 
 func _build_skin_selector(parent: Control) -> void:
@@ -997,6 +1003,8 @@ func _on_skin_selected(index: int) -> void:
 func _refresh_hero() -> void:
 	if hero and hero.has_method("refresh_for_pick"):
 		hero.refresh_for_pick()
+	if is_instance_valid(character_designer) and character_designer.preview:
+		character_designer.preview.refresh_for_pick()
 
 # --- office setup persistence (existing paths) --------------------------------
 

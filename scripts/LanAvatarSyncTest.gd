@@ -46,6 +46,7 @@ func _run() -> void:
 		"colors": network.player_colors.duplicate(true),
 		"characters": network.player_characters.duplicate(true),
 		"skins": network.player_skins.duplicate(true),
+		"designs": network.player_designs.duplicate(true),
 		"ready": network.ready_players.duplicate(true),
 	}
 	var announced_ids: Array[int] = []
@@ -66,7 +67,8 @@ func _run() -> void:
 		{42.0: true},
 		{42.0: "45d9ca"},
 		{42.0: "remote_ron"},
-		{42.0: "toilet"}
+		{42.0: "toilet"},
+		{42.0: {"hair": "bun", "expression": "derpy", "shirt_color": "ff73b5", "build": "not_a_build", "unknown": "drop_me"}}
 	)
 	check(network.connected_players.has(42), "RPC roster name key normalized float -> int")
 	check(network.player_characters.has(42), "RPC character key normalized float -> int")
@@ -74,6 +76,8 @@ func _run() -> void:
 	check(network.get_player_character(42) == "remote_ron", "guest character survives roster round trip")
 	check(network.get_player_skin(42) == "toilet", "guest chair skin survives roster round trip")
 	check(network.get_player_color(42).is_equal_approx(Color("45d9ca")), "guest color survives roster round trip")
+	check(network.get_player_design(42) == {"hair": "bun", "expression": "derpy", "shirt_color": "ff73b5"}, "RPC cosmetic overrides normalized and sanitized")
+	check(network.get_player_design(77).is_empty(), "missing cosmetic overrides preserve preset defaults")
 	var lobby = load("res://scripts/Lobby.gd").new()
 	lobby.network = network
 	var lobby_avatar: String = lobby._avatar_label(42)
@@ -111,6 +115,8 @@ func _run() -> void:
 	if remote and is_instance_valid(remote):
 		check(remote.use_global_character == false, "remote chair ignores local GameManager character")
 		check(remote.use_global_skin == false, "remote chair ignores local GameManager skin")
+		check(remote.character_design == network.get_player_design(42), "remote custom design pinned before model build")
+		check(remote.rider_root.get_meta("design").hair == "bun", "remote model uses guest hair, not local design")
 		check(remote.character_id == "remote_ron", "remote chair built selected rider character")
 		check(remote.skin_id == "toilet", "remote chair built selected chassis skin")
 		check(String(remote.skin.get("id", "")) == "toilet", "remote skin stat profile resolved before physics")
@@ -128,6 +134,7 @@ func _run() -> void:
 	network.player_colors = saved.colors
 	network.player_characters = saved.characters
 	network.player_skins = saved.skins
+	network.player_designs = saved.designs
 	network.ready_players = saved.ready
 	if mounted_network and is_instance_valid(network):
 		network.free()
