@@ -3,7 +3,12 @@
 Repository: `jiracipika/friday-evacuation`
 Engine: Godot 4.7.1
 Primary mode: Evacuation
-Latest verified commit at handoff: `c060c56`
+Latest verified commit at handoff: `4058dd9` (external re-verification,
+2026-10-27: full ladder 83/83 phases / 81 suites + boot PASS on Godot
+4.7.stable.official.5b4e0cb0; two-process multiplayer sync test PASS on
+UDP loopback including the new avatar/design roster assertions;
+`--import --quit` and `git diff --check` clean. Evidence run dir:
+docs/ui-continuation/evidence/ladder-runs/run-20261027-180910.)
 
 This document is the repository-visible handoff for future GLM polish, visual treatment, cleanup, and cross-platform QA. It intentionally records what is implemented, what was verified, and what remains unverified.
 
