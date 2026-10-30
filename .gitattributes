@@ -1,0 +1,2 @@
+# Keep the upstream license byte-for-byte, including its final blank line.
+third_party/nvidia/LICENSE.txt -whitespace

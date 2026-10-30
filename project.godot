@@ -13,8 +13,8 @@ config_version=5
 config/name="Friday 5PM: Evacuation"
 config/description="It's 4:59 PM Friday. Race your office chair to the parking lot. Last one buys beers. Plus 3 more chaotic game modes."
 config/version="0.1.0"
-run/main_scene="res://scenes/Main.tscn"
-config/features=PackedStringArray("4.7", "Forward Plus")
+run/main_scene="res://scenes/overhaul/OfficeLaunch.tscn"
+config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.png"
 
 [autoload]
@@ -24,21 +24,26 @@ Network="*res://scripts/Network.gd"
 InputHelper="*res://addons/input_helper/input_helper.gd"
 AudioManager="*res://scripts/AudioManager.gd"
 StatsManager="*res://scripts/StatsManager.gd"
+OfficeSession="*res://scripts/overhaul/Session.gd"
 
 [display]
 
 window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
-# GRAPHICS/MOBILE PASS: expand (not letterbox) so the HUD fills phones and
-# portrait browser windows edge-to-edge; anchors reflow instead of scaling.
+; GRAPHICS/MOBILE PASS: expand (not letterbox) so the HUD fills phones and
+; portrait browser windows edge-to-edge; anchors reflow instead of scaling.
 window/stretch/aspect="expand"
-# SENSOR_LANDSCAPE (4) — this is a landscape game; it previously shipped
-# PORTRAIT (1), which is the tiny-UI + black-bars mobile screenshot bug.
+; SENSOR_LANDSCAPE (4) — this is a landscape game; it previously shipped
+; PORTRAIT (1), which is the tiny-UI + black-bars mobile screenshot bug.
 window/handheld/orientation=4
 
 [input]
 
+brake_drift={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":4194325), Object(InputEventJoypadMotion,"axis":4,"axis_value":1.0)]
+}
 move_forward={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":87,"key_label":0,"unicode":119,"location":0,"echo":false,"script":null)
@@ -143,7 +148,8 @@ texture_etc2_astc={
 
 [rendering]
 
-renderer/rendering_method="forward_plus"
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0.039, 0.039, 0.058, 1)
 textures/default_filters/anisotropic_filtering_level=8

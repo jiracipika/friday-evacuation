@@ -23,3 +23,6 @@ Thumbs.db
 # graphify output (regenerable, machine-local)
 graphify-out/
 docs/ui-continuation/evidence/ladder-runs/
+
+# Lightmap array importer settings are required to interpret baked EXR atlases.
+!scenes/overhaul/baked/*.exr.import
