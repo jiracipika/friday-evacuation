@@ -363,7 +363,7 @@ static func camera_x_sign() -> float:
 # InputHelper and saved as the blob.
 
 ## Actions whose key/mouse/pad bindings the player may change.
-const REMAPPABLE_ACTIONS := ["boost", "action", "sabotage", "pause", "recenter_camera"]
+const REMAPPABLE_ACTIONS := ["boost", "action", "sabotage", "pause", "recenter_camera", "brake_drift"]
 
 static func _helper() -> Node:
 	var ml := Engine.get_main_loop()

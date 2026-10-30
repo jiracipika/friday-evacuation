@@ -1,0 +1,30 @@
+[remap]
+
+importer="2d_array_texture"
+type="CompressedTexture2DArray"
+uid="uid://cicwsc5d6x65"
+path.bptc="res://.godot/imported/open_plan.exr-935d8af62ca28fb72ea4d9e5bf509670.bptc.ctexarray"
+path.astc="res://.godot/imported/open_plan.exr-935d8af62ca28fb72ea4d9e5bf509670.astc.ctexarray"
+metadata={
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
+}
+
+[deps]
+
+source_file="res://scenes/overhaul/baked/open_plan.exr"
+dest_files=["res://.godot/imported/open_plan.exr-935d8af62ca28fb72ea4d9e5bf509670.bptc.ctexarray", "res://.godot/imported/open_plan.exr-935d8af62ca28fb72ea4d9e5bf509670.astc.ctexarray"]
+
+[params]
+
+compress/mode=2
+compress/high_quality=false
+compress/lossy_quality=0.7
+compress/uastc_level=0
+compress/rdo_quality_loss=0.0
+compress/hdr_compression=1
+compress/channel_pack=1
+mipmaps/generate=false
+mipmaps/limit=-1
+slices/horizontal=1
+slices/vertical=19

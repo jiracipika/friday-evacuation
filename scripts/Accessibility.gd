@@ -43,6 +43,10 @@ static func set_setting(key: String, value: Variant) -> void:
 static func get_time_scale() -> float:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree:
+		var office_session := tree.root.get_node_or_null("OfficeSession")
+		if office_session:
+			if office_session.active or (is_instance_valid(office_session.game) and office_session.game.trial):
+				return 1.0
 		var net_node := tree.root.get_node_or_null("Network")
 		if net_node and "peer" in net_node and net_node.peer:
 			return 1.0

@@ -1,0 +1,93 @@
+{
+  "dataset": "nvidia/simready-assets",
+  "asset": "chair_office_fabric_manager_a01",
+  "revision": "4763fbfaa4f8e97658e68b57d01b4c86659e08b5",
+  "license": "CC-BY-4.0",
+  "files": [
+    {
+      "path": "chair_office_fabric_manager_a01/.metadata/LICENSE.txt",
+      "sha256": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411",
+      "bytes": 18657
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/.metadata/com.nvidia.simready.conformance.Package-Candidate@1.0.0.json",
+      "sha256": "abd51f2e438b5e9febe13272b963f2dce849a5d699984d33092eb9a5977627e6",
+      "bytes": 899
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/.metadata/com.nvidia.simready.conformance.Package@1.0.0.json",
+      "sha256": "859159efba0024264664b38508f80d9ecd26be79cd0676c40671969baf3a43e3",
+      "bytes": 763
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/.metadata/com.nvidia.simready.packaging.bom.json",
+      "sha256": "286e3b5c65588f87b26b5099eb19deac2f8f6d9092a86eaf20b761863c9d4519",
+      "bytes": 12252
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/.metadata/com.nvidia.simready.root_usds.json",
+      "sha256": "c31fc03f12a95089e92ab9b6b176213b228ebb91bee417e8eecc577e48c0f6c6",
+      "bytes": 111
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/com.nvidia.simready.packaging.json",
+      "sha256": "bf82662bf27a6930350801df1046cc572ccd4ea6260b4a8b016fe4ec27745b0c",
+      "bytes": 576
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/simready_usd/payloads/PhysX/disabled.usda",
+      "sha256": "666c10d8d484dc9a992a7b08327cda0cfac4a39665b19f4dbb480f3b4b274fc8",
+      "bytes": 4278
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/simready_usd/payloads/PhysX/enabled.usda",
+      "sha256": "8840a7efb341fa2c67cbe594974ef93124d5b40da16e7934ba446d6bb3456c2c",
+      "bytes": 7750
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/simready_usd/payloads/Physics/physics.usda",
+      "sha256": "4a50c852b736d405b2f5be8c08d52a4ccdcfe9d5cfaeaa3863df89fb493838c1",
+      "bytes": 18009
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/simready_usd/payloads/base.usda",
+      "sha256": "0c70d622b86a056525839ca572416a461edc84bc32742aa33594953ccf0cdc3a",
+      "bytes": 35993
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/simready_usd/payloads/geometries.usd",
+      "sha256": "ea54848a67d7f8e797290ed52eff4b4408bafe34ef82069bfa6a6e1cd02a86a3",
+      "bytes": 4728938
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/simready_usd/payloads/instances.usda",
+      "sha256": "c70257f5c0995881536ec08d3e5256f5bb179790e1da3b041d56975c7d392ef0",
+      "bytes": 15364
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/simready_usd/payloads/instances_mujoco.usda",
+      "sha256": "c2b8e74d71aaba295269f932db1aa6c75197f083c2b0c2e13041fe2f30c4ec99",
+      "bytes": 19664
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/simready_usd/payloads/instances_newton.usda",
+      "sha256": "cc74baecd5a0666d73b295620e000cf9662ab91888281d559aea3799064f2909",
+      "bytes": 17727
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/simready_usd/payloads/instances_physx.usda",
+      "sha256": "71c9f22207840d7cbdbffd3016c357d8e3535fd7ce3917282e70e9719ae6886e",
+      "bytes": 19023
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/simready_usd/payloads/materials.usda",
+      "sha256": "be5a945522704a2a546136b67c116d0148dca63cdb13e1f8f8cab0c834941089",
+      "bytes": 31249
+    },
+    {
+      "path": "chair_office_fabric_manager_a01/simready_usd/sm_chair_office_fabric_manager_a01_01.usd",
+      "sha256": "6da22ae0756aab5b39e819336975e334fca097b7d005e2c0c515bfb31e27ae6b",
+      "bytes": 21593
+    }
+  ]
+}
