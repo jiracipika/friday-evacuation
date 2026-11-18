@@ -8,6 +8,7 @@ def run(script, *arguments):
     print(result.stdout, flush=True)
     if result.returncode or 'SCRIPT ERROR' in result.stdout or '\nERROR:' in result.stdout:
         raise SystemExit('Overhaul check failed: ' + script + ' ' + ' '.join(arguments))
+run('tools/overhaul/VisualRedesignCheck.gd')
 run('tools/overhaul/AssetCheck.gd')
 run('tools/overhaul/MotorCheck.gd')
 for mode in ['hauled', 'seek', 'pizza']:

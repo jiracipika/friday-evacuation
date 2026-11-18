@@ -65,6 +65,7 @@ static func text(parent: Node3D, words: String, pos: Vector3, size := 40, color 
 	var label := Label3D.new()
 	label.text = words
 	label.font_size = size
+	label.font = preload("res://assets/fonts/Display.ttf")
 	label.pixel_size = 0.006
 	label.outline_size = 0
 	label.modulate = color
@@ -100,9 +101,9 @@ static func environment(parent: Node3D) -> void:
 	world.name = "WorldEnvironment"
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color("c0d3d2")
+	env.background_color = Color("a3b1a7")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("b9d1d4")
+	env.ambient_light_color = Color("c5d0da")
 	env.ambient_light_energy = 0.42
 	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	world.environment = env
@@ -110,9 +111,47 @@ static func environment(parent: Node3D) -> void:
 	var sun := DirectionalLight3D.new()
 	sun.name = "OfficeSun"
 	sun.rotation_degrees = Vector3(-48, -28, 0)
-	sun.light_color = Color("fff2de")
-	sun.light_energy = 0.65
+	sun.light_color = Color("fff0d8")
+	sun.light_energy = 0.55
 	sun.shadow_enabled = true
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	sun.directional_shadow_max_distance = 42
 	parent.add_child(sun)
+
+static func sign(parent: Node3D, words: String, pos: Vector3, size: Vector2, background := TEAL, foreground := IVORY) -> Node3D:
+	var board := Node3D.new()
+	board.position = pos
+	parent.add_child(board)
+	decor_box(board, Vector3(size.x, size.y, 0.07), Vector3.ZERO, background)
+	var lettering := text(board, words, Vector3(0, 0, 0.047), 48, foreground)
+	var longest := 1
+	for line in words.split("\n"):
+		longest = maxi(longest, line.length())
+	lettering.pixel_size = minf(size.x / (longest * 25.0), size.y / (58.0 * words.split("\n").size())) * 0.88
+	return board
+
+static func batch_decor(art: Node3D) -> void:
+	# These box meshes are decoration. Group them by material before drawing.
+	var groups: Dictionary = {}
+	for node in art.find_children("*", "MeshInstance3D", true, false):
+		if node.mesh is BoxMesh and node.material_override:
+			var key: Material = node.material_override
+			if not groups.has(key):
+				groups[key] = []
+			groups[key].append(node)
+	for acrylic in groups:
+		var pieces: Array = groups[acrylic]
+		var multi := MultiMesh.new()
+		multi.transform_format = MultiMesh.TRANSFORM_3D
+		multi.mesh = BoxMesh.new()
+		multi.instance_count = pieces.size()
+		for index in pieces.size():
+			var node: MeshInstance3D = pieces[index]
+			var transform := art.global_transform.affine_inverse() * node.global_transform
+			transform.basis = transform.basis.scaled_local(node.mesh.size)
+			multi.set_instance_transform(index, transform)
+			node.free()
+		var draw := MultiMeshInstance3D.new()
+		draw.multimesh = multi
+		draw.material_override = acrylic
+		art.add_child(draw)

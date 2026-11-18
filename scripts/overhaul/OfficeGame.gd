@@ -40,6 +40,18 @@ var objective: Label
 var notice: Label
 var meter: ProgressBar
 var overlay: PanelContainer
+var hud_root: Control
+var dashboard: PanelContainer
+var boost_panel: PanelContainer
+var speed_panel: PanelContainer
+var clock: Label
+var boost_label: Label
+var speed_label: Label
+var countdown_card: PanelContainer
+var countdown_label: Label
+var shade: ColorRect
+var touch_direction: HBoxContainer
+var touch_actions: HBoxContainer
 var result_box: VBoxContainer
 var pause_box: VBoxContainer
 var paused_local := false
@@ -518,6 +530,8 @@ func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("pause") and rules.state.phase != "results":
 		paused_local = not paused_local
 		overlay.visible = paused_local
+		shade.visible = paused_local
+		_layout_hud.call_deferred()
 		pause_box.visible = paused_local
 		result_box.visible = false
 		if paused_local:
@@ -576,47 +590,83 @@ func _camera(delta: float) -> void:
 func _make_hud() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
-	var root := Control.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.theme = UI.theme()
-	layer.add_child(root)
-	var panel := PanelContainer.new()
-	panel.position = Vector2(22, 20)
-	panel.custom_minimum_size = Vector2(355, 0)
-	root.add_child(panel)
+	hud_root = Control.new()
+	hud_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hud_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_root.theme = UI.theme()
+	layer.add_child(hud_root)
+	dashboard = PanelContainer.new()
+	dashboard.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_root.add_child(dashboard)
 	var stack := VBoxContainer.new()
-	panel.add_child(stack)
-	hud = UI.label(stack, "", 22)
-	objective = UI.label(stack, "", 16)
+	stack.add_theme_constant_override("separation", 3)
+	dashboard.add_child(stack)
+	hud = UI.heading(stack, "", 24)
+	clock = UI.heading(stack, "00:00", 43)
+	UI.rule(stack)
+	objective = UI.label(stack, "", 13)
+	objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	boost_panel = PanelContainer.new()
+	boost_panel.add_theme_stylebox_override("panel", UI.style(UI.INK, 3, 13))
+	hud_root.add_child(boost_panel)
+	var reserve := VBoxContainer.new()
+	boost_panel.add_child(reserve)
+	boost_label = UI.label(reserve, "COFFEE RESERVE", 11, UI.PAPER)
 	meter = ProgressBar.new()
-	meter.custom_minimum_size = Vector2(300, 12)
+	meter.custom_minimum_size = Vector2(170, 8)
 	meter.show_percentage = false
-	meter.add_theme_stylebox_override("fill", UI.style(UI.ORANGE, 4, 0))
-	meter.add_theme_stylebox_override("background", UI.style(Color("cad4ce"), 4, 0))
-	stack.add_child(meter)
-	notice = UI.label(root, "", 20, UI.PAPER)
-	notice.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	notice.position = Vector2(40, -65)
-	notice.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	meter.add_theme_stylebox_override("fill", UI.style(UI.ORANGE, 0, 0))
+	meter.add_theme_stylebox_override("background", UI.style(Color("526455"), 0, 0))
+	reserve.add_child(meter)
+	speed_panel = PanelContainer.new()
+	speed_panel.add_theme_stylebox_override("panel", UI.style(UI.PAPER, 3, 12))
+	hud_root.add_child(speed_panel)
+	var speedometer := VBoxContainer.new()
+	speedometer.add_theme_constant_override("separation", -3)
+	speed_panel.add_child(speedometer)
+	speed_label = UI.heading(speedometer, "00", 39)
+	UI.label(speedometer, "CHAIR SPEED / KM/H", 10, UI.MUTED)
+	notice = UI.label(hud_root, "", 14, UI.PAPER)
 	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	notice.add_theme_color_override("font_shadow_color", UI.INK)
-	notice.add_theme_constant_override("shadow_offset_x", 2)
-	notice.add_theme_constant_override("shadow_offset_y", 2)
+	notice.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	notice.max_lines_visible = 2
+	notice.add_theme_stylebox_override("normal", UI.style(UI.INK, 3, 8))
+	countdown_card = PanelContainer.new()
+	countdown_card.add_theme_stylebox_override("panel", UI.style(UI.ORANGE, 3, 16))
+	hud_root.add_child(countdown_card)
+	var countdown := VBoxContainer.new()
+	countdown.add_theme_constant_override("separation", -8)
+	countdown_card.add_child(countdown)
+	UI.heading(countdown, "CLOCK OUT IN", 22).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	countdown_label = UI.heading(countdown, "3", 76)
+	countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if _touch_enabled():
+		_touch_controls(hud_root)
+	shade = ColorRect.new()
+	shade.color = Color(0.065, 0.10, 0.085, 0.72)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hud_root.add_child(shade)
 	overlay = PanelContainer.new()
-	overlay.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	overlay.position = Vector2(-220, -215)
-	overlay.custom_minimum_size = Vector2(440, 0)
-	root.add_child(overlay)
+	overlay.add_theme_stylebox_override("panel", UI.style(UI.PAPER, 3, 24))
+	hud_root.add_child(overlay)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
+	overlay.add_child(scroll)
 	var contents := VBoxContainer.new()
-	overlay.add_child(contents)
+	contents.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contents)
 	pause_box = VBoxContainer.new()
 	contents.add_child(pause_box)
-	UI.label(pause_box, "TAKING A BREATHER", 28)
-	UI.label(pause_box, "The office keeps moving during LAN play.", 15)
-	UI.button(pause_box, "Resume", func(): paused_local = false; overlay.hide())
+	UI.heading(pause_box, "TAKING A BREATHER.", 42).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UI.rule(pause_box)
+	var pause_note := UI.label(pause_box, "The office keeps moving during LAN play." if session.active else "Your shift can wait. Take your time.", 14)
+	pause_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UI.primary(pause_box, "RESUME   ↗", func(): paused_local = false; overlay.hide(); shade.hide())
 	UI.button(pause_box, "Settings", func():
 		var settings = load("res://scripts/Settings.gd").new()
+		settings.office_style = true
 		var settings_layer := CanvasLayer.new()
 		settings_layer.layer = 10
 		add_child(settings_layer)
@@ -626,8 +676,36 @@ func _make_hud() -> void:
 	result_box = VBoxContainer.new()
 	contents.add_child(result_box)
 	overlay.hide()
-	if _touch_enabled():
-		_touch_controls(root)
+	shade.hide()
+	hud_root.resized.connect(_layout_hud)
+	get_window().size_changed.connect(_fit_window)
+	_fit_window()
+
+func _fit_window() -> void:
+	UI.fit_window(get_window())
+	_layout_hud.call_deferred()
+
+func _layout_hud() -> void:
+	var bounds := hud_root.size
+	var compact := bounds.x < 760
+	var touch := is_instance_valid(touch_direction)
+	var controls_height := 132 if compact and touch else 76 if touch else 0
+	dashboard.position = Vector2(18, 18)
+	dashboard.size.x = minf(262, bounds.x - 36)
+	boost_panel.position = Vector2(18, bounds.y - controls_height - 79)
+	speed_panel.position = Vector2(bounds.x - 152, bounds.y - controls_height - 93)
+	var notice_width := minf(640, bounds.x - 36)
+	notice.position = Vector2((bounds.x - notice_width) * 0.5, bounds.y - controls_height - 157)
+	notice.size = Vector2(notice_width, 42)
+	countdown_card.size = Vector2(176, 143)
+	countdown_card.position = (bounds - countdown_card.size) * 0.5
+	var active_box := pause_box if paused_local else result_box
+	var overlay_height := clampf(active_box.get_combined_minimum_size().y + 52, 230, maxf(230, bounds.y - 36))
+	overlay.size = Vector2(minf(510, bounds.x - 36), overlay_height)
+	overlay.position = (bounds - overlay.size) * 0.5
+	if touch:
+		touch_direction.position = Vector2(18, bounds.y - (135 if compact else 64))
+		touch_actions.position = Vector2(maxf(18, bounds.x - touch_actions.get_combined_minimum_size().x - 18), bounds.y - 58)
 
 func _touch_enabled() -> bool:
 	if Prefs.touch_mode() == "on": return true
@@ -639,8 +717,7 @@ func _touch_enabled() -> bool:
 
 func _touch_controls(root: Control) -> void:
 	var row := HBoxContainer.new()
-	row.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	row.position = Vector2(20, -140)
+	touch_direction = row
 	root.add_child(row)
 	for direction in [Vector2.LEFT, Vector2.UP, Vector2.DOWN, Vector2.RIGHT]:
 		var b := UI.button(row, "<" if direction == Vector2.LEFT else "^" if direction == Vector2.UP else "v" if direction == Vector2.DOWN else ">", func(): pass)
@@ -648,8 +725,7 @@ func _touch_controls(root: Control) -> void:
 		b.button_down.connect(func(): input.touch_move = direction)
 		b.button_up.connect(func(): input.touch_move = Vector2.ZERO)
 	var actions := HBoxContainer.new()
-	actions.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	actions.position = Vector2(-380, -85)
+	touch_actions = actions
 	root.add_child(actions)
 	for title in ["BOOST", "DRIFT", "E", "Q"]:
 		var b := UI.button(actions, title, func(): pass)
@@ -660,25 +736,34 @@ func _touch_controls(root: Control) -> void:
 				"E": input.touch_hop = true
 				"Q": input.touch_item = true
 		)
-		b.button_up.connect(func(): input.touch_boost = false; input.touch_drift = false)
+		b.button_up.connect(func():
+			match title:
+				"BOOST": input.touch_boost = false
+				"DRIFT": input.touch_drift = false
+		)
 
 func _update_hud(delta: float) -> void:
 	var actor = actors[local_id]
 	var state: Dictionary = rules.state
 	meter.value = actor.boost_charge
-	if state.phase == "countdown":
-		hud.text = "CLOCKING OUT IN %d" % maxi(1, ceili(rules.countdown))
-	else:
-		hud.text = "%s   %02d:%02d" % [{"evacuation": "TIME TRIAL" if trial else "EVACUATION", "hauled": "HAULED", "seek": "SHOP & SEEK", "pizza": "PIZZA COLONY"}[mode], int(state.remaining) / 60, int(state.remaining) % 60]
-		if trial:
-			hud.text = "TIME TRIAL   %02d:%05.2f" % [int(state.elapsed) / 60, fmod(state.elapsed, 60)]
+	hud.text = {"evacuation": "TIME TRIAL" if trial else "EVACUATION", "hauled": "HAULED", "seek": "SHOP & SEEK", "pizza": "PIZZA COLONY"}[mode]
+	clock.text = "%02d:%02d" % [int(state.remaining) / 60, int(state.remaining) % 60]
+	if trial:
+		clock.text = "%02d:%05.2f" % [int(state.elapsed) / 60, fmod(state.elapsed, 60)]
+	clock.add_theme_color_override("font_color", Color("a83a19") if not trial and state.remaining < 20 else Color.BLACK if high_contrast else UI.INK)
+	boost_label.text = "COFFEE RESERVE  %d%%" % int(actor.boost_charge)
+	speed_label.text = "%02d" % int(Vector2(actor.velocity.x, actor.velocity.z).length() * 3.6)
+	countdown_card.visible = state.phase == "countdown" and not paused_local
+	countdown_label.text = str(maxi(1, ceili(rules.countdown)))
 	match mode:
 		"evacuation":
 			var place := 1
 			for rival in actors.values():
 				if course.progress(rival.position, rival.checkpoint) > course.progress(actor.position, actor.checkpoint):
 					place += 1
-			objective.text = "%d / %d · FLOOR %d · %s\nBOOST %d%%   %s" % [place, actors.size(), 4 - mini(3, actor.checkpoint / 8), course.zone_names[mini(3, actor.checkpoint / 8)].capitalize(), int(actor.boost_charge), "Q: " + actor.item_kind.replace("_", " ") if actor.item_kind != "" else "Drift + coffee to recharge"]
+			objective.text = "POSITION  %d / %d\nFLOOR %d  /  %s" % [place, actors.size(), 4 - mini(3, actor.checkpoint / 8), course.zone_names[mini(3, actor.checkpoint / 8)].capitalize()]
+			if actor.item_kind != "":
+				objective.text += "\nQ  /  " + actor.item_kind.replace("_", " ")
 			objective.text += "\nNEXT CHECKPOINT %dm" % int(actor.position.distance_to(course.points[mini(actor.checkpoint + 1, course.points.size() - 1)]))
 		"hauled": objective.text = "%s · INTEGRITY %d%%\nDELIVERED %d / 3 · E grab / release" % [state.cargo_kind, state.cargo_health, state.delivered]
 		"seek": objective.text = "%s · LIST %d / 5 · STRIKES %d / 3\nE collect / disguise · Q scanner" % [str(state.roles.get(local_id, "shopper")).to_upper(), state.collected.get(local_id, []).size(), state.caught.get(local_id, 0)]
@@ -692,15 +777,26 @@ func _show_results() -> void:
 	results_shown = true
 	paused_local = false
 	overlay.show()
+	shade.show()
+	countdown_card.hide()
 	pause_box.hide()
 	result_box.show()
-	UI.label(result_box, rules.state.headline, 28)
+	UI.label(result_box, "DEPARTURE REPORT", 12, UI.MUTED)
+	UI.heading(result_box, rules.state.headline.to_upper(), 38).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UI.rule(result_box)
 	var ranking := actors.keys()
 	ranking.sort_custom(func(a, b): return rules.state.players[a].score > rules.state.players[b].score)
 	for id in ranking:
 		var actor = actors[id]
 		var score := ("%.2fs" % actor.finish_time if actor.finish_time >= 0 else "Did not finish") if mode == "evacuation" else "%d pts" % rules.state.players[id].score
-		UI.label(result_box, "%s  ·  %s" % [actor.display_name, score], 18)
+		var row := HBoxContainer.new()
+		result_box.add_child(row)
+		UI.heading(row, "%02d" % (ranking.find(id) + 1), 23, UI.TEAL if id == local_id else UI.MUTED)
+		var rider := UI.label(row, actor.display_name + ("  /  YOU" if id == local_id else ""), 14)
+		rider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rider.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		UI.label(row, score, 13)
+		UI.rule(result_box)
 	if mode == "evacuation" and actors[local_id].finish_time >= 0 and not session.active and not test_mode:
 		var record: bool = Save.record(course.record_key(actors[local_id].profile_id, trial), actors[local_id].finish_time, ghost_frames if trial else [])
 		if record:
@@ -708,11 +804,12 @@ func _show_results() -> void:
 	if mode == "evacuation" and not trial and not test_mode:
 		StatsManager.record_race(ranking[0] == local_id, actors[local_id].profile.speed * 1.5, 0)
 	if authority:
-		UI.button(result_box, "Another shift", func(): session.start())
+		UI.primary(result_box, "ONE MORE SHIFT   ↗", func(): session.start())
 	else:
 		UI.label(result_box, "Waiting for the host to start the next shift.", 16)
 	UI.button(result_box, "Back to the office", _leave)
 	result_box.find_children("*", "Button", true, false)[0].grab_focus()
+	_layout_hud.call_deferred()
 
 func _update_ghost() -> void:
 	if not ghost or previous_ghost.size() < 2:
