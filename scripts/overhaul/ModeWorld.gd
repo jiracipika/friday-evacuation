@@ -1,9 +1,12 @@
 extends RefCounted
+const Art = preload("res://scripts/overhaul/OfficeArt.gd")
 const Kit = preload("res://scripts/overhaul/OfficeKit.gd")
 
 static func build(game: Node3D, mode: String) -> void:
 	Kit.environment(game)
 	if mode == "pizza":
+		Kit.decor_box(game, Vector3(68, 0.2, 68), Vector3(0, -1.2, 0), Color("968c75"))
+		Kit.sign(game, "PIZZA COLONY  /  SPECIAL OF THE DAY", Vector3(0, 2.2, -23), Vector2(16, 1.2), Kit.INK)
 		var body := StaticBody3D.new()
 		game.add_child(body)
 		var shape := CylinderShape3D.new()
@@ -14,7 +17,6 @@ static func build(game: Node3D, mode: String) -> void:
 		col.position.y = -0.35
 		body.add_child(col)
 		Kit.prop(game, "pizza", Vector3.ZERO, 0, false)
-		Kit.text(game, "PIZZA COLONY", Vector3(0, 3, -19), 130, Kit.INK)
 		return
 	var room := Kit.room(game, Vector3.ZERO, 2)
 	# Low end walls contain the shared arena, with a readable delivery zone.
@@ -70,3 +72,5 @@ static func build(game: Node3D, mode: String) -> void:
 		for x in [-20, 20]:
 			for z in [-15, -5, 5, 15]:
 				Kit.prop(room, "shelf", Vector3(x, 0, z), PI / 2)
+
+	Art.arena(room, mode)

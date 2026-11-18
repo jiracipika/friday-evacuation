@@ -1,4 +1,5 @@
 extends RefCounted
+const Art = preload("res://scripts/overhaul/OfficeArt.gd")
 const Kit = preload("res://scripts/overhaul/OfficeKit.gd")
 var rooms: Array[Node3D] = []
 var pickups: Array[Dictionary] = []
@@ -25,6 +26,7 @@ func build(parent: Node3D, course: Resource, trial := false, use_baked := true) 
 				var hazard: Dictionary = node.get_meta("hazard").duplicate(true)
 				hazard.node = node
 				hazards.append(hazard)
+		Art.course_rooms(course, rooms)
 		return
 	Kit.environment(parent)
 	for zone in 4:
@@ -106,6 +108,8 @@ func build(parent: Node3D, course: Resource, trial := false, use_baked := true) 
 		metadata.erase("node")
 		metadata.erase("warning")
 		hazard.node.set_meta("hazard", metadata)
+
+	Art.course_rooms(course, rooms)
 
 func _arrow(parent: Node3D, pos: Vector3, direction: Vector3) -> Node3D:
 	var node := Node3D.new()

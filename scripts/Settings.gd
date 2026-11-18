@@ -25,6 +25,8 @@ var _remap_buttons: Dictionary = {}  # action -> {"key": Button, "pad": Button}
 var _remap_action := ""  # non-empty while listening for a key or pad button
 var _remap_kind := ""  # "kb" or "pad" — which column is armed
 var _restoring := false  # blocks reentrant _apply_settings during value restore
+const OFFICE_UI = preload("res://scripts/overhaul/OfficeUI.gd")
+var office_style := false
 const UI_THEME = preload("res://scripts/UITheme.gd")
 
 const TIME_SCALE_LABELS := ["0.75x (SLOWER)", "1.0x (NORMAL)", "1.25x (FASTER)"]
@@ -95,7 +97,11 @@ static func _cfg_bool(cfg: ConfigFile, section: String, key: String, default: bo
 
 func _ready() -> void:
 	_load_settings()
+	if office_style:
+		theme = OFFICE_UI.theme()
 	_build_ui()
+	if office_style:
+		_apply_office_style()
 	_restore_persisted_values()
 	_apply_settings()
 
@@ -110,6 +116,7 @@ func _build_ui() -> void:
 	add_child(backdrop)
 
 	var panel = PanelContainer.new()
+	panel.name = "SettingsSheet"
 	# S-D portrait: below 560px the desktop 520px panel cannot fit, so it
 	# becomes a full-bleed sheet; the body scroll + row ellipsis absorb the
 	# remaining squeeze. Desktop keeps the centered 520x620 card.
@@ -145,6 +152,7 @@ func _build_ui() -> void:
 	column.add_child(title_row)
 	var title = Label.new()
 	title.text = "SETTINGS"
+	title.name = "SettingsHeading"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.add_theme_font_size_override("font_size", 32)
 	title.add_theme_color_override("font_color", Color("ff9a1a"))
@@ -604,7 +612,9 @@ func _refresh_toggle_tag(toggle: CheckButton) -> void:
 		return
 	tag.text = "ON" if toggle.button_pressed else "OFF"
 	tag.add_theme_font_size_override("font_size", 10)
-	tag.add_theme_color_override("font_color", Color("b9f34a") if toggle.button_pressed else Color("9a9aae"))
+	var active := OFFICE_UI.TEAL if office_style else Color("b9f34a")
+	var inactive := OFFICE_UI.MUTED if office_style else Color("9a9aae")
+	tag.add_theme_color_override("font_color", active if toggle.button_pressed else inactive)
 
 func _apply_settings() -> void:
 	# Reentrancy guard: setting a slider value inside _restore_persisted_values
@@ -764,3 +774,26 @@ func _restore_persisted_values() -> void:
 	sfx_slider.value = float(config.get_value("audio", "sfx", 0.8)) * 100.0
 	shake_toggle.button_pressed = _cfg_bool(config, "accessibility", "screen_shake", true)
 	_restoring = false
+
+
+func _apply_office_style() -> void:
+	var sheet := get_node("SettingsSheet") as PanelContainer
+	sheet.add_theme_stylebox_override("panel", OFFICE_UI.outlined(OFFICE_UI.PAPER, OFFICE_UI.LINE, 24))
+	var heading := sheet.find_child("SettingsHeading", true, false) as Label
+	heading.add_theme_font_override("font", OFFICE_UI.DISPLAY)
+	heading.add_theme_font_size_override("font_size", 38)
+	for text in sheet.find_children("*", "Label", true, false):
+		if text.name == "StateTag":
+			continue
+		var color := OFFICE_UI.TEAL if text.name == "AutosaveLabel" else OFFICE_UI.INK
+		text.add_theme_color_override("font_color", color)
+	for button in sheet.find_children("*", "Button", true, false):
+		button.add_theme_stylebox_override("normal", OFFICE_UI.outlined(OFFICE_UI.PAPER))
+		button.add_theme_stylebox_override("hover", OFFICE_UI.outlined(Color("e7dfcd"), OFFICE_UI.INK))
+		button.add_theme_stylebox_override("pressed", OFFICE_UI.style(OFFICE_UI.INK, 3, 10))
+		for state in ["font_color", "font_hover_color", "font_focus_color"]:
+			button.add_theme_color_override(state, OFFICE_UI.INK)
+		button.add_theme_color_override("font_pressed_color", OFFICE_UI.PAPER)
+		if button is OptionButton:
+			button.get_popup().theme = theme
+	sheet.find_child("ScrollFade", true, false).hide()
