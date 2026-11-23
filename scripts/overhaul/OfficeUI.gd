@@ -6,6 +6,8 @@ const ORANGE := Color("ed632b")
 const MUTED := Color("59645e")
 const LINE := Color("cdc6b4")
 const TEAL := Color("356e64")
+const MODE_NAMES := {"evacuation": "Evacuation", "hauled": "Hauled", "seek": "Shop & Seek", "pizza": "Pizza Colony"}
+const MODE_ACCENTS := {"evacuation": Color("ff9c56"), "hauled": Color("f5ca6b"), "seek": Color("8fd5c3"), "pizza": Color("ffa293")}
 const BODY = preload("res://assets/fonts/Body.ttf")
 const DISPLAY = preload("res://assets/fonts/Display.ttf")
 
@@ -21,6 +23,12 @@ static func outlined(color: Color, border := LINE, padding := 10) -> StyleBoxFla
 	var box := style(color, 3, padding)
 	box.border_color = border
 	box.set_border_width_all(1)
+	return box
+
+static func instrument(accent: Color, contrast := false) -> StyleBoxFlat:
+	var box := style(Color.BLACK if contrast else Color("172522"), 6, 12)
+	box.border_color = accent
+	box.border_width_left = 3
 	return box
 
 static func theme() -> Theme:

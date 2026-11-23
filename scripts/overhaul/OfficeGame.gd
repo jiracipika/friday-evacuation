@@ -14,6 +14,7 @@ const UI = preload("res://scripts/overhaul/OfficeUI.gd")
 const Save = preload("res://scripts/overhaul/OverhaulSave.gd")
 const A11y = preload("res://scripts/Accessibility.gd")
 const Prefs = preload("res://scripts/InputPrefs.gd")
+const Touch = preload("res://scripts/overhaul/OfficeTouch.gd")
 const Roster = preload("res://scripts/CharacterRoster.gd")
 var session: Node
 var local_id := 1
@@ -50,8 +51,13 @@ var speed_label: Label
 var countdown_card: PanelContainer
 var countdown_label: Label
 var shade: ColorRect
-var touch_direction: HBoxContainer
-var touch_actions: HBoxContainer
+var touch: Control
+var pause_button: Button
+var direction_arrow: Label
+var direction_panel: PanelContainer
+var direction_label: Label
+var progress: ProgressBar
+var mode_accent: Color
 var result_box: VBoxContainer
 var pause_box: VBoxContainer
 var paused_local := false
@@ -59,6 +65,8 @@ var snapshot_clock := 0.0
 var tick := 0
 var received_tick := -1
 var notice_time := 0.0
+var last_countdown := 0
+var last_seconds := -1
 var frame_clock := 0.0
 var ghost_frames: Array = []
 var previous_ghost: Array = []
@@ -67,8 +75,10 @@ var ghost_index := 0
 var results_shown := false
 var effects_root: Node3D
 var chef: Node3D
-var cutter: MeshInstance3D
+var cutter: Node3D
 var pads: Array[MeshInstance3D] = []
+var pad_fills: Array[MeshInstance3D] = []
+var name_tags: Dictionary = {}
 var camera_yaw := 0.0
 var test_bot_local := false
 var reduced_motion := false
@@ -146,7 +156,8 @@ func _ready() -> void:
 	if mode in ["seek", "pizza"]:
 		chef = Rig.new()
 		add_child(chef)
-		chef.configure("facilities_frank", {"shirt_color": "f7f6f2", "expression": "derpy"})
+		chef.configure("facilities_frank", {"shirt_color": "f7f6f2" if mode == "pizza" else "36566f", "expression": "derpy"})
+		chef.visible = mode == "pizza" or not session.active
 		if mode == "pizza":
 			Kit.prop(chef, "chef_hat", Vector3(0, 1.7, 0), 0, false)
 	if mode == "pizza":
@@ -159,10 +170,20 @@ func _ready() -> void:
 			circle.radial_segments = 24
 			marker.mesh = circle
 			marker.position = pad.p
-			marker.material_override = Kit.material(Kit.IVORY)
+			marker.material_override = Kit.material(Color("c05039"))
 			add_child(marker)
 			pads.append(marker)
-		cutter = Kit.decor_box(self, Vector3(18, 0.12, 0.18), Vector3(9, 0.25, 0), Kit.ORANGE)
+			var fill := MeshInstance3D.new()
+			fill.mesh = circle
+			fill.position = pad.p + Vector3.UP * 0.025
+			fill.material_override = Kit.material(Kit.IVORY)
+			add_child(fill)
+			pad_fills.append(fill)
+		cutter = Node3D.new()
+		add_child(cutter)
+		var blade := Kit.decor_box(cutter, Vector3(18, 0.06, 1.3), Vector3.ZERO, Color("c34c32"))
+		blade.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		Kit.decor_box(cutter, Vector3(18, 0.08, 0.12), Vector3(0, 0.04, 0), Color("fff0cd"))
 	if trial:
 		previous_ghost = Save.ghost(course.record_key(session.identity_profile, true))
 		if previous_ghost.size() > 1:
@@ -176,7 +197,13 @@ func _ready() -> void:
 				mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 				mesh.material_override = mat
 	session.ready_in_game()
-	announce("WASD steer · SPACE boost · SHIFT drift / brake · E hop / interact · Q item")
+	if not touch:
+		announce({
+			"evacuation": "WASD steer · Space boost · Shift drift · E hop · Q item",
+			"hauled": "WASD steer · E grab or release · Shift brake",
+			"seek": "WASD steer · E collect or disguise · Q seeker scan",
+			"pizza": "WASD steer · E hop · Q build a fort",
+		}[mode])
 
 func _bot_identity(index: int) -> Dictionary:
 	var character: Dictionary = Roster.CHARACTERS[(index + 7) % Roster.CHARACTERS.size()]
@@ -196,6 +223,12 @@ func _spawn(id: int, identity: Dictionary) -> void:
 	if mode == "pizza":
 		var angle := actors.size() * 1.1
 		actor.position = Vector3(cos(angle) * 7, 0.7, sin(angle) * 7)
+	if mode == "hauled":
+		# Keep the grid on the cargo side of the first divider.
+		var slot := actors.size()
+		actor.position = Vector3(-14 + (slot % 3) * 1.65, 0.7, -16 - (slot / 3) * 1.4)
+	if mode == "seek" and session.active and id == 1:
+		actor.position = Vector3(16, 0.7, 17)
 	actor.spawn_point = actor.position
 	add_child(actor)
 	if mode == "hauled":
@@ -218,7 +251,10 @@ func _spawn(id: int, identity: Dictionary) -> void:
 	if id != local_id:
 		var name_tag := Kit.text(actor, actor.display_name, Vector3(0, 2.1, 0), 24, Kit.INK)
 		name_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		name_tag.no_depth_test = false
+		name_tag.outline_size = 8
+		name_tag.outline_modulate = Color("202c2b")
+		name_tag.modulate = UI.PAPER
+		name_tags[id] = name_tag
 
 func add_human(id: int) -> void:
 	if actors.has(id):
@@ -244,6 +280,7 @@ func remove_human(id: int) -> void:
 	commands.erase(id)
 	command_ages.erase(id)
 	brains.erase(id)
+	name_tags.erase(id)
 	if rules:
 		for key in ["players", "roles", "disguises", "caught", "collected", "cheese", "scan"]:
 			rules.state[key].erase(id)
@@ -284,7 +321,7 @@ func _physics_process(delta: float) -> void:
 				command_ages[id] += delta
 				if command_ages[id] > 0.3:
 					command = Command.make(Vector2.ZERO, false, false, false, false, int(command.seq))
-			var active_actor: bool = rules.state.phase == "running" and rules.state.players[id].alive
+			var active_actor: bool = rules.can_drive(id)
 			if rules.state.disguises.has(id) and command.move.length() > 0.2:
 				rules.state.disguises.erase(id)
 			actor.enabled = active_actor and not rules.state.disguises.has(id)
@@ -307,7 +344,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		session.submit(cmd)
 		var actor = actors[local_id]
-		actor.enabled = rules.state.phase == "running" and rules.state.players.get(local_id, {"alive": true}).alive and not rules.state.disguises.has(local_id)
+		actor.enabled = rules.can_drive(local_id) and not rules.state.disguises.has(local_id)
 		var motor_cmd := cmd.duplicate()
 		if mode in ["hauled", "seek"]:
 			motor_cmd.hop = false
@@ -485,9 +522,8 @@ func _process(delta: float) -> void:
 		var actor = actors[id]
 		actor.present(delta)
 		actor.visual.visible = not rules.state.disguises.has(id)
-		if rules.state.disguises.has(id):
-			# Matching prop appears in the exact actor location on every peer.
-			actor.visual.visible = false
+		if name_tags.has(id):
+			name_tags[id].visible = actor.visual.visible and mode != "seek"
 	_camera(delta)
 	if builder:
 		builder.tick_visuals(rules.elapsed)
@@ -520,22 +556,19 @@ func _process(delta: float) -> void:
 		var angle: float = rules.state.cutter
 		cutter.position = Vector3(cos(angle) * 9, 0.22, sin(angle) * 9)
 		cutter.rotation.y = -angle
-		cutter.visible = fmod(rules.elapsed, 12) > 3
+		cutter.visible = rules.state.phase == "running" and fmod(rules.elapsed, 12) > 3
 		for i in pads.size():
-			var owner_id: int = rules.state.pads[i].owner
-			pads[i].material_override = Kit.material(Kit.IVORY if owner_id == 0 else Kit.TEAL if owner_id == local_id else Kit.ORANGE)
+			var pad: Dictionary = rules.state.pads[i]
+			var owner_color := Color("bd553b") if pad.owner == 0 else Color("267969") if pad.owner == local_id else Color("735589")
+			pads[i].material_override = Kit.material(owner_color)
+			var fill := pad_fills[i]
+			fill.visible = pad.progress > 0.0
+			fill.scale = Vector3(maxf(0.02, sqrt(pad.progress / 3.0)), 1, maxf(0.02, sqrt(pad.progress / 3.0)))
 	_effects()
 	_update_ghost()
 	_update_hud(delta)
 	if Input.is_action_just_pressed("pause") and rules.state.phase != "results":
-		paused_local = not paused_local
-		overlay.visible = paused_local
-		shade.visible = paused_local
-		_layout_hud.call_deferred()
-		pause_box.visible = paused_local
-		result_box.visible = false
-		if paused_local:
-			pause_box.find_children("*", "Button", true, false)[0].grab_focus()
+		_set_paused(not paused_local)
 	if rules.state.phase == "results" and not results_shown:
 		_show_results()
 
@@ -562,8 +595,9 @@ func _make_camera() -> void:
 	camera.fov = 64
 	camera.far = 115
 	add_child(camera)
-	if mode == "evacuation":
-		camera_yaw = -PI / 2
+	match mode:
+		"evacuation": camera_yaw = -PI / 2
+		"hauled", "seek": camera_yaw = PI
 	_camera(1)
 
 func _camera(delta: float) -> void:
@@ -574,18 +608,35 @@ func _camera(delta: float) -> void:
 	if Input.is_action_just_pressed("recenter_camera"):
 		camera_yaw = actor.facing
 	var target: Vector3 = actor.position + Vector3(0, 0.8, 0)
-	var offset := Vector3(sin(camera_yaw) * 7.5, 6.0 if reduced else 4.8, cos(camera_yaw) * 7.5)
+	var chase_distance := 6.6 if not reduced else 7.5
+	var offset := Vector3(sin(camera_yaw) * chase_distance, 6.0 if reduced else 4.6, cos(camera_yaw) * chase_distance)
 	var query := PhysicsRayQueryParameters3D.create(target, target + offset, 1)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	var desired: Vector3 = hit.position.lerp(target, 0.15) if not hit.is_empty() else target + offset
 	# Keep the chase camera inside cutaway office walls at edge checkpoints.
 	# This also keeps wall lights out of the foreground at the starting grid.
-	if mode == "evacuation":
+	if mode != "pizza":
 		desired.x = clampf(desired.x, -23, 23)
+		if mode != "evacuation":
+			desired.z = clampf(desired.z, -23.5, 23.5)
 	camera.position = camera.position.lerp(desired, 1.0 - exp(-7 * delta))
 	if camera.position.distance_to(target) > 0.01:
 		camera.look_at(target)
 	camera.fov = lerpf(camera.fov, 64.0 if reduced else 68.0 if actor.boost_active else 64.0, 1.0 - exp(-4 * delta))
+
+func _set_paused(value: bool) -> void:
+	if results_shown:
+		return
+	paused_local = value
+	overlay.visible = value
+	shade.visible = value
+	pause_box.visible = value
+	result_box.hide()
+	if touch:
+		touch.visible = not value
+	if value:
+		pause_box.find_children("*", "Button", true, false)[0].grab_focus()
+	_layout_hud.call_deferred()
 
 func _make_hud() -> void:
 	var layer := CanvasLayer.new()
@@ -595,17 +646,32 @@ func _make_hud() -> void:
 	hud_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.theme = UI.theme()
 	layer.add_child(hud_root)
+	mode_accent = UI.MODE_ACCENTS[mode]
 	dashboard = PanelContainer.new()
 	dashboard.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(dashboard)
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 3)
 	dashboard.add_child(stack)
-	hud = UI.heading(stack, "", 24)
-	clock = UI.heading(stack, "00:00", 43)
-	UI.rule(stack)
-	objective = UI.label(stack, "", 13)
+	hud = UI.heading(stack, "", 21, mode_accent)
+	clock = UI.heading(stack, "00:00", 40, UI.PAPER)
+	objective = UI.label(stack, "", 15, UI.PAPER)
 	objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	progress = ProgressBar.new()
+	progress.custom_minimum_size.y = 5
+	progress.show_percentage = false
+	progress.add_theme_stylebox_override("fill", UI.style(mode_accent, 0, 0))
+	progress.add_theme_stylebox_override("background", UI.style(Color("4c5e58"), 0, 0))
+	stack.add_child(progress)
+	direction_panel = PanelContainer.new()
+	direction_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_root.add_child(direction_panel)
+	var bearing := HBoxContainer.new()
+	bearing.alignment = BoxContainer.ALIGNMENT_CENTER
+	bearing.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	direction_panel.add_child(bearing)
+	direction_arrow = UI.heading(bearing, "↑", 23, mode_accent)
+	direction_label = UI.label(bearing, "", 13, UI.PAPER)
 	boost_panel = PanelContainer.new()
 	boost_panel.add_theme_stylebox_override("panel", UI.style(UI.INK, 3, 13))
 	hud_root.add_child(boost_panel)
@@ -619,13 +685,13 @@ func _make_hud() -> void:
 	meter.add_theme_stylebox_override("background", UI.style(Color("526455"), 0, 0))
 	reserve.add_child(meter)
 	speed_panel = PanelContainer.new()
-	speed_panel.add_theme_stylebox_override("panel", UI.style(UI.PAPER, 3, 12))
+	speed_panel.add_theme_stylebox_override("panel", UI.instrument(mode_accent))
 	hud_root.add_child(speed_panel)
 	var speedometer := VBoxContainer.new()
 	speedometer.add_theme_constant_override("separation", -3)
 	speed_panel.add_child(speedometer)
-	speed_label = UI.heading(speedometer, "00", 39)
-	UI.label(speedometer, "CHAIR SPEED / KM/H", 10, UI.MUTED)
+	speed_label = UI.heading(speedometer, "00", 39, UI.PAPER)
+	UI.label(speedometer, "KM/H", 11, UI.PAPER)
 	notice = UI.label(hud_root, "", 14, UI.PAPER)
 	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	notice.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -638,11 +704,19 @@ func _make_hud() -> void:
 	var countdown := VBoxContainer.new()
 	countdown.add_theme_constant_override("separation", -8)
 	countdown_card.add_child(countdown)
-	UI.heading(countdown, "CLOCK OUT IN", 22).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UI.heading(countdown, {"evacuation": "CLOCK OUT IN", "hauled": "SHIFT STARTS IN", "seek": "SHOP OPENS IN", "pizza": "KITCHEN OPENS IN"}[mode], 22).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	countdown_label = UI.heading(countdown, "3", 76)
 	countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if _touch_enabled():
-		_touch_controls(hud_root)
+		touch = Touch.new()
+		touch.driver = input
+		touch.labels = PackedStringArray(["BOOST", "BRAKE", "GRAB" if mode == "hauled" else "USE" if mode == "seek" else "HOP", "SCAN" if mode == "seek" else "FORT" if mode == "pizza" else "ITEM"])
+		if mode == "hauled":
+			touch.labels.resize(3)
+		hud_root.add_child(touch)
+		touch.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		pause_button = UI.button(hud_root, "Pause", _set_paused.bind(true))
+		pause_button.size = Vector2(86, 44)
 	shade = ColorRect.new()
 	shade.color = Color(0.065, 0.10, 0.085, 0.72)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -663,7 +737,7 @@ func _make_hud() -> void:
 	UI.rule(pause_box)
 	var pause_note := UI.label(pause_box, "The office keeps moving during LAN play." if session.active else "Your shift can wait. Take your time.", 14)
 	pause_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	UI.primary(pause_box, "RESUME   ↗", func(): paused_local = false; overlay.hide(); shade.hide())
+	UI.primary(pause_box, "RESUME   ↗", _set_paused.bind(false))
 	UI.button(pause_box, "Settings", func():
 		var settings = load("res://scripts/Settings.gd").new()
 		settings.office_style = true
@@ -677,6 +751,8 @@ func _make_hud() -> void:
 	contents.add_child(result_box)
 	overlay.hide()
 	shade.hide()
+	speed_panel.resized.connect(_layout_hud)
+	boost_panel.resized.connect(_layout_hud)
 	hud_root.resized.connect(_layout_hud)
 	get_window().size_changed.connect(_fit_window)
 	_fit_window()
@@ -688,24 +764,24 @@ func _fit_window() -> void:
 func _layout_hud() -> void:
 	var bounds := hud_root.size
 	var compact := bounds.x < 760
-	var touch := is_instance_valid(touch_direction)
-	var controls_height := 132 if compact and touch else 76 if touch else 0
+	var controls_height := 140 if touch else 0
 	dashboard.position = Vector2(18, 18)
-	dashboard.size.x = minf(262, bounds.x - 36)
-	boost_panel.position = Vector2(18, bounds.y - controls_height - 79)
-	speed_panel.position = Vector2(bounds.x - 152, bounds.y - controls_height - 93)
+	dashboard.size.x = minf(235 if compact else 300, bounds.x - 36)
+	boost_panel.position = Vector2(18, bounds.y - controls_height - boost_panel.size.y - 18)
+	speed_panel.position = Vector2(bounds.x - speed_panel.size.x - 18, bounds.y - controls_height - speed_panel.size.y - 18)
+	if pause_button:
+		pause_button.position = Vector2(bounds.x - pause_button.size.x - 18, 18)
+	direction_panel.position.y = 73 if pause_button else 18
+	direction_panel.position.x = bounds.x - direction_panel.size.x - 18
 	var notice_width := minf(640, bounds.x - 36)
 	notice.position = Vector2((bounds.x - notice_width) * 0.5, bounds.y - controls_height - 157)
 	notice.size = Vector2(notice_width, 42)
-	countdown_card.size = Vector2(176, 143)
-	countdown_card.position = (bounds - countdown_card.size) * 0.5
+	countdown_card.size = Vector2(228, 143)
+	countdown_card.position = Vector2((bounds.x - countdown_card.size.x) * 0.5, 206 if compact else 40)
 	var active_box := pause_box if paused_local else result_box
 	var overlay_height := clampf(active_box.get_combined_minimum_size().y + 52, 230, maxf(230, bounds.y - 36))
 	overlay.size = Vector2(minf(510, bounds.x - 36), overlay_height)
 	overlay.position = (bounds - overlay.size) * 0.5
-	if touch:
-		touch_direction.position = Vector2(18, bounds.y - (135 if compact else 64))
-		touch_actions.position = Vector2(maxf(18, bounds.x - touch_actions.get_combined_minimum_size().x - 18), bounds.y - 58)
 
 func _touch_enabled() -> bool:
 	if Prefs.touch_mode() == "on": return true
@@ -715,63 +791,105 @@ func _touch_enabled() -> bool:
 		return bool(Engine.get_singleton("JavaScriptBridge").eval("navigator.maxTouchPoints > 0"))
 	return Prefs.touch_enabled()
 
-func _touch_controls(root: Control) -> void:
-	var row := HBoxContainer.new()
-	touch_direction = row
-	root.add_child(row)
-	for direction in [Vector2.LEFT, Vector2.UP, Vector2.DOWN, Vector2.RIGHT]:
-		var b := UI.button(row, "<" if direction == Vector2.LEFT else "^" if direction == Vector2.UP else "v" if direction == Vector2.DOWN else ">", func(): pass)
-		b.custom_minimum_size = Vector2(64, 64)
-		b.button_down.connect(func(): input.touch_move = direction)
-		b.button_up.connect(func(): input.touch_move = Vector2.ZERO)
-	var actions := HBoxContainer.new()
-	touch_actions = actions
-	root.add_child(actions)
-	for title in ["BOOST", "DRIFT", "E", "Q"]:
-		var b := UI.button(actions, title, func(): pass)
-		b.button_down.connect(func():
-			match title:
-				"BOOST": input.touch_boost = true
-				"DRIFT": input.touch_drift = true
-				"E": input.touch_hop = true
-				"Q": input.touch_item = true
-		)
-		b.button_up.connect(func():
-			match title:
-				"BOOST": input.touch_boost = false
-				"DRIFT": input.touch_drift = false
-		)
-
 func _update_hud(delta: float) -> void:
 	var actor = actors[local_id]
 	var state: Dictionary = rules.state
 	meter.value = actor.boost_charge
-	hud.text = {"evacuation": "TIME TRIAL" if trial else "EVACUATION", "hauled": "HAULED", "seek": "SHOP & SEEK", "pizza": "PIZZA COLONY"}[mode]
+	hud.text = "TIME TRIAL" if trial else UI.MODE_NAMES[mode].to_upper()
 	clock.text = "%02d:%02d" % [int(state.remaining) / 60, int(state.remaining) % 60]
 	if trial:
 		clock.text = "%02d:%05.2f" % [int(state.elapsed) / 60, fmod(state.elapsed, 60)]
-	clock.add_theme_color_override("font_color", Color("a83a19") if not trial and state.remaining < 20 else Color.BLACK if high_contrast else UI.INK)
+	clock.add_theme_color_override("font_color", Color("ffae91") if not trial and state.remaining < 20 else UI.PAPER)
 	boost_label.text = "COFFEE RESERVE  %d%%" % int(actor.boost_charge)
 	speed_label.text = "%02d" % int(Vector2(actor.velocity.x, actor.velocity.z).length() * 3.6)
 	countdown_card.visible = state.phase == "countdown" and not paused_local
-	countdown_label.text = str(maxi(1, ceili(rules.countdown)))
+	var count := maxi(1, ceili(rules.countdown)) if state.phase == "countdown" else 0
+	countdown_label.text = str(count)
+	if not test_mode and count != last_countdown:
+		if count > 0:
+			AudioManager.play_sfx("countdown_tick")
+		elif state.phase == "running":
+			AudioManager.play_sfx("go_horn")
+	last_countdown = count
+	var seconds := ceili(state.remaining)
+	if not test_mode and not trial and last_seconds > 10 and seconds <= 10:
+		AudioManager.play_sfx("low_time")
+	last_seconds = seconds
+	var guide := ""
 	match mode:
 		"evacuation":
-			var place := 1
-			for rival in actors.values():
-				if course.progress(rival.position, rival.checkpoint) > course.progress(actor.position, actor.checkpoint):
-					place += 1
-			objective.text = "POSITION  %d / %d\nFLOOR %d  /  %s" % [place, actors.size(), 4 - mini(3, actor.checkpoint / 8), course.zone_names[mini(3, actor.checkpoint / 8)].capitalize()]
+			var place := _race_position()
+			var zone := mini(3, actor.checkpoint / 8)
+			objective.text = "Position %d of %d  ·  Floor %d\n%s" % [place, actors.size(), 4 - zone, course.zone_names[zone].capitalize()]
 			if actor.item_kind != "":
-				objective.text += "\nQ  /  " + actor.item_kind.replace("_", " ")
-			objective.text += "\nNEXT CHECKPOINT %dm" % int(actor.position.distance_to(course.points[mini(actor.checkpoint + 1, course.points.size() - 1)]))
-		"hauled": objective.text = "%s · INTEGRITY %d%%\nDELIVERED %d / 3 · E grab / release" % [state.cargo_kind, state.cargo_health, state.delivered]
-		"seek": objective.text = "%s · LIST %d / 5 · STRIKES %d / 3\nE collect / disguise · Q scanner" % [str(state.roles.get(local_id, "shopper")).to_upper(), state.collected.get(local_id, []).size(), state.caught.get(local_id, 0)]
-		"pizza": objective.text = "YOUR SLICES %d / 12 · CHEESE %d\nStay on a tile to claim · Q build a fort" % [state.players.get(local_id, {"score": 0}).score, state.cheese.get(local_id, 0)]
-	if mode == "seek" and state.roles.get(local_id, "shopper") == "shopper":
-		objective.text += "\nNEXT: " + ["Plant", "Printer", "Water cooler", "File cabinet", "Vending machine", "Checkout complete"][mini(5, state.collected.get(local_id, []).size())]
+				objective.text += "\nReady: " + actor.item_kind.replace("_", " ").capitalize()
+			guide = "Checkpoint"
+			progress.value = course.progress(actor.position, actor.checkpoint) / course.total_length * 100
+		"hauled":
+			var carrying: bool = state.holders.has(local_id)
+			objective.text = "%s\n%d of 3 delivered  ·  %d%% integrity" % [state.cargo_kind.capitalize(), state.delivered, state.cargo_health]
+			guide = "Delivery bay" if carrying else "Cargo"
+			progress.value = state.cargo_health
+		"seek":
+			var role: String = state.roles.get(local_id, "shopper")
+			if touch:
+				var role_labels := PackedStringArray(["BOOST", "BRAKE", "HIDE" if role == "hider" else "TAKE"])
+				if role == "seeker":
+					role_labels = PackedStringArray(["BOOST", "BRAKE", "", "SCAN"])
+				touch.update_labels(role_labels)
+			var collected: int = state.collected.get(local_id, []).size()
+			match role:
+				"shopper":
+					objective.text = "Shopping list %d of 5\nSecurity strikes %d of 3" % [collected, state.caught.get(local_id, 0)]
+					if collected < 5:
+						guide = ["Plant", "Printer", "Water cooler", "File cabinet", "Vending machine"][collected]
+					progress.value = collected * 20
+				"seeker":
+					var remaining: float = rules.hide_time_remaining()
+					var cooldown: float = state.scan.get(local_id, 0.0)
+					objective.text = "Seeker\nHiding time  %ds" % ceili(remaining) if remaining > 0 else "Seeker\n" + ("Scanner ready" if cooldown <= 0 else "Scanner recharging  %ds" % ceili(cooldown))
+					progress.value = 100 - cooldown * 20
+				"hider":
+					objective.text = "Hider\n" + ("Disguised · move to reveal" if state.disguises.has(local_id) else "Use a nearby display to disguise")
+					progress.value = 100 * state.elapsed / maxf(1.0, state.elapsed + state.remaining)
+		"pizza":
+			var slices: int = state.players.get(local_id, {"score": 0}).score
+			var cheese: int = state.cheese.get(local_id, 0)
+			objective.text = "%d of 12 slices  ·  %d cheese\n%s" % [slices, cheese, "Hold a tile to claim it" if state.players[local_id].alive else "Eliminated · spectating"]
+			progress.value = slices / 12.0 * 100
+	_update_direction(guide, actor.position)
 	notice_time = maxf(0, notice_time - delta)
 	notice.visible = notice_time > 0
+
+func _race_position() -> int:
+	var local = actors[local_id]
+	var place := 1
+	for id in actors:
+		if id == local_id:
+			continue
+		var rival = actors[id]
+		if local.finish_time >= 0:
+			if rival.finish_time >= 0 and rival.finish_time < local.finish_time:
+				place += 1
+		elif rival.finish_time >= 0 or course.progress(rival.position, rival.checkpoint) > course.progress(local.position, local.checkpoint):
+			place += 1
+	return place
+
+func _update_direction(label: String, from: Vector3) -> void:
+	direction_panel.visible = not label.is_empty() and rules.state.phase != "results"
+	if not direction_panel.visible:
+		return
+	var offset := checkpoint_marker.position - from
+	offset.y = 0
+	var forward := -camera.global_basis.z
+	forward.y = 0
+	var angle := atan2(offset.dot(camera.global_basis.x), offset.dot(forward.normalized()))
+	direction_arrow.text = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"][posmod(roundi(angle / (PI / 4)), 8)]
+	var description := "%s  %dm" % [label, roundi(offset.length())]
+	if direction_label.text != description:
+		direction_label.text = description
+		direction_panel.reset_size()
+		direction_panel.position.x = hud_root.size.x - direction_panel.size.x - 18
 
 func _show_results() -> void:
 	results_shown = true
@@ -779,16 +897,37 @@ func _show_results() -> void:
 	overlay.show()
 	shade.show()
 	countdown_card.hide()
+	if touch:
+		touch.hide()
+		pause_button.hide()
 	pause_box.hide()
 	result_box.show()
-	UI.label(result_box, "DEPARTURE REPORT", 12, UI.MUTED)
+	UI.label(result_box, {"evacuation": "RACE RESULTS", "hauled": "DELIVERY REPORT", "seek": "SHOP & SEEK RESULTS", "pizza": "SLICE COUNT"}[mode], 12, UI.MUTED)
 	UI.heading(result_box, rules.state.headline.to_upper(), 38).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	UI.rule(result_box)
 	var ranking := actors.keys()
-	ranking.sort_custom(func(a, b): return rules.state.players[a].score > rules.state.players[b].score)
+	ranking.sort_custom(func(a, b): return _result_rank(a) > _result_rank(b))
+	if not test_mode:
+		var won: bool = ranking[0] == local_id
+		match mode:
+			"evacuation": won = won and actors[local_id].finish_time >= 0
+			"hauled": won = rules.state.delivered >= 3
+			"seek":
+				var local_role: String = rules.state.roles.get(local_id, "")
+				if session.active:
+					won = (local_role == "hider" and rules.state.headline == "HIDERS WIN") or (local_role == "seeker" and rules.state.headline == "EVERYONE HAS BEEN FOUND")
+				else:
+					won = rules.state.headline == "CHECKOUT COMPLETE"
+			"pizza": won = won and rules.state.players[local_id].alive
+		AudioManager.play_sfx("victory" if won else "defeat")
 	for id in ranking:
 		var actor = actors[id]
-		var score := ("%.2fs" % actor.finish_time if actor.finish_time >= 0 else "Did not finish") if mode == "evacuation" else "%d pts" % rules.state.players[id].score
+		var score := ""
+		match mode:
+			"evacuation": score = "%.2fs" % actor.finish_time if actor.finish_time >= 0 else "Did not finish"
+			"seek": score = "%d %s" % [rules.state.players[id].score, "items" if not session.active else "found"]
+			"pizza": score = "%d slices" % rules.state.players[id].score
+			_: score = "%d pts" % rules.state.players[id].score
 		var row := HBoxContainer.new()
 		result_box.add_child(row)
 		UI.heading(row, "%02d" % (ranking.find(id) + 1), 23, UI.TEAL if id == local_id else UI.MUTED)
@@ -810,6 +949,20 @@ func _show_results() -> void:
 	UI.button(result_box, "Back to the office", _leave)
 	result_box.find_children("*", "Button", true, false)[0].grab_focus()
 	_layout_hud.call_deferred()
+
+func _result_rank(id: int) -> float:
+	var player: Dictionary = rules.state.players[id]
+	match mode:
+		"evacuation":
+			var actor = actors[id]
+			return course.total_length + 180 - actor.finish_time if actor.finish_time >= 0 else course.progress(actor.position, actor.checkpoint)
+		"pizza":
+			return float(player.score) + (13.0 if player.alive else 0.0)
+		"seek":
+			var escaped: bool = rules.state.headline == "HIDERS WIN" and rules.state.roles[id] == "hider"
+			return float(player.score) + (100.0 if escaped else 0.0)
+		_:
+			return float(player.score)
 
 func _update_ghost() -> void:
 	if not ghost or previous_ghost.size() < 2:
@@ -902,15 +1055,17 @@ func _refresh_preferences() -> void:
 	for actor in actors.values():
 		actor.visual.reduced_motion = reduced_motion
 	if hud:
-		hud.add_theme_color_override("font_color", Color.BLACK if high_contrast else UI.INK)
-		objective.add_theme_color_override("font_color", Color.BLACK if high_contrast else UI.INK)
+		for instrument in [dashboard, direction_panel, speed_panel, boost_panel]:
+			instrument.add_theme_stylebox_override("panel", UI.instrument(mode_accent, high_contrast))
 	var config := ConfigFile.new()
 	config.load("user://settings.cfg")
 	var quality := int(config.get_value("graphics", "quality", 0))
 	for sun in find_children("OfficeSun", "DirectionalLight3D", true, false):
 		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 		sun.directional_shadow_max_distance = 28 if quality == 0 else 42
-	get_viewport().scaling_3d_scale = 0.75 if quality == 0 else 1.0
+	var viewport := get_viewport()
+	viewport.scaling_3d_scale = 0.85 if quality == 0 and (_touch_enabled() or OS.has_feature("web")) else 1.0
+	viewport.msaa_3d = Viewport.MSAA_2X if quality > 0 else Viewport.MSAA_DISABLED
 
 func _input(event: InputEvent) -> void:
 	Prefs.note_device(event)

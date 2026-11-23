@@ -38,15 +38,19 @@ func run() -> void:
 	await settle()
 	check(launch.actions.get_rect().end.y < launch.root.size.y, "Portrait launch action must stay on screen")
 	check(launch.nav_bar.get_rect().end.x <= launch.root.size.x, "Portrait navigation must fit")
+	check(launch.hero.visible and launch.hero.texture == launch.KEY_ART[0], "Selected mode shows its key art")
 	launch._open_page("coworker")
 	await settle()
 	check(launch.panel.find_children("*", "OptionButton", true, false).size() > 8, "Coworker customization must remain available")
+	check(not launch.hero.visible, "Coworker editor shows the 3D preview")
 	launch._open_page("settings")
 	await settle()
 	check(launch.root.find_child("SettingsSheet", true, false) != null, "Settings must open from the redesign")
 	launch.queue_free()
 	await settle()
-	root.size = Vector2i(1280, 720)
+	var launch_size := root.size
+	var previous_touch := OS.get_environment("FE_TOUCH")
+	OS.set_environment("FE_TOUCH", "1")
 	for mode in ["evacuation", "hauled", "seek", "pizza"]:
 		session.configuration.mode = mode
 		session.configuration.bots = 0
@@ -56,6 +60,17 @@ func run() -> void:
 		await settle()
 		check(game.countdown_card.visible, "Countdown must appear in " + mode)
 		check(game.clock.text.contains(":"), "Timer must render in " + mode)
+		check(game.dashboard.get_rect().end.x <= game.hud_root.size.x, "Portrait dashboard fits in " + mode)
+		if is_instance_valid(game.touch):
+			var controls: Control = game.touch
+			controls._touch(0, true, controls._center() + Vector2(30, 0))
+			controls._touch(1, true, controls._action_center(0))
+			check(game.input.touch_move.x > 0.0 and game.input.touch_boost, "Touch steering and boost can be held together")
+			controls._touch(0, false, Vector2.ZERO)
+			check(game.input.touch_move == Vector2.ZERO and game.input.touch_boost, "A second finger retains its action when steering is released")
+			game._set_paused(true)
+			check(not game.input.touch_boost and not controls.visible, "Pause clears held touch actions")
+			game._set_paused(false)
 		game.rules.state.phase = "results"
 		game.rules.state.headline = "The weekend is yours"
 		await settle()
@@ -63,5 +78,7 @@ func run() -> void:
 		check(game.result_box.find_children("*", "Button", true, false).size() >= 2, "Results must offer replay and exit")
 		game.queue_free()
 		await settle()
+	OS.set_environment("FE_TOUCH", previous_touch)
+	root.size = launch_size
 	print("VISUAL_REDESIGN_CHECK failures=", failures)
 	quit(1 if failures else 0)

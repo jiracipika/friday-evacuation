@@ -96,22 +96,25 @@ static func room(parent: Node3D, origin: Vector3, variant := 0) -> Node3D:
 			decor_box(room_root, Vector3(0.8, 0.14, 3), Vector3(side * 21.7, 3.6, z), Color("fff1c9"))
 	return room_root
 
-static func environment(parent: Node3D) -> void:
+static func environment(parent: Node3D, mode := "evacuation") -> void:
 	var world := WorldEnvironment.new()
 	world.name = "WorldEnvironment"
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color("a3b1a7")
+	env.background_color = {
+		"evacuation": Color("687c87"), "hauled": Color("4f6378"),
+		"seek": Color("98a9ab"), "pizza": Color("774b47")
+	}[mode]
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("c5d0da")
-	env.ambient_light_energy = 0.42
+	env.ambient_light_energy = 0.46
 	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	world.environment = env
 	parent.add_child(world)
 	var sun := DirectionalLight3D.new()
 	sun.name = "OfficeSun"
-	sun.rotation_degrees = Vector3(-48, -28, 0)
-	sun.light_color = Color("fff0d8")
+	sun.rotation_degrees = Vector3(-56, -32, 0)
+	sun.light_color = Color("e4efff") if mode == "hauled" else Color("ffdfb7")
 	sun.light_energy = 0.55
 	sun.shadow_enabled = true
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS

@@ -11,7 +11,14 @@ const Skins = preload("res://scripts/ChairSkins.gd")
 const Save = preload("res://scripts/overhaul/OverhaulSave.gd")
 const MODES := ["evacuation", "hauled", "seek", "pizza"]
 const NAMES := ["Evacuation", "Hauled", "Shop & Seek", "Pizza Colony"]
-const DESCRIPTIONS := ["Four floors. One weekend. Race your coworkers to the parking lot, or chase your ghost.", "Grab the cargo, mind the corners. Deliver three very questionable office appliances together.", "Shop the supply list while avoiding security. In a LAN party, become a prop and hide from the scanner.", "Claim slices, build cheese forts and dodge the pizza cutter. Also: the chef has had enough."]
+const KEY_ART := [
+	preload("res://assets/mode_art/evacuation.webp"),
+	preload("res://assets/mode_art/hauled.webp"),
+	preload("res://assets/mode_art/seek.webp"),
+	preload("res://assets/mode_art/pizza.webp"),
+]
+const SOLO_ACTIONS := ["START RACE", "START DELIVERY", "START SHOPPING", "START SHIFT"]
+const DESCRIPTIONS := ["Race down four office floors to the parking lot. Time Trial lets you race your own ghost.", "Deliver three troublesome packages. Carry with a coworker for more speed and brake before corners.", "Collect the shopping list and dodge security. In a local party, hide as a store display or scan for hiders.", "Hold a pepperoni tile to claim it. Build forts with cheese and stay clear of the cutter."]
 var session: Node
 var panel: VBoxContainer
 var message_label: Label
@@ -29,7 +36,8 @@ var sheet: ColorRect
 var nav_bar: HBoxContainer
 var card: PanelContainer
 var footer: VBoxContainer
-var ticket: PanelContainer
+var hero: TextureRect
+var hero_edge: ColorRect
 var nav_backdrop: ColorRect
 var actions: VBoxContainer
 var setup_open := false
@@ -94,8 +102,16 @@ func _build_ui() -> void:
 	sheet.color = UI.PAPER
 	sheet.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(sheet)
+	hero = TextureRect.new()
+	hero.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hero.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	hero.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	root.add_child(hero)
+	hero_edge = ColorRect.new()
+	hero_edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(hero_edge)
 	var header := ColorRect.new()
-	header.color = UI.PAPER
+	header.color = UI.INK
 	header.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	header.offset_bottom = 76
 	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -107,9 +123,9 @@ func _build_ui() -> void:
 	mark.add_theme_stylebox_override("panel", UI.style(UI.ORANGE, 2, 5))
 	brand.add_child(mark)
 	UI.heading(mark, "↗", 28)
-	UI.heading(brand, "FRIDAY 5PM", 32)
+	UI.heading(brand, "FRIDAY 5PM", 32, UI.PAPER)
 	nav_backdrop = ColorRect.new()
-	nav_backdrop.color = UI.PAPER
+	nav_backdrop.color = UI.INK
 	nav_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(nav_backdrop)
 	nav_bar = HBoxContainer.new()
@@ -134,20 +150,12 @@ func _build_ui() -> void:
 	actions = VBoxContainer.new()
 	actions.add_theme_constant_override("separation", 8)
 	root.add_child(actions)
-	ticket = PanelContainer.new()
-	ticket.add_theme_stylebox_override("panel", UI.style(UI.INK, 2, 16))
-	root.add_child(ticket)
-	var stamp := VBoxContainer.new()
-	stamp.add_theme_constant_override("separation", 0)
-	ticket.add_child(stamp)
-	UI.label(stamp, "FRIDAY  /  LOCAL TIME", 11, UI.PAPER)
-	UI.heading(stamp, "16:59", 56, UI.PAPER)
 	footer = VBoxContainer.new()
 	footer.add_theme_constant_override("separation", 2)
 	root.add_child(footer)
 	status_label = UI.label(footer, "", 12, UI.INK)
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	message_label = UI.label(footer, "SOLO IN BROWSER  /  LOCAL MULTIPLAYER ON DESKTOP", 10, UI.MUTED)
+	message_label = UI.label(footer, "", 12, UI.MUTED)
 	message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 func _fit_window() -> void:
@@ -162,10 +170,17 @@ func _layout() -> void:
 	var inset := 24.0 if compact else 36.0
 	var column := width - 2 * inset if compact else 440.0
 	var portrait_preview := compact and wardrobe
-	var top := 374.0 if portrait_preview else 146.0 if compact else 100.0
-	var bottom := height - 174.0 if home else height - 62.0
+	var top := 374.0 if portrait_preview else 345.0 if compact and home else 146.0 if compact else 107.0
+	var bottom := height - 167.0 if home else height - 62.0
 	sheet.position.y = top if portrait_preview else 0.0
 	sheet.size = Vector2(width if compact else 512, height - sheet.position.y)
+	hero.position = Vector2(0, 134) if compact else Vector2(516, 76)
+	hero.size = Vector2(width, 194) if compact else Vector2(width - 516, height - 76)
+	hero.visible = home
+	hero_edge.visible = home
+	hero_edge.color = UI.MODE_ACCENTS[MODES[selected_mode]]
+	hero_edge.position = Vector2(0, 328) if compact else Vector2(512, 76)
+	hero_edge.size = Vector2(width, 4) if compact else Vector2(4, height - 76)
 	nav_backdrop.position.y = 76
 	nav_backdrop.size = Vector2(width, 58 if compact else 0)
 	if portrait_preview:
@@ -183,8 +198,6 @@ func _layout() -> void:
 	actions.visible = home
 	footer.position = Vector2(inset, height - 47)
 	footer.size.x = column
-	ticket.position = Vector2(width - 190, 100)
-	ticket.visible = not compact and not wardrobe
 
 func _open_page(key: String) -> void:
 	if key == "settings":
@@ -218,10 +231,11 @@ func _clear() -> void:
 	panel.get_parent().scroll_vertical = 0
 	for key in nav:
 		var selected: bool = key == page
-		nav[key].add_theme_stylebox_override("normal", UI.outlined(UI.INK, UI.INK) if selected else UI.outlined(UI.PAPER))
-		nav[key].add_theme_color_override("font_color", UI.PAPER if selected else UI.INK)
-		nav[key].add_theme_stylebox_override("hover", UI.outlined(UI.INK.lightened(0.12), UI.INK) if selected else UI.outlined(UI.PAPER.darkened(0.06)))
-		nav[key].add_theme_color_override("font_hover_color", UI.PAPER if selected else UI.INK)
+		var tab_color := UI.PAPER if selected else UI.INK
+		nav[key].add_theme_stylebox_override("normal", UI.outlined(tab_color, Color("667772")))
+		nav[key].add_theme_stylebox_override("hover", UI.outlined(tab_color.lightened(0.12), UI.PAPER))
+		for state in ["font_color", "font_focus_color", "font_hover_color"]:
+			nav[key].add_theme_color_override(state, UI.INK if selected else UI.PAPER)
 	_layout.call_deferred()
 
 func _refresh_page() -> void:
@@ -236,11 +250,14 @@ func _show_play() -> void:
 	if setup_open:
 		_show_setup()
 		return
-	UI.label(panel, "OFFICE CHAIR RACING  /  AFTER HOURS", 12, UI.MUTED)
-	var title := UI.heading(panel, "THE WEEKEND\nWON'T WAIT.", 55)
-	title.add_theme_constant_override("line_spacing", -15)
+	hero.texture = KEY_ART[selected_mode]
+	UI.heading(panel, NAMES[selected_mode].to_upper(), 51)
+	var description := Label.new()
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	description.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	description.text = DESCRIPTIONS[selected_mode]
+	panel.add_child(description)
 	UI.rule(panel)
-	UI.label(panel, "CHOOSE YOUR EXIT STRATEGY", 12, UI.MUTED)
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 8)
@@ -251,26 +268,22 @@ func _show_play() -> void:
 		var mode_button := UI.button(grid, NAMES[index].to_upper() + "\n" + MODE_DETAILS[index], _select_mode.bind(index))
 		mode_button.name = "Mode_" + MODES[index]
 		mode_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		mode_button.custom_minimum_size.y = 59
+		mode_button.custom_minimum_size.y = 68
 		mode_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		mode_button.tooltip_text = DESCRIPTIONS[index]
 		mode_button.add_theme_font_override("font", UI.DISPLAY)
 		mode_button.add_theme_font_size_override("font_size", 19)
 		if selected:
-			mode_button.add_theme_stylebox_override("normal", UI.outlined(UI.INK, UI.INK))
-			mode_button.add_theme_stylebox_override("hover", UI.outlined(UI.INK.lightened(0.12), UI.INK))
+			var accent: Color = UI.MODE_ACCENTS[MODES[index]]
+			mode_button.add_theme_stylebox_override("normal", UI.instrument(accent))
+			mode_button.add_theme_stylebox_override("hover", UI.outlined(UI.INK.lightened(0.12), accent))
 			for state in ["font_color", "font_hover_color", "font_focus_color"]:
 				mode_button.add_theme_color_override(state, UI.PAPER)
-	var description := Label.new()
-	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	description.add_theme_font_size_override("font_size", 14)
-	description.text = DESCRIPTIONS[selected_mode]
-	panel.add_child(description)
 	var setup := UI.button(actions, _setup_summary() + "   /   SETUP →", func():
 		setup_open = true
 		_show_play())
 	setup.add_theme_font_size_override("font_size", 13)
-	UI.primary(actions, "CLOCK OUT   ↗", _launch_solo).name = "ClockOut"
+	UI.primary(actions, SOLO_ACTIONS[selected_mode] + "   ↗", _launch_solo).name = "ClockOut"
 	status_label.text = Roster.get_character(GameManager.selected_character_id).name + "  /  READY TO LEAVE"
 
 func _setup_summary() -> String:
@@ -298,7 +311,7 @@ func _show_setup() -> void:
 		UI.option(panel, ["Easy", "Normal", "Hard"], session.configuration.difficulty, func(i): session.configuration.difficulty = i)
 		UI.option(panel, ["4 AI coworkers", "3 AI coworkers", "2 AI coworkers", "1 AI coworker", "Solo"], 4 - int(session.configuration.bots), func(i): session.configuration.bots = 4 - i)
 	_profile()
-	UI.primary(panel, "CLOCK OUT   ↗", _launch_solo)
+	UI.primary(panel, SOLO_ACTIONS[selected_mode] + "   ↗", _launch_solo)
 	UI.label(panel, "WASD steer   /   SPACE boost   /   SHIFT drift", 12, UI.MUTED)
 
 func _profile() -> void:
@@ -439,7 +452,7 @@ func _start_game() -> void:
 
 func _process(delta: float) -> void:
 	rotation_time += delta
-	if preview:
+	if preview and not hero.visible:
 		preview.reduced_motion = reduced_motion
 		preview.animate(delta, 0, false, false, false, 0)
 		if not wardrobe and not reduced_motion:
