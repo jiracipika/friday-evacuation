@@ -1,6 +1,9 @@
 extends RefCounted
 ## Host-owned mode rules. State contains serializable values only.
-const Command = preload("res://scripts/overhaul/DrivingCommand.gd")
+const SEEK_HIDE_SECONDS := 8.0
+const SECONDS_TO_CLAIM := 3.0
+const CUTTER_RADIUS := 18.0
+const CARGO_NAMES := ["FRIDGE OF BEES", "HAUNTED SOFA", "WET CARDBOARD"]
 var mode := "evacuation"
 var elapsed := 0.0
 var countdown := 3.0
@@ -34,6 +37,17 @@ func add_player(id: int) -> void:
 	state.cheese[id] = 3
 	state.scan[id] = 0.0
 
+func hide_time_remaining() -> float:
+	if mode != "seek" or not game.session.active:
+		return 0.0
+	return maxf(0.0, SEEK_HIDE_SECONDS - elapsed)
+
+func can_drive(id: int) -> bool:
+	var player: Dictionary = state.players.get(id, {})
+	if state.phase != "running" or not player.get("alive", false):
+		return false
+	return state.roles.get(id, "") != "seeker" or hide_time_remaining() == 0.0
+
 func tick(delta: float) -> void:
 	if finished:
 		return
@@ -41,7 +55,7 @@ func tick(delta: float) -> void:
 		countdown -= delta
 		if countdown <= 0:
 			state.phase = "running"
-			game.announce("GO! The weekend is waiting.")
+			game.announce("Find a display to hide. Seekers are held for %ds." % int(SEEK_HIDE_SECONDS) if hide_time_remaining() > 0 else "GO!")
 		return
 	elapsed += delta
 	state.elapsed = elapsed
@@ -52,7 +66,11 @@ func tick(delta: float) -> void:
 		"seek": _seek(delta)
 		"pizza": _pizza(delta)
 	if state.remaining <= 0:
-		end("SHIFT COMPLETE" if mode == "pizza" else "THE CLOCK WON")
+		match mode:
+			"seek": end("HIDERS WIN" if game.session.active else "STORE CLOSED")
+			"hauled": end("DELIVERY WINDOW CLOSED")
+			"pizza": end("SERVICE COMPLETE")
+			_: end("THE CLOCK WON")
 
 func _race(_delta: float) -> void:
 	for id in game.actors:
@@ -89,7 +107,7 @@ func _race(_delta: float) -> void:
 		end("OFF THE CLOCK")
 
 func interact(id: int, hop: bool, item: bool) -> void:
-	if finished or countdown > 0 or not game.actors.has(id):
+	if not can_drive(id) or not game.actors.has(id):
 		return
 	var actor = game.actors[id]
 	match mode:
@@ -165,7 +183,7 @@ func _hauled(delta: float) -> void:
 	state.cargo_position = game.cargo.position
 	state.cargo_velocity = game.cargo.linear_velocity
 	var behavior := int(state.round) % 3
-	state.cargo_kind = ["FRIDGE OF BEES", "HAUNTED SOFA", "WET CARDBOARD"][behavior]
+	state.cargo_kind = CARGO_NAMES[behavior]
 	for id in game.actors:
 		game.actors[id].collision_mask = 1 if state.holders.has(id) else 5
 		game.actors[id].desired_speed = (0.66 if state.holders.size() == 1 else 0.85) if state.holders.has(id) else 1.0
@@ -173,6 +191,7 @@ func _hauled(delta: float) -> void:
 			state.cargo_health = maxf(0, state.cargo_health - delta * (6 if behavior == 2 else 2))
 	if state.cargo_health <= 0:
 		end("RETURN TO SENDER")
+		return
 	if behavior == 1 and fmod(elapsed, 8.0) > 7.0 and state.holders.is_empty():
 		game.cargo.apply_central_force((Vector3(-12, 0, -10) - game.cargo.position).normalized() * 18)
 	if behavior == 2:
@@ -194,7 +213,11 @@ func _hauled(delta: float) -> void:
 			state.holders.clear()
 			game.cargo.position = Vector3(-12, 1, -10)
 			game.cargo.linear_velocity = Vector3.ZERO
-			game.announce("DELIVERED! NEXT: " + ["FRIDGE OF BEES", "HAUNTED SOFA", "WET CARDBOARD"][int(state.round) % 3])
+			game.cargo.mass = 4
+			state.cargo_position = game.cargo.position
+			state.cargo_velocity = Vector3.ZERO
+			state.cargo_kind = CARGO_NAMES[int(state.round) % 3]
+			game.announce("DELIVERED! NEXT: " + state.cargo_kind)
 	for actor in game.actors.values():
 		if actor.position.y < -3:
 			actor.respawn()
@@ -203,6 +226,8 @@ func _seek(delta: float) -> void:
 	for id in state.scan:
 		state.scan[id] = maxf(0, state.scan[id] - delta)
 	if game.session.active:
+		if hide_time_remaining() > 0.0:
+			return
 		var hiders := 0
 		for id in game.actors:
 			if state.roles[id] == "hider":
@@ -211,7 +236,10 @@ func _seek(delta: float) -> void:
 			end("EVERYONE HAS BEEN FOUND")
 	else:
 		var player = game.actors[game.local_id]
-		var target: Vector3 = player.position if player.position.distance_to(state.chef) < 8 else Vector3(sin(elapsed * 0.2) * 14, 0.6, cos(elapsed * 0.2) * 13)
+		var patrol := Vector3(sin(elapsed * 0.2) * 14, 0.8, cos(elapsed * 0.2) * 13)
+		var guard_ray := PhysicsRayQueryParameters3D.create(state.chef + Vector3.UP * 0.5, player.position + Vector3.UP * 0.5, 1)
+		var sees_player: bool = player.position.distance_to(state.chef) < 8 and game.get_world_3d().direct_space_state.intersect_ray(guard_ray).is_empty()
+		var target: Vector3 = player.position if sees_player else patrol
 		target.y = 0.8
 		state.chef = game.sweep_agent(state.chef, state.chef.move_toward(target, 3.0 * delta))
 		if player.position.distance_to(state.chef) < 1.2 and player.immunity <= 0:
@@ -241,19 +269,9 @@ func _pizza(delta: float) -> void:
 		if fmod(elapsed, 12) > 3:
 			var ray := Vector2(cos(state.cutter), sin(state.cutter))
 			var pos := Vector2(actor.position.x, actor.position.z)
-			if absf(pos.cross(ray)) < 0.65 and pos.dot(ray) > 0 and actor.position.y < 1.7:
+			if absf(pos.cross(ray)) < 0.65 and pos.dot(ray) > 0 and pos.dot(ray) <= CUTTER_RADIUS and actor.position.y < 1.7:
 				actor.apply_hit(Vector3(ray.y * 4, 2, -ray.x * 4), 0.3)
-		for pad in state.pads:
-			if Vector2(actor.position.x - pad.p.x, actor.position.z - pad.p.z).length() < 1.5:
-				if pad.owner == id:
-					continue
-				if pad.claimant != id:
-					pad.progress = 0.0
-					pad.claimant = id
-				pad.progress += delta
-				if pad.progress >= 3:
-					pad.owner = id
-					pad.progress = 0
+	_claim_territory(delta)
 	if target_id:
 		var target: Vector3 = game.actors[target_id].position
 		target.y = 0.8
@@ -261,16 +279,43 @@ func _pizza(delta: float) -> void:
 		if nearest < 1.4:
 			var actor = game.actors[target_id]
 			actor.apply_hit((actor.position - state.chef).normalized() * 5, 0.4)
-	var alive := 0
+	var alive: Array[int] = []
 	for id in state.players:
 		state.players[id].score = 0
 		if state.players[id].alive:
-			alive += 1
+			alive.append(id)
 	for pad in state.pads:
 		if state.players.has(pad.owner):
 			state.players[pad.owner].score += 1
-	if alive == 0:
+	if alive.is_empty():
 		end("THE CHEF WINS")
+	elif alive.size() == 1 and state.players.size() > 1:
+		end(game.actors[alive[0]].display_name + " IS THE LAST RIDER")
+	else:
+		for id in alive:
+			if state.players[id].score == state.pads.size():
+				end(game.actors[id].display_name + " CLAIMED THE WHOLE PIE")
+				break
+
+func _claim_territory(delta: float) -> void:
+	for pad in state.pads:
+		var sole_rider := 0
+		for id in game.actors:
+			var offset: Vector3 = game.actors[id].position - pad.p
+			if not state.players[id].alive or absf(offset.y) > 1.3 or Vector2(offset.x, offset.z).length() >= 1.5:
+				continue
+			if sole_rider != 0:
+				sole_rider = 0
+				break
+			sole_rider = id
+		if sole_rider != pad.claimant or sole_rider == 0:
+			pad.claimant = sole_rider
+			pad.progress = 0.0
+		if sole_rider != 0 and sole_rider != pad.owner:
+			pad.progress += delta
+			if pad.progress >= SECONDS_TO_CLAIM:
+				pad.owner = sole_rider
+				pad.progress = 0.0
 
 func end(headline: String) -> void:
 	if finished:

@@ -1,23 +1,21 @@
 # Friday 5PM visual redesign
 
-The game takes its cues from an office at closing time. Warm paper carries the interface, dark ink organizes information, and safety orange marks the main action and course warnings.
+The launch screen shows key art, a short description, and launch options for each of the four modes. The Coworker tab uses a live 3D preview for rider customization, and the chair upholstery uses the rider’s accent colour across detail levels.
 
-The live launch screen shows all four modes and keeps Clock Out available while players browse. Race options live in setup. The Coworker tab keeps the live rider preview and the existing presets, chair skins, and appearance options.
+![Evacuation mode selection](launch.webp)
 
-![Launch screen and live office preview](launch.webp)
+The office floors have department signs and distinct floor finishes. Hauled takes place in a freight bay, Shop & Seek has stocked racks and cross-aisles, and Pizza Colony is set in a tiled pizzeria.
 
-Department colors, ramp signs, and loading bay and shop markings distinguish the spaces. The race HUD separates the timer and objective from chair speed and coffee reserve.
+![Evacuation race with checkpoint direction and progress](race.webp)
 
-![Evacuation race and HUD](race.webp)
+The in-match display pairs a mode-specific objective with an arrow and distance for the next checkpoint, cargo load, or shopping-list item. Pizza Colony shows capture progress on the tile itself. The touch layout supports steering and holding boost or brake at the same time.
 
-The departure report highlights the local player, places and finish times.
+![Pizza Colony with touch controls in portrait](pizza-touch.webp)
 
-![Departure report and replay options](results.webp)
-
-Run the visual UI regression check with:
+Run the scene, simulation, and LAN checks with:
 
 ```sh
-godot --headless --path . --script tools/overhaul/VisualRedesignCheck.gd -- --test-mode
+python3 tools/overhaul/verify.py
 ```
 
-Desktop screenshots were captured in Godot 4.6.3 using the generated courses. The existing avatar and baked course assets are retained in the repository.
+Screenshots were captured in Godot 4.7.2 with its Compatibility renderer.

@@ -27,6 +27,7 @@ func build(parent: Node3D, course: Resource, trial := false, use_baked := true) 
 				hazard.node = node
 				hazards.append(hazard)
 		Art.course_rooms(course, rooms)
+		Art.parking(stage)
 		return
 	Kit.environment(parent)
 	for zone in 4:
@@ -110,6 +111,7 @@ func build(parent: Node3D, course: Resource, trial := false, use_baked := true) 
 		hazard.node.set_meta("hazard", metadata)
 
 	Art.course_rooms(course, rooms)
+	Art.parking(parent)
 
 func _arrow(parent: Node3D, pos: Vector3, direction: Vector3) -> Node3D:
 	var node := Node3D.new()

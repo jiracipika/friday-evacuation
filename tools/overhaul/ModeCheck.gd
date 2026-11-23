@@ -95,8 +95,17 @@ func run() -> void:
 	else:
 		await open_mode("pizza")
 		check(await drive_to(game.rules.state.pads[0].p), "Reach pizza territory")
+		var pad: Dictionary = game.rules.state.pads[0]
+		var actor = game.actors[1]
+		var at_pad: Vector3 = actor.position
+		game.rules._claim_territory(1.0)
+		check(pad.progress > 0 and pad.owner == 0, "Partial claim shows progress")
+		actor.position = Vector3(6, 0.6, 0)
+		game.rules._claim_territory(0.1)
+		check(pad.progress == 0 and pad.claimant == 0, "Leaving a pad resets the claim")
+		actor.position = at_pad
 		for i in 190: await physics_frame
-		check(game.rules.state.pads[0].owner == 1, "Territory claimed after dwell")
+		check(pad.owner == 1, "Territory claimed after dwell")
 		game.input.touch_item = true
 		for i in 4: await physics_frame
 		check(game.rules.state.forts.size() == 1 and game.rules.state.cheese[1] < 3, "Fort spends authoritative cheese")

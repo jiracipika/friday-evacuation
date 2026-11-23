@@ -56,32 +56,33 @@ func configure(character_id: String, overrides: Dictionary, skin_id := "office_s
 	if skin_id == "office_standard":
 		chair.rotation.y = PI
 	add_child(chair)
-	for mesh in chair.find_children("*", "MeshInstance3D", true, false):
-		if skin_id == "office_standard":
-			mesh.visibility_range_end = 17
-			mesh.visibility_range_end_margin = 1
-		for surface in mesh.mesh.get_surface_count():
-			var source: Material = mesh.mesh.surface_get_material(surface)
-			if source and source.resource_name == "teal":
-				var cushion := source.duplicate() as StandardMaterial3D
-				cushion.albedo_color = Color(configured.shirt_color).darkened(0.15)
-				mesh.set_surface_override_material(surface, cushion)
 	if skin_id == "office_standard":
+		var upholstery := StandardMaterial3D.new()
+		upholstery.albedo_color = Color(configured.accent_color).darkened(0.27)
+		upholstery.roughness = 0.84
+		_finish_chair(chair, upholstery, 0, 17)
 		for level in [1, 2]:
 			var lod: Node3D = load("res://models/overhaul/office_chair_lod%d.glb" % level).instantiate()
 			lod.rotation.y = PI
 			add_child(lod)
-			for mesh in lod.find_children("*", "MeshInstance3D", true, false):
-				mesh.visibility_range_begin = 17 if level == 1 else 33
-				mesh.visibility_range_end = 33 if level == 1 else 90
-				mesh.visibility_range_begin_margin = 1
-				mesh.visibility_range_end_margin = 1
+			_finish_chair(lod, upholstery, 17 if level == 1 else 33, 33 if level == 1 else 90)
 	if character_id in ["it_iggy", "remote_ron"]:
 		# Headphone silhouette remains independent of hair selection.
 		var props = load("res://scripts/overhaul/OfficeKit.gd")
 		for side in [-1.0, 1.0]:
 			props.decor_box(self, Vector3(0.055, 0.16, 0.14), Vector3(side * 0.22, 1.52, 0.02), Color(configured.accent_color))
 	_play("Idle")
+
+func _finish_chair(model: Node3D, upholstery: StandardMaterial3D, near: float, far: float) -> void:
+	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		mesh.visibility_range_begin = near
+		mesh.visibility_range_end = far
+		mesh.visibility_range_begin_margin = 1
+		mesh.visibility_range_end_margin = 1
+		for surface in mesh.mesh.get_surface_count():
+			var source := mesh.mesh.surface_get_material(surface)
+			if source and source.resource_name.get_slice(".", 0) == "teal":
+				mesh.set_surface_override_material(surface, upholstery)
 
 func set_expression(expression: String) -> void:
 	if expression == applied_expression:

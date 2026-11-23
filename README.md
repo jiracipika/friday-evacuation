@@ -30,63 +30,28 @@ CI builds fresh artifacts on every push to `main` (see the `continuous` prerelea
 
 ### Controls
 
-Before every match, a briefing screen shows the full control map and pauses the game until you hit **I AGREE**. A quick recap also plays during the countdown. The active scheme (keyboard vs controller) is highlighted automatically based on the last device you touched.
+| Input | Steer | Boost | Brake or drift | Hop or interact | Item, scan, or fort | Pause |
+| --- | --- | --- | --- | --- | --- | --- |
+| Keyboard | WASD or arrows | Space | Shift | E | Q | Esc |
+| Controller | Left stick | A / Cross or right trigger | Left trigger | X / Square | B / Circle | Start |
+| Touch | Left thumbstick | Boost | Brake | Mode action | Mode action | Pause |
 
-**Keyboard & Mouse:**
-- WASD / Arrow Keys: Move (camera-relative)
-- Mouse: Camera pan (when enabled in Settings)
-- Space / Left Mouse: Boost (Coffee power-up; hold to sustain)
-- E / Middle Mouse: Jump — also GRAB power-ups (press E in range when the key prompt appears)
-- Q / Right Mouse: Place sabotage item; seeker scan in Shop & Seek
-- R + Y: Recenter camera
-- Esc: Pause menu
-
-**Controller (any pad):**
-- Left stick: Move (response curve configurable: Linear / Expo / Precision)
-- A/Cross: Boost — **RT/R2 analog trigger scales boost strength with pressure**
-- X/Square: Jump / grab / interact
-- B/Circle: Sabotage / scan
-- Right stick / shoulders: Camera
-- Start: Pause
-- Rumble: boost hum, impact thump, hard-landing sputter (Settings toggle)
-
-Buttons can be remapped in Settings. Sensitivity, stick curves, and invert-pan are all adjustable and persist.
-
-**Touch (Mobile/Web):**
-- Virtual joystick: Move
-- BOOST / JUMP / TRAP buttons; power-ups auto-collect (no spare thumb needed)
-- Auto-detects touchscreens; force on/off from the main menu's TOUCH button
+**A / Cross** uses coffee reserve while held. Press **E** or **X / Square** to grab and release cargo in Hauled, or collect an item and disguise in Shop & Seek. In the other modes this button hops. Use the camera bindings in Settings to change your view.
 
 ## Game Modes
 
-1. **Evacuation** (Primary): Race through a 4-floor office to the parking lot exit. Ride elevator pads floor-to-floor, grab coffee boosts (E to grab!), dodge Roombas, swinging doors, falling debris, and periodic fire drills. Coffee boosts, sabotage traps, 120s timer. Land an elevator jump dead-center for a perfect-landing boost bonus.
-
-2. **Hauled**: Three-round physics delivery with six hostile cargo types (fridge of bees, haunted sofa...), damage/scoring, grab/throw, and rotating terrain gauntlets.
-
-3. **Shop & Seek**: Shopper fallback with a five-item list and patrol guard, plus hider disguises (freeze as a product with a wobble tell), seeker scans, infection-ready role state, 24 product variants, and a full supermarket layout.
-
-4. **Pizza Colony**: Zoned giant pizza (crust/cheese/sauce), claim pepperoni pads by standing on them, harvest cheese, build olive-bomb forts, dodge the chef patrol and the accelerating cutter sweep. Win by owning all pads or surviving 120s.
-
-## Map Layouts (Evacuation)
-
-Pick from the main menu's MAP button; the pick persists:
-- **Open Plan** — the classic: scattered desks, wide corridors
-- **Cubicle Maze** — dense floor-1 cubicle grid, narrow lanes, more power-ups
-- **Executive Suite** — long sightlines, few obstacles, wide ice patch, extra crates
-
-In LAN play the **host's pick is authoritative** — everyone races the host's map, and your own saved pick stays untouched for when you host.
-
-## Race Modifiers
-
-"TODAY'S OFFICE CHAOS" chips on the main menu toggle single-player modifiers (time attack, low gravity, ice rink, and more) with a live summary line. Combinations persist between sessions.
+- **Evacuation** sends up to eight riders racing down four office floors to the parking lot. Follow the checkpoint arrow, collect coffee and avoid the Roombas. Setup offers three routes and a Time Trial with a personal best ghost.
+- **Hauled** gives the team three deliveries and a cargo integrity meter. Grab each package, steer it to the marked bay and ease off boost when carrying vulnerable cargo.
+- **Shop & Seek** sends solo players through a shopping list while a security guard patrols. In LAN play, hiders get eight seconds to choose a disguise before the seeker can move or scan.
+- **Pizza Colony** rewards staying on a pepperoni tile for three uninterrupted seconds. A second rider contests the claim. Spend cheese on forts and dodge the cutter. Claim the whole pie, be the last rider standing, or lead the remaining riders when time expires.
 
 ## Design Your Coworker
 
-Open **YOUR RIDE** from the main menu to choose from eleven low-poly office
+Open **Coworker** from the main menu to choose from eleven low-poly office
 characters, including Spreadsheet Stu, Coffee Carl, and Printer Pam. Mix outfits,
 hairstyles, hair and skin colors, body builds, expressions, outfit/accent colors,
-and office props. **TURN LEFT / TURN RIGHT** lets you inspect the live 3D model;
-**SURPRISE ME** shuffles the design and **RESET PRESET** restores that coworker.
+and office props. **Rotate** lets you inspect the live 3D model;
+**Surprise me** shuffles the design and **Reset preset** restores that coworker.
 Edits save automatically for each character and travel with your avatar over LAN.
 Use the same game build on every peer. Appearance changes are cosmetic; chair
 skins still control the existing handling stats.
@@ -101,12 +66,12 @@ builder, art captures, and verification commands.
 ### Local Wi-Fi (LAN)
 
 **Host:**
-1. Main menu → "HOST LOCAL" — your LAN address is shown in the lobby ("your address: 192.168.x.x")
+1. Main menu → **Party** → **Host an office** — your LAN address is shown in the lobby ("your address: 192.168.x.x")
 2. Friends scan, or type your address directly
 3. Everyone readies up; host starts the match
 
 **Join:**
-1. Main menu → "JOIN LOCAL"
+1. Main menu → **Party** → **Join by address**
 2. "SCAN LOCAL WI-FI" to discover hosts, or type the host's address
 3. Ready up and wait for host to start
 
@@ -116,7 +81,7 @@ builder, art captures, and verification commands.
 
 **Requirements:**
 - All players on the same Wi-Fi network (or one phone's hotspot)
-- macOS may ask for firewall permission for UDP ports 5005/5006
+- macOS may ask for firewall permission for UDP ports 5007–5009
 - Host and clients need compatible Godot version (4.7.1)
 
 ## Performance Settings
@@ -198,7 +163,7 @@ godot --headless --path . --quit-after 3                      # full project boo
 
 1. `git pull --ff-only` before starting work
 2. Always run the ladder after changes
-3. Work on `main` branch
+3. Submit changes for review in a pull request
 4. Commit with descriptive messages
 5. Push after verifying
 

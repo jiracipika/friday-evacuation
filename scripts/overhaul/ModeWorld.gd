@@ -3,10 +3,9 @@ const Art = preload("res://scripts/overhaul/OfficeArt.gd")
 const Kit = preload("res://scripts/overhaul/OfficeKit.gd")
 
 static func build(game: Node3D, mode: String) -> void:
-	Kit.environment(game)
+	Kit.environment(game, mode)
 	if mode == "pizza":
-		Kit.decor_box(game, Vector3(68, 0.2, 68), Vector3(0, -1.2, 0), Color("968c75"))
-		Kit.sign(game, "PIZZA COLONY  /  SPECIAL OF THE DAY", Vector3(0, 2.2, -23), Vector2(16, 1.2), Kit.INK)
+		Art.pizzeria(game)
 		var body := StaticBody3D.new()
 		game.add_child(body)
 		var shape := CylinderShape3D.new()
@@ -23,7 +22,6 @@ static func build(game: Node3D, mode: String) -> void:
 	for z in [-22, 22]:
 		Kit.solid(room, Vector3(48, 1, 0.35), Vector3(0, 0.5, z), Kit.IVORY)
 	if mode == "hauled":
-		Kit.text(room, "LOADING BAY / HANDLE WITH COLLEAGUES", Vector3(0, 3, -21), 95, Kit.INK)
 		for x in [-7, 6]:
 			Kit.solid(room, Vector3(1, 1.7, 19), Vector3(x, 0.85, -7 if x == -7 else 8), Kit.TEAL)
 		for i in 6:
@@ -63,7 +61,6 @@ static func build(game: Node3D, mode: String) -> void:
 		Kit.text(box, "THIS SIDE UP", Vector3(0.25, 0.2, 0.56), 20, Kit.INK)
 		game.cargo = cargo
 	else:
-		Kit.text(room, "SHOP & SEEK / OFFICE SUPPLY SUPERSTORE", Vector3(0, 3, -21), 90, Kit.INK)
 		var kinds := ["plant", "printer", "water", "cabinet", "vending"]
 		for row in 4:
 			for column in 5:
@@ -72,5 +69,11 @@ static func build(game: Node3D, mode: String) -> void:
 		for x in [-20, 20]:
 			for z in [-15, -5, 5, 15]:
 				Kit.prop(room, "shelf", Vector3(x, 0, z), PI / 2)
+		# Stocked aisle islands break seeker sightlines and leave cross-aisles.
+		for row in 3:
+			var z := -9.0 + row * 8
+			for x in [-12.0, 0.0, 12.0]:
+				for offset in [-1.1, 1.1]:
+					Kit.prop(room, "shelf", Vector3(x + offset, 0, z), PI if row % 2 else 0.0)
 
 	Art.arena(room, mode)
